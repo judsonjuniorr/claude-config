@@ -1,0 +1,354 @@
+# github-ops
+
+A consolidated skill for GitHub/GitLab operations via `gh`/`glab` with **pipe-delimited** output — optimized for AI agent consumption (fewer tokens, less parsing).
+
+## Why it exists
+
+Agents that run `gh pr list` or `git push` directly get verbose output (ANSI colors, headers, prose) and burn tokens re-reading it. This skill:
+
+- Detects the platform (`github.com` → `gh`, `gitlab.com` → `glab`) and routes automatically.
+- Returns **1 line per record**, fields separated by `|`, no colors, no redundant labels.
+- Blocks accidental commits of `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json`.
+- Synthesizes conventional-commit messages from the diff.
+- Generates PR bodies from `git log` + `git diff --stat` when you don't pass one.
+
+## Prerequisites
+
+```bash
+gh auth login           # for GitHub
+glab auth login         # for GitLab
+```
+
+## Structure
+
+```
+github-ops/
+├── SKILL.md
+└── scripts/
+    ├── _common.sh        # shared helpers (sourced)
+    ├── ship.sh           # commit + push
+    ├── commit-msg.sh     # suggest message only
+    ├── pr.sh             # create | list | view | merge | checks | diff
+    ├── issue.sh          # create | list | view | close | comment
+    └── repo.sh           # info | releases | runs | workflow-run
+```
+
+## Output format
+
+| Type | Pattern | Example |
+|---|---|---|
+| Data | `<type>\|<f1>\|<f2>...` | `pr\|42\|open\|fix: cache\|feature/x\|2/3` |
+| Error (stderr) | `err\|<code>\|<detail>` | `err\|missing-cli\|gh` |
+| Truncated body | up to 40 lines, `...` at the end | `body\|Lorem ipsum...` |
+
+---
+
+## Examples
+
+### `ship.sh` — commit + push
+
+**Auto-generated message (from the diff)**
+```bash
+$ bash github-ops/scripts/ship.sh
+branch|feature/retry
+staged|3
+commit|abc1234|feat(api): update 3 files
+push|origin/feature/retry|new
+pr-url|https://github.com/org/repo/pull/new/feature/retry
+```
+
+**Custom message**
+```bash
+$ bash github-ops/scripts/ship.sh --message "fix(auth): handle expired refresh token"
+branch|fix/auth
+staged|2
+commit|de23a91|fix(auth): handle expired refresh token
+push|origin/fix/auth|existing
+```
+
+**Commit only, no push**
+```bash
+$ bash github-ops/scripts/ship.sh --no-push -m "wip: testing"
+```
+
+**Safe amend + force-push**
+```bash
+$ bash github-ops/scripts/ship.sh --amend -m "feat: corrected message"
+```
+
+**Error: secret detected**
+```bash
+$ echo "API_KEY=xxx" > .env && bash github-ops/scripts/ship.sh
+err|secret-detected|use --force to override
+```
+
+---
+
+### `commit-msg.sh` — suggest message only
+
+```bash
+$ git add src/api/retry.ts
+$ bash github-ops/scripts/commit-msg.sh
+feat|api|update retry.ts
+```
+
+Output is `type|scope|description`. Format it as `feat(api): update retry.ts` if you want.
+
+---
+
+### `pr.sh` — pull requests / merge requests
+
+**Create PR (body generated from the diff)**
+```bash
+$ bash github-ops/scripts/pr.sh create
+pr|142|https://github.com/org/repo/pull/142
+```
+
+**Create draft PR with custom title**
+```bash
+$ bash github-ops/scripts/pr.sh create --draft --title "WIP: oauth flow"
+pr|143|https://github.com/org/repo/pull/143
+```
+
+**List open PRs**
+```bash
+$ bash github-ops/scripts/pr.sh list
+42|open|fix: cache invalidation|feature/cache|2/3
+41|open|feat: retry on 502|feature/retry|3/3
+40|draft|wip: oauth|feature/oauth|-
+```
+
+Fields: `<num>|<state>|<title>|<branch>|<checks-ok>/<total>`.
+
+**Only mine**
+```bash
+$ bash github-ops/scripts/pr.sh list --mine --state all
+```
+
+**View PR details**
+```bash
+$ bash github-ops/scripts/pr.sh view 42
+pr|42|open|fix: cache invalidation
+branch|feature/cache→main
+author|judson
+checks|2/3|test:success|lint:success|e2e:failure
+body|## What
+body|Fixes the cache invalidation race when two requests
+body|hit the same key in <50ms window.
+body|
+body|## Testing
+body|- [x] unit tests
+body|- [x] reproduced manually
+```
+
+**Check CI status**
+```bash
+$ bash github-ops/scripts/pr.sh checks 42
+test|success|https://github.com/org/repo/actions/runs/123
+lint|success|https://github.com/org/repo/actions/runs/124
+e2e|failure|https://github.com/org/repo/actions/runs/125
+```
+
+**Raw PR diff**
+```bash
+$ bash github-ops/scripts/pr.sh diff 42
+```
+
+**Merge (squash by default)**
+```bash
+$ bash github-ops/scripts/pr.sh merge 42
+merged|42|ef89b21
+
+$ bash github-ops/scripts/pr.sh merge 42 --rebase
+merged|42|ef89b21
+```
+
+---
+
+### `issue.sh` — issues
+
+**Create**
+```bash
+$ bash github-ops/scripts/issue.sh create \
+    --title "Cache misses on cold start" \
+    --body "Repro: restart pod, first 5 reqs miss." \
+    --label bug,p1
+issue|217|https://github.com/org/repo/issues/217
+```
+
+**With body from a file**
+```bash
+$ bash github-ops/scripts/issue.sh create --title "Spec" --body-file /tmp/spec.md
+issue|218|https://github.com/org/repo/issues/218
+```
+
+**List**
+```bash
+$ bash github-ops/scripts/issue.sh list
+217|open|bug,p1|Cache misses on cold start
+215|open|bug|Auth race condition
+210|open|-|Improve docs
+```
+
+Fields: `<num>|<state>|<labels>|<title>`.
+
+**Filter by label**
+```bash
+$ bash github-ops/scripts/issue.sh list --label bug
+```
+
+**View**
+```bash
+$ bash github-ops/scripts/issue.sh view 217
+issue|217|open|Cache misses on cold start
+author|judson
+labels|bug,p1
+body|Repro: restart pod, first 5 reqs miss.
+body|
+body|Suspect the warmup hook isn't priming the LRU.
+comment|alice|tried locally, can confirm
+comment|bob|PR #218 should fix this
+comment|judson|closing once #218 lands
+```
+
+**Comment**
+```bash
+$ bash github-ops/scripts/issue.sh comment 217 --body "Fixed in #218"
+commented|217
+```
+
+**Close**
+```bash
+$ bash github-ops/scripts/issue.sh close 217
+closed|217
+```
+
+---
+
+### `repo.sh` — repository information
+
+**Basic info**
+```bash
+$ bash github-ops/scripts/repo.sh info
+name|org/repo
+default-branch|main
+visibility|private
+merge-allowed|squash,rebase
+```
+
+**Latest releases**
+```bash
+$ bash github-ops/scripts/repo.sh releases --limit 5
+v2.4.0|Retry hardening|2026-05-12T18:22:00Z|stable
+v2.3.1|Patch: cache fix|2026-05-08T10:01:00Z|stable
+v2.3.0|OAuth flow|2026-05-01T09:00:00Z|stable
+v2.3.0-rc1|RC|2026-04-28T15:00:00Z|prerelease
+v2.2.0|—|2026-04-15T12:00:00Z|stable
+```
+
+Fields: `<tag>|<name>|<published-at>|<draft|prerelease|stable>`.
+
+**Recent CI runs**
+```bash
+$ bash github-ops/scripts/repo.sh runs --limit 5
+9921|completed|success|main|test
+9920|completed|failure|feature/x|test
+9919|in_progress|-|feature/y|test
+9918|completed|success|main|deploy
+9917|completed|success|main|test
+```
+
+Fields: `<run-id>|<status>|<conclusion>|<branch>|<workflow>`.
+
+**Filter by workflow**
+```bash
+$ bash github-ops/scripts/repo.sh runs --workflow deploy --limit 3
+```
+
+**Dispatch a workflow**
+```bash
+$ bash github-ops/scripts/repo.sh workflow-run deploy --ref main
+run|9930|https://github.com/org/repo/actions/runs/9930
+```
+
+---
+
+## Composed workflows
+
+### Ship + open PR + check CI
+
+```bash
+$ bash github-ops/scripts/ship.sh -m "feat(api): add retry"
+branch|feature/retry
+staged|3
+commit|abc1234|feat(api): add retry
+push|origin/feature/retry|new
+pr-url|https://github.com/org/repo/pull/new/feature/retry
+
+$ bash github-ops/scripts/pr.sh create
+pr|144|https://github.com/org/repo/pull/144
+
+$ bash github-ops/scripts/pr.sh checks 144
+test|in_progress|...
+lint|success|...
+```
+
+### Triage PRs with failing CI
+
+```bash
+$ bash github-ops/scripts/pr.sh list --state open \
+    | awk -F'|' '$5 ~ /^[0-9]+\/[0-9]+$/ && $5 != gensub(/\//,"\\&","g",$5) { split($5,a,"/"); if (a[1]<a[2]) print $1 }'
+# prints numbers of PRs with failing checks
+```
+
+### How many open issues with the `bug` label
+
+```bash
+$ bash github-ops/scripts/issue.sh list --label bug | wc -l
+```
+
+---
+
+## Common error codes
+
+| Code | Meaning | How to resolve |
+|---|---|---|
+| `not-a-repo` | Directory is not a git repo | `cd` into a repo |
+| `missing-cli` | `gh`/`glab` not installed | install and `auth login` |
+| `unknown-platform` | Remote isn't GitHub or GitLab | use `git` manually |
+| `nothing-to-commit` | No changes | do some work first |
+| `nothing-staged` | Nothing in `git diff --cached` | `git add` something |
+| `secret-detected` | `.env`/key in the list | review; `--force` if intentional |
+| `same-branch` | Tried to create a PR from `main` into `main` | switch branches |
+| `push-failed` | `git push` failed | check stderr |
+| `create-failed` | `gh pr create` failed | check stderr |
+| `merge-failed` | merge rejected | check branch protections |
+| `dispatch-failed` | workflow doesn't exist | verify `--workflow` |
+| `bad-arg` / `bad-sub` | unknown flag | check usage |
+
+---
+
+## Commit conventions
+
+`commit-msg.sh` picks `type` like so:
+
+| Type | Trigger |
+|---|---|
+| `docs` | Only `.md/.mdx/.txt/.rst/.adoc` files |
+| `test` | Paths containing `test/`, `tests/`, `__tests__/`, `spec/`, `.test.`, `.spec.` |
+| `chore` | `package.json`, lockfiles, `Cargo.toml`, `go.mod`, `Gemfile` |
+| `ci` | `.github/workflows/`, `.gitlab-ci.yml`, `Dockerfile`, `.circleci/` |
+| `fix` | Diff contains `+...fix|bug|hotfix|patch` |
+| `refactor` | Diff contains `+...refactor|rename|extract|inline` |
+| `perf` | Diff contains `+...perf|performance|optimize` |
+| `feat` | Fallback |
+
+Scope = the top-level directory most common among staged files (ignoring `node_modules`, `dist`, `build`, `vendor`).
+
+---
+
+## When NOT to use this skill
+
+- `git status`, `git log`, `git diff`, `git blame` — use them directly; they're local and cheap.
+- Bisect, interactive rebase, conflict resolution — flows that require human decisions.
+- Self-hosted repos (Gitea, Forgejo, Bitbucket) — `detect_platform` returns `unknown` and the skill bails; use the native CLI.
