@@ -6,11 +6,16 @@ Personal Claude Code configuration hub: custom slash commands and skills that tr
 
 ```
 claude-config/
+├── CLAUDE.md                    # global instructions Claude Code loads at session start
 ├── commands/                    # slash commands
 │   └── graphify-install.md      → see commands/README.md
 └── skills/                      # skills
     └── github-ops/              → see skills/github-ops/README.md
 ```
+
+## CLAUDE.md
+
+[`CLAUDE.md`](./CLAUDE.md) holds the global instructions Claude Code reads at the start of every session — communication style, output hygiene, and the four working principles (think before coding, simplicity first, surgical changes, goal-driven execution).
 
 ## Contents
 
