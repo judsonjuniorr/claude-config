@@ -2,6 +2,16 @@
 
 A consolidated skill for GitHub/GitLab operations via `gh`/`glab` with **pipe-delimited** output — optimized for AI agent consumption (fewer tokens, less parsing).
 
+## Making it used system-wide
+
+Add the following on `~/.claude/CLAUDE.md`:
+
+```markdown
+# github-ops
+- **github-ops** (`~/.claude/skills/github-ops/SKILL.md`) - gh/glab + git workflow ops with pipe-delimited output.
+Invoke the Skill tool with `skill: "github-ops"` before running any of: `git commit`, `git push`, `gh`/`glab` PR/MR ops (create, list, view, checks, diff, merge), issue ops (create, list, view, close, comment), repo/release inspection, CI run inspection or dispatch. Raw `git` is allowed only for local read-only state: `git status`, `git log`, `git diff`.
+```
+
 ## Why it exists
 
 Agents that run `gh pr list` or `git push` directly get verbose output (ANSI colors, headers, prose) and burn tokens re-reading it. This skill:
@@ -11,6 +21,7 @@ Agents that run `gh pr list` or `git push` directly get verbose output (ANSI col
 - Blocks accidental commits of `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json`.
 - Synthesizes conventional-commit messages from the diff.
 - Generates PR bodies from `git log` + `git diff --stat` when you don't pass one.
+
 
 ## Prerequisites
 
