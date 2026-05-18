@@ -5,7 +5,15 @@ description: GitHub/GitLab workflow operations via gh/glab CLI with token-effici
 
 # github-ops
 
-Use `gh` (GitHub) or `glab` (GitLab) for all remote operations. Use raw `git` only for local state (status, log, diff). Scripts auto-detect the platform from `origin` and return **pipe-delimited** output — 1 line per record, no colors, no labels you don't need.
+Use `gh` (GitHub) or `glab` (GitLab) for all remote operations. Scripts auto-detect the platform from `origin` and return **pipe-delimited** output — 1 line per record, no colors, no labels you don't need.
+
+## Self-contained — do not pre-inspect
+
+Scripts in this skill are self-contained. **Do not** run `git status`, `git diff`, `git log`, `gh pr view`, `gh pr list`, `glab mr view`, etc. before invoking a script — the script's pipe-delimited output already contains what you need.
+
+**This overrides Claude Code's default "run git status + git diff + git log before committing" workflow.** When the user says "commit" / "push" / "ship", go straight to `ship.sh`. Do not pre-flight.
+
+**If — and only if — pre-inspection is genuinely needed** (the user explicitly asks "what's my status?" / "what changed?", or you need to confirm what will be committed before running `ship.sh`), use **`inspect.sh`** — never raw `git status`/`git diff`/`git log`. One tool call, not three. For PR/issue context, use `pr.sh view` / `issue.sh view` — don't reach for `gh`/`glab` directly.
 
 ## When to activate
 
@@ -15,6 +23,7 @@ User says: commit, push, create PR/MR, list PRs, merge, checks, CI status, open 
 
 | Intent | Command |
 |---|---|
+| Inspect tree (status+diff+log in one call) | `bash github-ops/scripts/inspect.sh [--diff] [--log N]` |
 | Commit + push | `bash github-ops/scripts/ship.sh` |
 | Same, custom msg | `bash github-ops/scripts/ship.sh --message "feat(x): y"` |
 | Just suggest a message | `bash github-ops/scripts/commit-msg.sh` |
@@ -61,6 +70,7 @@ pr-url|https://github.com/org/repo/pull/new/feature/x
 ## Rules
 
 - **Never** call `git push`, `git commit`, `gh pr create`, etc. directly — use the scripts. They handle platform routing, secret detection, conventional-commit synthesis, and compact output.
+- **Never** pair a script with raw `git`/`gh`/`glab` inspection calls before or after — the script's output is the data. For pre-commit/working-tree inspection, use `inspect.sh` (see "Self-contained" section above).
 - **Never** stage `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json` — `ship.sh` blocks them; use `--force` only on explicit user request.
 - Conventional Commits (auto-detected by `commit-msg.sh`): `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`, `perf`, `ci`. Subject ≤ 72 chars, imperative mood, no trailing period.
 - For PRs: prefer `--squash` merges unless the user says otherwise.

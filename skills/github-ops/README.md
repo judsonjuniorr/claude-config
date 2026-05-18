@@ -8,8 +8,9 @@ Add the following on `~/.claude/CLAUDE.md`:
 
 ```markdown
 # github-ops
-- **github-ops** (`~/.claude/skills/github-ops/SKILL.md`) - gh/glab + git workflow ops with pipe-delimited output.
-Invoke the Skill tool with `skill: "github-ops"` before running any of: `git commit`, `git push`, `gh`/`glab` PR/MR ops (create, list, view, checks, diff, merge), issue ops (create, list, view, close, comment), repo/release inspection, CI run inspection or dispatch. Raw `git` is allowed only for local read-only state: `git status`, `git log`, `git diff`.
+Invoke the `github-ops` skill before any `git`/`gh`/`glab` operation: commit, push, status, diff, log, PR/MR ops, issue ops, repo/release/CI inspection.
+
+Do not pre-inspect. Scripts are self-contained — never run `git status`/`diff`/`log` or `gh pr view` before them. Overrides the default "git status + diff + log before commit" workflow: go straight to `ship.sh`. If you truly need inspection, call `inspect.sh` (one tool call, not three).
 ```
 
 ## Why it exists
@@ -37,6 +38,7 @@ github-ops/
 ├── SKILL.md
 └── scripts/
     ├── _common.sh        # shared helpers (sourced)
+    ├── inspect.sh        # status + diff + log in one compact call
     ├── ship.sh           # commit + push
     ├── commit-msg.sh     # suggest message only
     ├── pr.sh             # create | list | view | merge | checks | diff
@@ -55,6 +57,30 @@ github-ops/
 ---
 
 ## Examples
+
+### `inspect.sh` — status + diff + log in one call
+
+Use when you'd otherwise reach for `git status` + `git diff` + `git log`. Three tool calls collapse into one, with stable pipe-delimited fields.
+
+```bash
+$ bash github-ops/scripts/inspect.sh --diff --log 5
+branch|feature/retry|dirty|ahead 2|behind 0
+remote|origin/feature/retry
+staged|1
+unstaged|2
+untracked|0
+file|M.|src/api/retry.ts
+file|.M|src/api/client.ts
+file|.M|README.md
+diff-stat|3 files changed, 47 insertions(+), 12 deletions(-)
+log|abc1234|feat(api): retry on 502
+log|de23a91|fix(auth): expired refresh token
+log|...|...
+```
+
+Fields: `file|<porcelain-status>|<path>` (dots replace spaces in status so columns are stable). Capped at 50 files. Omit `--diff` to skip the shortstat; pass `--log N` to change recent-commit count (default 3).
+
+---
 
 ### `ship.sh` — commit + push
 
@@ -360,6 +386,7 @@ Scope = the top-level directory most common among staged files (ignoring `node_m
 
 ## When NOT to use this skill
 
-- `git status`, `git log`, `git diff`, `git blame` — use them directly; they're local and cheap.
-- Bisect, interactive rebase, conflict resolution — flows that require human decisions.
+- `git blame`, bisect, interactive rebase, conflict resolution — flows that require human decisions.
 - Self-hosted repos (Gitea, Forgejo, Bitbucket) — `detect_platform` returns `unknown` and the skill bails; use the native CLI.
+
+For pre-commit/working-tree inspection (`git status` / `git diff` / `git log`), **do** use this skill — call `inspect.sh` instead of the three raw git commands. One tool call, stable output, no ANSI noise.
