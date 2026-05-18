@@ -47,22 +47,29 @@ fi
 STAGED="$(git diff --cached --name-only | sed '/^$/d' | wc -l | tr -d ' ')"
 echo "staged|$STAGED"
 
-# Build commit message if not given.
-if [ -z "$MSG" ]; then
-  PARTS="$(bash "$DIR/commit-msg.sh")"
-  T="$(echo "$PARTS" | cut -d'|' -f1)"
-  S="$(echo "$PARTS" | cut -d'|' -f2)"
-  D="$(echo "$PARTS" | cut -d'|' -f3)"
-  if [ -n "$S" ]; then
-    MSG="${T}(${S}): ${D}"
-  else
-    MSG="${T}: ${D}"
+# Require an explicit --message. Emit the staged diff so the agent can
+# craft a descriptive Conventional Commits subject, then re-run with
+# --message "...". --amend keeps the prior message and skips this gate.
+if [ -z "$MSG" ] && [ "$AMEND" = "0" ]; then
+  echo "need-message|1"
+  FILES_CSV="$(git diff --cached --name-only | paste -sd, -)"
+  echo "diff-files|$FILES_CSV"
+  git diff --cached --stat | sed 's/^/diff-stat|/'
+  TOTAL="$(git diff --cached | wc -l | tr -d ' ')"
+  git diff --cached | head -200 | sed 's/^/diff|/'
+  if [ "$TOTAL" -gt 200 ]; then
+    echo "diff|...(truncated, $TOTAL total lines)"
   fi
+  die "need-message" "re-run with --message \"<conventional-commit subject>\""
 fi
 
 FOOTER="$(printf '\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>')"
 if [ "$AMEND" = "1" ]; then
-  git commit --amend -m "${MSG}${FOOTER}" >/dev/null
+  if [ -z "$MSG" ]; then
+    git commit --amend --no-edit >/dev/null
+  else
+    git commit --amend -m "${MSG}${FOOTER}" >/dev/null
+  fi
 else
   git commit -m "${MSG}${FOOTER}" >/dev/null
 fi

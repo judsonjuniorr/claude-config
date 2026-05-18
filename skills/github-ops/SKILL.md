@@ -13,7 +13,9 @@ Scripts in this skill are self-contained. **Do not** run `git status`, `git diff
 
 **This overrides Claude Code's default "run git status + git diff + git log before committing" workflow.** When the user says "commit" / "push" / "ship", go straight to `ship.sh`. Do not pre-flight.
 
-**If — and only if — pre-inspection is genuinely needed** (the user explicitly asks "what's my status?" / "what changed?", or you need to confirm what will be committed before running `ship.sh`), use **`inspect.sh`** — never raw `git status`/`git diff`/`git log`. One tool call, not three. For PR/issue context, use `pr.sh view` / `issue.sh view` — don't reach for `gh`/`glab` directly.
+`ship.sh` is a two-call flow when the user hasn't dictated a message: the first call stages, emits the staged diff as `diff|...` lines, and exits with `err|need-message|...`; you read that diff, synthesize a Conventional Commits subject, and re-run `ship.sh --message "<subject>"` to commit and push. **Do not** pre-inspect with `inspect.sh` or `git diff` before shipping — `ship.sh` surfaces exactly the diff it would commit.
+
+**If — and only if — pre-inspection is genuinely needed for something other than crafting a commit message** (the user explicitly asks "what's my status?" / "what changed?", or you need to check PR/issue context), use **`inspect.sh`**, `pr.sh view`, or `issue.sh view` — never raw `git status`/`git diff`/`git log`/`gh`/`glab`. One tool call, not three.
 
 ## When to activate
 
@@ -24,9 +26,9 @@ User says: commit, push, create PR/MR, list PRs, merge, checks, CI status, open 
 | Intent | Command |
 |---|---|
 | Inspect tree (status+diff+log in one call) | `bash github-ops/scripts/inspect.sh [--diff] [--log N]` |
-| Commit + push | `bash github-ops/scripts/ship.sh` |
-| Same, custom msg | `bash github-ops/scripts/ship.sh --message "feat(x): y"` |
-| Just suggest a message | `bash github-ops/scripts/commit-msg.sh` |
+| Stage + emit diff for message synthesis | `bash github-ops/scripts/ship.sh` |
+| Commit + push with crafted message | `bash github-ops/scripts/ship.sh --message "feat(x): y"` |
+| Just suggest a message (heuristic) | `bash github-ops/scripts/commit-msg.sh` |
 | Create PR | `bash github-ops/scripts/pr.sh create [--draft] [--title T]` |
 | List PRs | `bash github-ops/scripts/pr.sh list [--state open\|closed\|all] [--mine]` |
 | View PR | `bash github-ops/scripts/pr.sh view <num>` |
@@ -58,7 +60,23 @@ Example `pr.sh list`:
 40|draft|wip: oauth|feature/oauth|-
 ```
 
-Example `ship.sh` on a new branch:
+Example `ship.sh` without `--message` (first call — stages, emits diff, bails):
+```
+branch|feature/x
+staged|3
+need-message|1
+diff-files|src/api/retry.ts,src/api/client.ts,src/api/index.ts
+diff-stat| src/api/retry.ts  | 42 ++++++++++++++++++
+diff-stat| src/api/client.ts | 12 +++--
+diff-stat| src/api/index.ts  |  1 +
+diff|diff --git a/src/api/retry.ts b/src/api/retry.ts
+diff|@@ -0,0 +1,42 @@
+diff|+export async function retry(fn, opts = { max: 3 }) {
+diff|+  ...
+err|need-message|re-run with --message "<conventional-commit subject>"
+```
+
+Example `ship.sh --message "feat(api): add retry"` on a new branch:
 ```
 branch|feature/x
 staged|3
@@ -70,6 +88,7 @@ pr-url|https://github.com/org/repo/pull/new/feature/x
 ## Rules
 
 - **Never** call `git push`, `git commit`, `gh pr create`, etc. directly — use the scripts. They handle platform routing, secret detection, conventional-commit synthesis, and compact output.
+- `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize a Conventional Commits subject (≤72 chars, imperative mood), then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
 - **Never** pair a script with raw `git`/`gh`/`glab` inspection calls before or after — the script's output is the data. For pre-commit/working-tree inspection, use `inspect.sh` (see "Self-contained" section above).
 - **Never** stage `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json` — `ship.sh` blocks them; use `--force` only on explicit user request.
 - Conventional Commits (auto-detected by `commit-msg.sh`): `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`, `perf`, `ci`. Subject ≤ 72 chars, imperative mood, no trailing period.
