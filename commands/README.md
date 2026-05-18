@@ -1,10 +1,13 @@
 # commands
 
-Slash commands for Claude Code. Each command is a single `.md` file with YAML frontmatter (`description`, `allowed-tools`, `argument-hint`) followed by the agent-facing instructions.
+Slash commands for Claude Code. Each command lives in its own subdirectory containing:
+
+- a `<command>.md` file with YAML frontmatter (`description`, `allowed-tools`, `argument-hint`) followed by the agent-facing instructions, and
+- a `README.md` with the human-facing summary (what it does, when to use, prerequisites).
 
 ## Available
 
-### [`/graphify-install`](./graphify-install.md)
+### [`/graphify-install`](./graphify-install/)
 
 End-to-end bootstrap for [graphify](https://github.com/safishamsi/graphify) inside any git repository.
 
@@ -20,16 +23,42 @@ End-to-end bootstrap for [graphify](https://github.com/safishamsi/graphify) insi
 
 **Allowed tools**: `Bash`, `Read`, `Write`, `Edit`, `AskUserQuestion`, `Skill`.
 
+**Language**: English.
+
 **When to use**: first time you want graphify on a repo, or to refresh `.graphifyignore`/`.gitignore` after the repo's stack has shifted.
 
 **Prerequisites**:
 - The `graphify` skill is installed and available to Claude Code.
 - You're inside a git repo (or willing to let the command run `git init`).
 
+### [`/release-notes`](./release-notes/)
+
+Generates a user-friendly changelog from the commits since the last tag (or the last 50 commits if no tag exists), rendered inline in the chat.
+
+**What it does**
+
+1. Detects the last language used in this repo (`customCommands.releaseNotes.lang` in `<repo-root>/.claude/settings.local.json`, default `pt-br`).
+2. Asks for the language (`pt-br` or `en`) with the last choice pre-selected as `(Recommended)` and persists the answer (atomic write via `jq`, Python fallback), preserving every other key in the file.
+3. Collects commits since the most recent tag by date — or the last 50 commits if no tag exists — dropping merge commits and cancelling out revert↔original pairs.
+4. Classifies each commit into ✨ New Features, 🛠️ Improvements, 🐛 Bug Fixes, or 🔧 Internal Changes, using Conventional Commit prefixes and explicit decision rules. Marks breaking changes with `⚠️ Breaking:`.
+5. Rewrites bullets in past tense, user-facing language — no jargon, no hashes, no PR/issue IDs, no author names — and groups related commits.
+6. Suggests the next SemVer version (major/minor/patch) based on the change mix.
+7. Renders the changelog inline in the chat using the localized template, omitting empty sections, and runs a final validation checklist.
+
+**Allowed tools**: inherits Claude Code defaults (no explicit allow-list).
+
+**Language**: bilingual — `pt-br` (default) or `en`, persisted per-repo.
+
+**When to use**: preparing release notes before tagging a new version, or sharing a human-readable summary with non-engineering stakeholders.
+
+**Prerequisites**:
+- Inside a git repository.
+- `jq` available (Python fallback if not).
+
 ## Adding a new command
 
-1. Drop a new `.md` file in this directory.
-2. Start with frontmatter:
+1. Create a subdirectory `commands/<name>/`.
+2. Add `<name>.md` starting with frontmatter:
    ```yaml
    ---
    description: One-line summary shown in the slash-command picker.
@@ -38,4 +67,5 @@ End-to-end bootstrap for [graphify](https://github.com/safishamsi/graphify) insi
    ---
    ```
 3. Write the agent-facing body as a numbered procedure — be explicit about ordering, error handling, and when to ask the user.
-4. Document it here with: what it does, allowed tools, language (if non-English UX), when to use, and prerequisites.
+4. Add a `README.md` in the same subdirectory with the human-facing summary (what it does, allowed tools, language, when to use, prerequisites).
+5. Document the new command here with: what it does, allowed tools, language (if non-English UX), when to use, and prerequisites.

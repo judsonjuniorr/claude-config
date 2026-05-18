@@ -8,7 +8,8 @@ Personal Claude Code configuration hub: custom slash commands and skills that tr
 claude-config/
 ├── CLAUDE.md                    # global instructions Claude Code loads at session start
 ├── commands/                    # slash commands
-│   └── graphify-install.md      → see commands/README.md
+│   ├── graphify-install/        → see commands/graphify-install/README.md
+│   └── release-notes/           → see commands/release-notes/README.md
 └── skills/                      # skills
     └── github-ops/              → see skills/github-ops/README.md
 ```
@@ -21,7 +22,8 @@ claude-config/
 
 | Type    | Name                                                         | One-liner                                                                   |
 |---------|--------------------------------------------------------------|-----------------------------------------------------------------------------|
-| Command | [`/graphify-install`](./commands/README.md)                  | Bootstrap [graphify](https://github.com/) inside any git repo end-to-end.   |
+| Command | [`/graphify-install`](./commands/graphify-install/README.md) | Bootstrap [graphify](https://github.com/safishamsi/graphify) inside any git repo end-to-end. |
+| Command | [`/release-notes`](./commands/release-notes/README.md)       | Generate a user-friendly changelog (pt-br/en) from commits since the last tag, inline in the chat. |
 | Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab` with pipe-delimited output. |
 
 Each command and skill has its own README with the full reference, examples, and rules.
