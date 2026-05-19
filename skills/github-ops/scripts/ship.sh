@@ -63,15 +63,14 @@ if [ -z "$MSG" ] && [ "$AMEND" = "0" ]; then
   die "need-message" "re-run with --message \"<conventional-commit subject>\""
 fi
 
-FOOTER="$(printf '\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>')"
 if [ "$AMEND" = "1" ]; then
   if [ -z "$MSG" ]; then
     git commit --amend --no-edit >/dev/null
   else
-    git commit --amend -m "${MSG}${FOOTER}" >/dev/null
+    git commit --amend -m "${MSG}" >/dev/null
   fi
 else
-  git commit -m "${MSG}${FOOTER}" >/dev/null
+  git commit -m "${MSG}" >/dev/null
 fi
 SHA="$(git rev-parse --short HEAD)"
 SUBJ="$(git log -1 --pretty=%s)"
