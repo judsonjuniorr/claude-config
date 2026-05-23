@@ -7,6 +7,29 @@ Slash commands for Claude Code. Each command lives in its own subdirectory conta
 
 ## Available
 
+### [`/file-organizer`](./file-organizer/)
+
+Analyze a directory, surface duplicates and clutter, propose a tidy structure, and only after explicit approval move/rename files — every destructive action is logged so it can be reversed.
+
+**What it does**
+
+1. Parses the target directory and aggressiveness (`conservative` default, `comprehensive` opt-in). Asks via `AskUserQuestion` for protected paths and whether to scan for duplicates.
+2. Inventories the tree depth-limited (`find -maxdepth 3`): top-level layout, extension breakdown, largest items, date span, obvious clutter.
+3. Optionally finds exact duplicates (`md5`/`md5sum`) and filename collisions — surfaces them with sizes/mtimes and a recommendation, never auto-deletes.
+4. Presents a written plan (folders to create, moves, renames, deletions, items needing a decision) and asks **Proceed / Modify / Cancel**.
+5. Executes with `mv -n` (no clobber), preserving mtimes, writing every action as `ACTION\tSRC\tDST` to `<target>/.file-organizer-YYYYMMDD-HHMMSS.log`.
+6. Reports folders created, files moved per destination, bytes freed (if any), and the log path. Suggests a maintenance cadence (weekly sort, monthly review, quarterly dedupe, yearly archive).
+
+**Allowed tools**: `Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `AskUserQuestion`.
+
+**Language**: English.
+
+**When to use**: `Downloads/` has degenerated into chaos; a project tree needs structure before archiving; disk space is tight and you suspect duplicates; you're about to back up or sync a directory and want it clean first.
+
+**Prerequisites**:
+- POSIX shell with `find`, `du`, `sort`, `awk`, and `md5`/`md5sum`.
+- Refuses to operate on `/`, `$HOME` root, `~/Library`, `~/.config`, `~/.ssh`, or paths with a top-level `.git/` unless the user explicitly insists.
+
 ### [`/fix-conflicts`](./fix-conflicts/)
 
 Resolves merge conflicts on a PR or branch with every decision justified by the commit history of both sides — not by the raw diff.

@@ -12,6 +12,7 @@ claude-config/
 │   ├── finance/                 → see commands/finance/README.md
 │   │   ├── organizze.md         → /finance:organizze command file
 │   │   └── organizze-scripts/   → scripts used by /finance:organizze
+│   ├── file-organizer/          → see commands/file-organizer/README.md
 │   ├── fix-conflicts/           → see commands/fix-conflicts/README.md
 │   ├── generate-tests/          → see commands/generate-tests/README.md
 │   ├── graphify-install/        → see commands/graphify-install/README.md
@@ -41,6 +42,7 @@ claude-config/
 |---------|--------------------------------------------------------------|-----------------------------------------------------------------------------|
 | Command | [`/commit`](./commands/commit/README.md)                     | Stage changes, craft an emoji-enhanced Conventional Commit, and commit via `github-ops`. |
 | Command | [`/finance:organizze`](./commands/finance/README.md#financeorganizze) | Pull personal finance data from Organizze via REST API, build a snapshot, delegate to the `financial-analyst` subagent for a prioritized action plan. |
+| Command | [`/file-organizer`](./commands/file-organizer/README.md)     | Analyze a directory, find duplicates, propose a tidy structure, and reorganize files only after explicit approval. |
 | Command | [`/fix-conflicts`](./commands/fix-conflicts/README.md)       | Resolve merge conflicts on a PR or branch, grounding each decision in the commit history of both sides. |
 | Command | [`/generate-tests`](./commands/generate-tests/README.md)     | Generate a comprehensive test suite for a file or function, auto-detecting the project's testing framework. |
 | Command | [`/graphify-install`](./commands/graphify-install/README.md) | Bootstrap [graphify](https://github.com/safishamsi/graphify) inside any git repo end-to-end. |
