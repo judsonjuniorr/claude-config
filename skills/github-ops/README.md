@@ -390,13 +390,18 @@ Scope = the top-level directory most common among staged files (ignoring `node_m
 
 ### Pre-commit checks
 
-Before committing, the skill runs available checks in order (stop on first failure):
+Checks are scoped to what actually changed — no full test battery on small commits.
 
-1. **Lint** — `pnpm lint` / `yarn lint` / `npm run lint` / `biome check .` / `ruff check .`
-2. **Type-check** — `pnpm exec tsc --noEmit` (if `tsconfig.json` present) / `mypy .`
-3. **Fast tests** — `pnpm test --run` / `pytest -x -q` (skipped if no test script)
+The staged file list is classified into: `code`, `config`, `ci`, `docs`, `deps`, `assets`. Then:
 
-Package manager is auto-detected from the lock file: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `bun.lockb` → bun, `package-lock.json` → npm. Pass `--no-verify` to skip all checks.
+| Change type | Lint | Type-check | Tests |
+|-------------|------|------------|-------|
+| code | ✅ staged files only | ✅ whole project (incremental) | ✅ targeted test files |
+| code + config | ✅ staged files only | ✅ whole project (incremental) | ✅ targeted test files |
+| config / ci only | ✅ staged files only | ❌ | ❌ |
+| deps / docs / assets | ❌ | ❌ | ❌ |
+
+**Targeted tests**: derives the test file from the staged source file (`src/foo.ts` → `src/foo.test.ts`), runs only that file. Falls back to the full suite only when ≥ 10 source files changed or a shared core module is touched. Pass `--no-verify` to skip all checks, or `--skip-tests` to skip #3.
 
 ### Split detection
 
