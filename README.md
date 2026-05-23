@@ -44,4 +44,31 @@ git clone https://github.com/judsonjuniorr/claude-config ~/sources/personal/clau
 ~/sources/personal/claude-config/install.sh
 ```
 
-Select what to install (space to mark, enter to confirm). Symlinks are the default — edits to the repo reflect immediately in Claude Code without reinstalling. Run `install.sh --help` for all options.
+`install.sh` discovers all commands, skills, and agents and lets you pick what to install. Symlinks are the default — edits in the repo reflect immediately in Claude Code without reinstalling.
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Install everything without prompting (useful on a new machine) |
+| `--replace` | Overwrite existing files instead of creating `.bak` backups |
+| `--help` | Show usage |
+| `uninstall` | Interactively remove installed assets |
+
+### Selection UI
+
+- **With [fzf](https://github.com/junegunn/fzf):** multi-select list (Space to mark, Enter to confirm)
+- **Without fzf / bash < 4:** numbered menu, enter space-separated numbers or `all`
+
+Assets already installed are shown as `[installed]`. Symlinks point to the cloned repo — don't move it after installing.
+
+### What gets installed where
+
+| Type | Installed to |
+|------|-------------|
+| Commands | `~/.claude/commands/{name}.md` |
+| Namespaced commands (e.g. `/finance:*`) | `~/.claude/commands/{namespace}/` (real dir, symlinked files inside) |
+| Skills | `~/.claude/skills/{name}/` (directory symlink) |
+| Agents | `~/.claude/agents/{name}.md` |
+
+`README.md` files are never copied to `~/.claude/`.
