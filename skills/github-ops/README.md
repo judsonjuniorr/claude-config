@@ -20,7 +20,9 @@ Agents that run `gh pr list` or `git push` directly get verbose output (ANSI col
 - Detects the platform (`github.com` → `gh`, `gitlab.com` → `glab`) and routes automatically.
 - Returns **1 line per record**, fields separated by `|`, no colors, no redundant labels.
 - Blocks accidental commits of `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json`.
-- Synthesizes conventional-commit messages from the diff.
+- Synthesizes emoji-prefixed Conventional Commit messages from the diff.
+- Runs pre-commit checks (lint, type-check, fast tests) before committing.
+- Detects mixed concerns in a staged diff and suggests splitting into separate commits.
 - Generates PR bodies from `git log` + `git diff --stat` when you don't pass one.
 
 
@@ -367,20 +369,54 @@ $ bash github-ops/scripts/issue.sh list --label bug | wc -l
 
 ## Commit conventions
 
-`commit-msg.sh` picks `type` like so:
+Every commit message is prefixed with an emoji and follows Conventional Commits format:
+
+`<emoji> <type>(<scope>): <imperative subject>`
+
+### Emoji map
+
+| Emoji | Type | When |
+|-------|------|------|
+| ✨ | `feat` | New feature |
+| 🐛 | `fix` | Bug fix |
+| 🚑️ | `hotfix` | Critical production fix |
+| 📝 | `docs` | Documentation only |
+| ♻️ | `refactor` | Code change, no behavior change |
+| ⚡️ | `perf` | Performance improvement |
+| ✅ | `test` | Tests only |
+| 🔧 | `chore` | Tooling, deps, config |
+| 👷 | `ci` | CI/CD changes |
+| 🎨 | `style` | Formatting, whitespace |
+| ⏪️ | `revert` | Revert a prior commit |
+
+### Type auto-detection (`commit-msg.sh`)
 
 | Type | Trigger |
-|---|---|
+|------|---------|
 | `docs` | Only `.md/.mdx/.txt/.rst/.adoc` files |
 | `test` | Paths containing `test/`, `tests/`, `__tests__/`, `spec/`, `.test.`, `.spec.` |
 | `chore` | `package.json`, lockfiles, `Cargo.toml`, `go.mod`, `Gemfile` |
 | `ci` | `.github/workflows/`, `.gitlab-ci.yml`, `Dockerfile`, `.circleci/` |
-| `fix` | Diff contains `+...fix|bug|hotfix|patch` |
-| `refactor` | Diff contains `+...refactor|rename|extract|inline` |
-| `perf` | Diff contains `+...perf|performance|optimize` |
+| `fix` | Diff contains `+…fix\|bug\|hotfix\|patch` |
+| `refactor` | Diff contains `+…refactor\|rename\|extract\|inline` |
+| `perf` | Diff contains `+…perf\|performance\|optimize` |
 | `feat` | Fallback |
 
 Scope = the top-level directory most common among staged files (ignoring `node_modules`, `dist`, `build`, `vendor`).
+
+### Pre-commit checks
+
+Before committing, the skill runs available checks in order (stop on first failure):
+
+1. **Lint** — `pnpm lint` / `yarn lint` / `npm run lint` / `biome check .` / `ruff check .`
+2. **Type-check** — `pnpm exec tsc --noEmit` (if `tsconfig.json` present) / `mypy .`
+3. **Fast tests** — `pnpm test --run` / `pytest -x -q` (skipped if no test script)
+
+Package manager is auto-detected from the lock file: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `bun.lockb` → bun, `package-lock.json` → npm. Pass `--no-verify` to skip all checks.
+
+### Split detection
+
+After staging, if the diff spans unrelated concerns (e.g., a bug fix + a new feature), the skill surfaces the groups and asks the user whether to split into separate commits before proceeding.
 
 ---
 

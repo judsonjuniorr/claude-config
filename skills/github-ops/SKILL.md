@@ -85,13 +85,60 @@ push|origin/feature/x|new
 pr-url|https://github.com/org/repo/pull/new/feature/x
 ```
 
+## Commit message convention
+
+Always prefix the Conventional Commits subject with an emoji:
+
+| Type | Emoji | When |
+|------|-------|------|
+| `feat` | ✨ | New feature |
+| `fix` | 🐛 | Bug fix |
+| `hotfix` | 🚑️ | Critical production fix |
+| `docs` | 📝 | Documentation only |
+| `refactor` | ♻️ | Code change, no behavior change |
+| `perf` | ⚡️ | Performance improvement |
+| `test` | ✅ | Tests only |
+| `chore` | 🔧 | Tooling, deps, config |
+| `ci` | 👷 | CI/CD changes |
+| `style` | 🎨 | Formatting, whitespace |
+| `revert` | ⏪️ | Revert a prior commit |
+
+Final format: `<emoji> <type>(<scope>): <imperative subject>` — subject ≤ 72 chars total (including emoji), no trailing period.
+
+Example: `✨ feat(auth): add refresh token rotation`
+
+## Pre-commit checks
+
+Before calling `ship.sh --message`, detect and run available checks in this order. Stop on the first failure — do not commit broken code.
+
+1. **Lint**: check `package.json` for a `lint` script, or `biome.json` for Biome.
+   - pnpm: `pnpm lint` or `pnpm exec biome check .`
+   - yarn: `yarn lint` or `yarn biome check .`
+   - npm: `npm run lint`
+   - Python: `ruff check .` if `pyproject.toml` or `ruff.toml` exists
+2. **Type-check**: run if `tsconfig.json` exists → `pnpm exec tsc --noEmit` (or yarn/npm equivalent). For Python: `mypy .` if configured.
+3. **Fast tests**: run only if a test script exists and the suite is fast (skip if no `test` script or if running feels slow for the context). Use `--run` / `-x` to avoid watch mode.
+
+Skip all checks if the user passes `--no-verify` or says "skip checks". Skip check #3 if the user says "skip tests".
+
+Detect the package manager from the lock file present in the repo root:
+- `pnpm-lock.yaml` → pnpm
+- `yarn.lock` → yarn
+- `bun.lockb` → bun
+- `package-lock.json` → npm
+
+## Logical unit split detection
+
+After the first `ship.sh` call surfaces the diff, scan the `diff-files` list. If staged files clearly span unrelated concerns (e.g., a bug fix mixed with a new feature, or application code mixed with CI config), suggest splitting into separate commits. Present the proposed groupings and ask the user before proceeding.
+
+Do not split automatically. Always ask.
+
 ## Rules
 
 - **Never** call `git push`, `git commit`, `gh pr create`, etc. directly — use the scripts. They handle platform routing, secret detection, conventional-commit synthesis, and compact output.
-- `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize a Conventional Commits subject (≤72 chars, imperative mood), then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
+- `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize the emoji-prefixed Conventional Commits subject, then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
 - **Never** pair a script with raw `git`/`gh`/`glab` inspection calls before or after — the script's output is the data. For pre-commit/working-tree inspection, use `inspect.sh` (see "Self-contained" section above).
 - **Never** stage `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json` — `ship.sh` blocks them; use `--force` only on explicit user request.
-- Conventional Commits (auto-detected by `commit-msg.sh`): `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`, `perf`, `ci`. Subject ≤ 72 chars, imperative mood, no trailing period.
 - For PRs: prefer `--squash` merges unless the user says otherwise.
 - For destructive ops (force-push via `ship.sh --amend`, `pr.sh merge`, `issue.sh close`) — confirm with the user before running.
 - If `detect_platform` returns `unknown` (e.g., self-hosted), the script exits with `err|unknown-platform|<url>`; ask the user which CLI to use.

@@ -8,7 +8,6 @@ Personal Claude Code configuration hub: custom slash commands and skills that tr
 claude-config/
 ├── CLAUDE.md                    # global instructions Claude Code loads at session start
 ├── commands/                    # slash commands
-│   ├── commit/                  → see commands/commit/README.md
 │   ├── finance/                 → see commands/finance/README.md
 │   │   ├── organizze.md         → /finance:organizze command file
 │   │   └── organizze-scripts/   → scripts used by /finance:organizze
@@ -40,7 +39,6 @@ claude-config/
 
 | Type    | Name                                                         | One-liner                                                                   |
 |---------|--------------------------------------------------------------|-----------------------------------------------------------------------------|
-| Command | [`/commit`](./commands/commit/README.md)                     | Stage changes, craft an emoji-enhanced Conventional Commit, and commit via `github-ops`. |
 | Command | [`/finance:organizze`](./commands/finance/README.md#financeorganizze) | Pull personal finance data from Organizze via REST API, build a snapshot, delegate to the `financial-analyst` subagent for a prioritized action plan. |
 | Command | [`/file-organizer`](./commands/file-organizer/README.md)     | Analyze a directory, find duplicates, propose a tidy structure, and reorganize files only after explicit approval. |
 | Command | [`/fix-conflicts`](./commands/fix-conflicts/README.md)       | Resolve merge conflicts on a PR or branch, grounding each decision in the commit history of both sides. |
@@ -48,7 +46,7 @@ claude-config/
 | Command | [`/graphify-install`](./commands/graphify-install/README.md) | Bootstrap [graphify](https://github.com/safishamsi/graphify) inside any git repo end-to-end. |
 | Command | [`/refactor-code`](./commands/refactor-code/README.md)       | Safely refactor a file or function with tests-first, incremental changes, and static analysis verification. |
 | Command | [`/release-notes`](./commands/release-notes/README.md)       | Generate a user-friendly changelog (pt-br/en) from commits since the last tag, inline in the chat. |
-| Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab` with pipe-delimited output. |
+| Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab`. Emoji Conventional Commits, pre-commit checks, split detection, PR/issue/CI management. |
 | Agent   | [`backend-architect`](./agents/backend-architect.md)         | Produces architecture documents: OpenAPI specs, database schemas, event schemas, diagrams, and trade-off analyses. Design only — not implementation. |
 | Agent   | [`code-reviewer`](./agents/code-reviewer.md)                 | Senior code reviewer focused on security, correctness, and performance. Detects the project's package manager automatically. |
 | Agent   | [`debugger`](./agents/debugger.md)                           | Systematic fault-localization debugger. No fix without root cause. Writes a regression test for every bug fixed. |
