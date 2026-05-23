@@ -39,4 +39,9 @@ Each command, skill and agent has its own README with the full reference, exampl
 
 ## Installation
 
-Clone somewhere stable (e.g. `~/sources/personal/claude-config`) and point Claude Code at it, or symlink individual items into `~/.claude/commands/`, `~/.claude/skills/` and `~/.claude/agents/` as needed.
+```bash
+git clone https://github.com/judsonjuniorr/claude-config ~/sources/personal/claude-config
+~/sources/personal/claude-config/install.sh
+```
+
+Select what to install (space to mark, enter to confirm). Symlinks are the default — edits to the repo reflect immediately in Claude Code without reinstalling. Run `install.sh --help` for all options.

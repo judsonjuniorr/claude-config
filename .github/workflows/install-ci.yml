@@ -1,0 +1,48 @@
+name: install.sh
+
+on:
+  push:
+    paths:
+      - install.sh
+      - commands/**
+      - skills/**
+      - agents/**
+  pull_request:
+    paths:
+      - install.sh
+      - commands/**
+      - skills/**
+      - agents/**
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run install --all
+        run: bash install.sh --all
+
+      - name: No README in ~/.claude
+        run: |
+          count=$(find ~/.claude -name "README.md" | wc -l)
+          if [ "$count" -gt 0 ]; then
+            echo "FAIL: README.md found in ~/.claude:"
+            find ~/.claude -name "README.md"
+            exit 1
+          fi
+          echo "OK: no README.md in ~/.claude"
+
+      - name: Symlinks point to absolute paths
+        run: |
+          find ~/.claude -maxdepth 3 -type l | while read -r link; do
+            target=$(readlink "$link")
+            if [[ "$target" != /* ]]; then
+              echo "FAIL: relative symlink: $link -> $target"
+              exit 1
+            fi
+          done
+          echo "OK: all symlinks are absolute"
+
+      - name: Run install --all --replace (idempotent)
+        run: bash install.sh --all --replace
