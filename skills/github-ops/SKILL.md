@@ -87,25 +87,11 @@ pr-url|https://github.com/org/repo/pull/new/feature/x
 
 ## Commit message convention
 
-Always prefix the Conventional Commits subject with an emoji:
+Use Conventional Commits format without emoji:
 
-| Type | Emoji | When |
-|------|-------|------|
-| `feat` | ✨ | New feature |
-| `fix` | 🐛 | Bug fix |
-| `hotfix` | 🚑️ | Critical production fix |
-| `docs` | 📝 | Documentation only |
-| `refactor` | ♻️ | Code change, no behavior change |
-| `perf` | ⚡️ | Performance improvement |
-| `test` | ✅ | Tests only |
-| `chore` | 🔧 | Tooling, deps, config |
-| `ci` | 👷 | CI/CD changes |
-| `style` | 🎨 | Formatting, whitespace |
-| `revert` | ⏪️ | Revert a prior commit |
+`<type>(<scope>): <imperative subject>` — subject ≤ 72 chars, no trailing period.
 
-Final format: `<emoji> <type>(<scope>): <imperative subject>` — subject ≤ 72 chars total (including emoji), no trailing period.
-
-Example: `✨ feat(auth): add refresh token rotation`
+Example: `feat(auth): add refresh token rotation`
 
 ## Pre-commit checks
 
@@ -136,7 +122,7 @@ Do not split automatically. Always ask.
 ## Rules
 
 - **Never** call `git push`, `git commit`, `gh pr create`, etc. directly — use the scripts. They handle platform routing, secret detection, conventional-commit synthesis, and compact output.
-- `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize the emoji-prefixed Conventional Commits subject, then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
+- `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize a Conventional Commits subject, then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
 - **Never** pair a script with raw `git`/`gh`/`glab` inspection calls before or after — the script's output is the data. For pre-commit/working-tree inspection, use `inspect.sh` (see "Self-contained" section above).
 - **Never** stage `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json` — `ship.sh` blocks them; use `--force` only on explicit user request.
 - For PRs: prefer `--squash` merges unless the user says otherwise.

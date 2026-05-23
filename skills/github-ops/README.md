@@ -20,7 +20,7 @@ Agents that run `gh pr list` or `git push` directly get verbose output (ANSI col
 - Detects the platform (`github.com` → `gh`, `gitlab.com` → `glab`) and routes automatically.
 - Returns **1 line per record**, fields separated by `|`, no colors, no redundant labels.
 - Blocks accidental commits of `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json`.
-- Synthesizes emoji-prefixed Conventional Commit messages from the diff.
+- Synthesizes Conventional Commit messages from the diff.
 - Runs pre-commit checks (lint, type-check, fast tests) before committing.
 - Detects mixed concerns in a staged diff and suggests splitting into separate commits.
 - Generates PR bodies from `git log` + `git diff --stat` when you don't pass one.
@@ -369,25 +369,9 @@ $ bash github-ops/scripts/issue.sh list --label bug | wc -l
 
 ## Commit conventions
 
-Every commit message is prefixed with an emoji and follows Conventional Commits format:
+Commits follow Conventional Commits format without emoji:
 
-`<emoji> <type>(<scope>): <imperative subject>`
-
-### Emoji map
-
-| Emoji | Type | When |
-|-------|------|------|
-| ✨ | `feat` | New feature |
-| 🐛 | `fix` | Bug fix |
-| 🚑️ | `hotfix` | Critical production fix |
-| 📝 | `docs` | Documentation only |
-| ♻️ | `refactor` | Code change, no behavior change |
-| ⚡️ | `perf` | Performance improvement |
-| ✅ | `test` | Tests only |
-| 🔧 | `chore` | Tooling, deps, config |
-| 👷 | `ci` | CI/CD changes |
-| 🎨 | `style` | Formatting, whitespace |
-| ⏪️ | `revert` | Revert a prior commit |
+`<type>(<scope>): <imperative subject>` — subject ≤ 72 chars, no trailing period.
 
 ### Type auto-detection (`commit-msg.sh`)
 
