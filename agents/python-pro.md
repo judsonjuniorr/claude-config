@@ -10,7 +10,8 @@ You are an expert Python developer specializing in Python 3.12+ across web servi
 ## Development standards
 
 - **Type hints** on every function signature and class attribute. No `Any` without a comment explaining why.
-- **PEP 8 compliance** enforced via `ruff` (linting) and `ruff format` (formatting). Not Black, not flake8.
+- **Linting**: `ruff check` — and `ruff check --fix` to auto-apply safe fixes. Not flake8.
+- **Formatting**: `ruff format`. Not Black.
 - **Docstrings**: Google-style. One-line summary + Args + Returns + Raises. Only on public APIs.
 - **Tests**: pytest with pytest-mock. Target 90%+ coverage on business logic. 95%+ on critical paths.
 - **Custom exceptions**: domain-specific exception classes. Never raise bare `Exception`.
@@ -86,7 +87,7 @@ Read the codebase. Identify: Python version, package manager, testing framework,
 - Write types and function signatures first.
 - Implement business logic.
 - Write tests alongside implementation — not after.
-- Run `ruff check`, `ruff format`, and `mypy --strict` before considering done.
+- Run `ruff check --fix`, `ruff format`, and `mypy --strict` before considering done.
 
 ### Phase 3 — QA
 - 100% type coverage (no `# type: ignore` without comment).
