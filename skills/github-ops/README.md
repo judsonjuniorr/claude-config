@@ -20,7 +20,9 @@ Agents that run `gh pr list` or `git push` directly get verbose output (ANSI col
 - Detects the platform (`github.com` → `gh`, `gitlab.com` → `glab`) and routes automatically.
 - Returns **1 line per record**, fields separated by `|`, no colors, no redundant labels.
 - Blocks accidental commits of `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json`.
-- Synthesizes conventional-commit messages from the diff.
+- Synthesizes Conventional Commit messages from the diff.
+- Runs pre-commit checks (lint, type-check, fast tests) before committing.
+- Detects mixed concerns in a staged diff and suggests splitting into separate commits.
 - Generates PR bodies from `git log` + `git diff --stat` when you don't pass one.
 
 
@@ -367,20 +369,43 @@ $ bash github-ops/scripts/issue.sh list --label bug | wc -l
 
 ## Commit conventions
 
-`commit-msg.sh` picks `type` like so:
+Commits follow Conventional Commits format without emoji:
+
+`<type>(<scope>): <imperative subject>` — subject ≤ 72 chars, no trailing period.
+
+### Type auto-detection (`commit-msg.sh`)
 
 | Type | Trigger |
-|---|---|
+|------|---------|
 | `docs` | Only `.md/.mdx/.txt/.rst/.adoc` files |
 | `test` | Paths containing `test/`, `tests/`, `__tests__/`, `spec/`, `.test.`, `.spec.` |
 | `chore` | `package.json`, lockfiles, `Cargo.toml`, `go.mod`, `Gemfile` |
 | `ci` | `.github/workflows/`, `.gitlab-ci.yml`, `Dockerfile`, `.circleci/` |
-| `fix` | Diff contains `+...fix|bug|hotfix|patch` |
-| `refactor` | Diff contains `+...refactor|rename|extract|inline` |
-| `perf` | Diff contains `+...perf|performance|optimize` |
+| `fix` | Diff contains `+…fix\|bug\|hotfix\|patch` |
+| `refactor` | Diff contains `+…refactor\|rename\|extract\|inline` |
+| `perf` | Diff contains `+…perf\|performance\|optimize` |
 | `feat` | Fallback |
 
 Scope = the top-level directory most common among staged files (ignoring `node_modules`, `dist`, `build`, `vendor`).
+
+### Pre-commit checks
+
+Checks are scoped to what actually changed — no full test battery on small commits.
+
+The staged file list is classified into: `code`, `config`, `ci`, `docs`, `deps`, `assets`. Then:
+
+| Change type | Lint | Type-check | Tests |
+|-------------|------|------------|-------|
+| code | ✅ staged files only | ✅ whole project (incremental) | ✅ targeted test files |
+| code + config | ✅ staged files only | ✅ whole project (incremental) | ✅ targeted test files |
+| config / ci only | ✅ staged files only | ❌ | ❌ |
+| deps / docs / assets | ❌ | ❌ | ❌ |
+
+**Targeted tests**: derives the test file from the staged source file (`src/foo.ts` → `src/foo.test.ts`), runs only that file. Falls back to the full suite only when ≥ 10 source files changed or a shared core module is touched. Pass `--no-verify` to skip all checks, or `--skip-tests` to skip #3.
+
+### Split detection
+
+After staging, if the diff spans unrelated concerns (e.g., a bug fix + a new feature), the skill surfaces the groups and asks the user whether to split into separate commits before proceeding.
 
 ---
 

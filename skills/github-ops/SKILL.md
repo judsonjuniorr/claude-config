@@ -85,13 +85,81 @@ push|origin/feature/x|new
 pr-url|https://github.com/org/repo/pull/new/feature/x
 ```
 
+## Commit message convention
+
+Use Conventional Commits format without emoji:
+
+`<type>(<scope>): <imperative subject>` — subject ≤ 72 chars, no trailing period.
+
+Example: `feat(auth): add refresh token rotation`
+
+## Pre-commit checks
+
+Run only the checks relevant to the staged files. Use the `diff-files` list from the first `ship.sh` call to classify the change, then apply the table below. Stop on the first failure — do not commit broken code. Skip all checks if the user passes `--no-verify` or says "skip checks".
+
+### File classification
+
+Classify staged files into one or more categories:
+
+| Category | File patterns |
+|----------|--------------|
+| **code** | `*.ts`, `*.tsx`, `*.js`, `*.jsx`, `*.py`, `*.go`, `*.rs`, `*.rb` |
+| **config** | `*.json`, `*.yaml`, `*.yml`, `*.toml`, `*.ini`, `*.env.*` (non-secret) |
+| **ci** | `.github/workflows/`, `.gitlab-ci.yml`, `.circleci/`, `Dockerfile*` |
+| **docs** | `*.md`, `*.mdx`, `*.txt`, `*.rst`, `*.adoc` |
+| **deps** | `package.json`, lockfiles, `Cargo.toml`, `go.mod`, `requirements*.txt`, `pyproject.toml` |
+| **assets** | `*.png`, `*.svg`, `*.ico`, `*.jpg`, `*.css` (no logic) |
+
+### Which checks to run
+
+| Change type | Lint | Type-check | Tests |
+|-------------|------|------------|-------|
+| code only | ✅ staged files | ✅ staged files | ✅ targeted |
+| code + config | ✅ staged files | ✅ staged files | ✅ targeted |
+| config / ci only | ✅ staged files | ❌ skip | ❌ skip |
+| deps only | ❌ skip | ❌ skip | ❌ skip |
+| docs / assets only | ❌ skip | ❌ skip | ❌ skip |
+
+### Running each check
+
+Detect the package manager from the lock file in the repo root: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `bun.lockb` → bun, `package-lock.json` → npm.
+
+**Lint — staged files only, not the whole project:**
+- JS/TS with Biome: `pnpm exec biome check <staged-files>` (or yarn/npm equivalent)
+- JS/TS with ESLint: `pnpm exec eslint <staged-files>`
+- Python: `ruff check <staged-files>`
+
+**Type-check — always whole-project (incremental by the compiler):**
+- TS: `pnpm exec tsc --noEmit` (skip if no `tsconfig.json`)
+- Python: `mypy <changed-packages>` (skip if mypy not configured)
+
+**Tests — targeted, not the full suite:**
+
+Derive the test file(s) from the staged source files using the project's conventions (e.g., `src/foo.ts` → `src/foo.test.ts` or `tests/foo.test.ts`). Run only those files:
+
+- Vitest: `pnpm vitest run <test-files>`
+- Jest: `pnpm jest --testPathPattern "<test-files>" --passWithNoTests`
+- pytest: `pytest <test-files> -x -q`
+- Go: `go test ./path/to/package/...`
+
+If no corresponding test file exists for a staged file, skip tests for that file — do not run the full suite as a fallback.
+
+**Full suite** — run only when: the user explicitly asks, the change touches ≥ 10 source files, or the change modifies shared utilities / core modules that have broad downstream impact.
+
+Skip check #3 entirely if the user says "skip tests".
+
+## Logical unit split detection
+
+After the first `ship.sh` call surfaces the diff, scan the `diff-files` list. If staged files clearly span unrelated concerns (e.g., a bug fix mixed with a new feature, or application code mixed with CI config), suggest splitting into separate commits. Present the proposed groupings and ask the user before proceeding.
+
+Do not split automatically. Always ask.
+
 ## Rules
 
 - **Never** call `git push`, `git commit`, `gh pr create`, etc. directly — use the scripts. They handle platform routing, secret detection, conventional-commit synthesis, and compact output.
-- `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize a Conventional Commits subject (≤72 chars, imperative mood), then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
+- `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize a Conventional Commits subject, then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
 - **Never** pair a script with raw `git`/`gh`/`glab` inspection calls before or after — the script's output is the data. For pre-commit/working-tree inspection, use `inspect.sh` (see "Self-contained" section above).
 - **Never** stage `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json` — `ship.sh` blocks them; use `--force` only on explicit user request.
-- Conventional Commits (auto-detected by `commit-msg.sh`): `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `chore`, `perf`, `ci`. Subject ≤ 72 chars, imperative mood, no trailing period.
 - For PRs: prefer `--squash` merges unless the user says otherwise.
 - For destructive ops (force-push via `ship.sh --amend`, `pr.sh merge`, `issue.sh close`) — confirm with the user before running.
 - If `detect_platform` returns `unknown` (e.g., self-hosted), the script exits with `err|unknown-platform|<url>`; ask the user which CLI to use.
