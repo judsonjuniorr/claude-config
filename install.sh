@@ -137,12 +137,13 @@ is_installed() {
 # selected_indices: space-separated indices into ASSET_NAMES
 select_assets_fzf() {
   local items=()
-  local i
-  for ((i = 0; i < ${#ASSET_NAMES[@]}; i++)); do
+  local i=0
+  while [ "$i" -lt "${#ASSET_NAMES[@]}" ]; do
     local status="new" display_type="${ASSET_TYPES[$i]}"
     [ "$display_type" = "commands-ns" ] && display_type="commands"
     is_installed "${ASSET_TYPES[$i]}" "${ASSET_NAMES[$i]}" && status="installed"
     items+=("$(printf '%s | %-30s [%s]' "$display_type" "${ASSET_NAMES[$i]}" "$status")")
+    i=$((i + 1))
   done
 
   local chosen
@@ -158,24 +159,29 @@ select_assets_fzf() {
     if echo "$chosen" | grep -qF "$line"; then
       echo "$idx"
     fi
-    ((idx++))
+    idx=$((idx + 1))
   done
 }
 
 select_assets_menu() {
-  local i
-  echo "Available assets:"
-  for ((i = 0; i < ${#ASSET_NAMES[@]}; i++)); do
+  local i=0
+  echo "Available assets:" >&2
+  while [ "$i" -lt "${#ASSET_NAMES[@]}" ]; do
     local status="new" display_type="${ASSET_TYPES[$i]}"
     [ "$display_type" = "commands-ns" ] && display_type="commands"
     is_installed "${ASSET_TYPES[$i]}" "${ASSET_NAMES[$i]}" && status="installed"
-    printf '  %2d) [%-9s] %-30s [%s]\n' $((i+1)) "$display_type" "${ASSET_NAMES[$i]}" "$status"
+    printf '  %2d) [%-9s] %-30s [%s]\n' $((i+1)) "$display_type" "${ASSET_NAMES[$i]}" "$status" >&2
+    i=$((i + 1))
   done
-  echo
-  echo "Enter numbers separated by spaces (e.g. 1 3 4), or 'all':"
-  read -r selection
+  echo >&2
+  printf "Enter numbers separated by spaces (e.g. 1 3 4), or 'all': " >&2
+  read -r selection </dev/tty
   if [ "$selection" = "all" ]; then
-    for ((i = 0; i < ${#ASSET_NAMES[@]}; i++)); do echo "$i"; done
+    i=0
+    while [ "$i" -lt "${#ASSET_NAMES[@]}" ]; do
+      echo "$i"
+      i=$((i + 1))
+    done
     return
   fi
   for n in $selection; do
@@ -322,16 +328,17 @@ uninstall_mode() {
   local inst_names=()
   local inst_dests=()
 
-  local i
-  for ((i = 0; i < ${#ASSET_NAMES[@]}; i++)); do
+  local i=0
+  while [ "$i" -lt "${#ASSET_NAMES[@]}" ]; do
     local type="${ASSET_TYPES[$i]}" name="${ASSET_NAMES[$i]}"
-    is_installed "$type" "$name" || continue
+    is_installed "$type" "$name" || { i=$((i+1)); continue; }
     local dest
     dest=$(dest_for "$type" "$name")
-    [ -e "$dest" ] || [ -L "$dest" ] || continue
+    { [ -e "$dest" ] || [ -L "$dest" ]; } || { i=$((i+1)); continue; }
     inst_types+=("$type")
     inst_names+=("$name")
     inst_dests+=("$dest")
+    i=$((i+1))
   done
 
   if [ "${#inst_names[@]}" -eq 0 ]; then
@@ -342,19 +349,23 @@ uninstall_mode() {
   local selected_indices=()
 
   if $OPT_ALL; then
-    for ((i = 0; i < ${#inst_names[@]}; i++)); do
-      selected_indices+=("$i")
+    i=0
+    while [ "$i" -lt "${#inst_names[@]}" ]; do
+      selected_indices+=("$i"); i=$((i+1))
     done
   else
     echo "Installed assets:"
-    for ((i = 0; i < ${#inst_names[@]}; i++)); do
+    i=0
+    while [ "$i" -lt "${#inst_names[@]}" ]; do
       printf '  %2d) [%-9s] %s\n' $((i+1)) "${inst_types[$i]}" "${inst_names[$i]}"
+      i=$((i+1))
     done
     echo
     echo "Enter numbers to uninstall (e.g. 1 3), or 'all':"
     read -r selection
     if [ "$selection" = "all" ]; then
-      for ((i = 0; i < ${#inst_names[@]}; i++)); do selected_indices+=("$i"); done
+      i=0
+      while [ "$i" -lt "${#inst_names[@]}" ]; do selected_indices+=("$i"); i=$((i+1)); done
     else
       for n in $selection; do
         local idx=$((n - 1))
@@ -416,8 +427,9 @@ fi
 # Select assets
 selected_indices=()
 if $OPT_ALL; then
-  for ((i = 0; i < ${#ASSET_NAMES[@]}; i++)); do
-    selected_indices+=("$i")
+  i=0
+  while [ "$i" -lt "${#ASSET_NAMES[@]}" ]; do
+    selected_indices+=("$i"); i=$((i+1))
   done
 elif $USE_FZF; then
   while IFS= read -r idx; do
