@@ -8,16 +8,28 @@ Personal Claude Code configuration hub: custom slash commands and skills that tr
 claude-config/
 ├── CLAUDE.md                    # global instructions Claude Code loads at session start
 ├── commands/                    # slash commands
+│   ├── commit/                  → see commands/commit/README.md
 │   ├── finance/                 → see commands/finance/README.md
 │   │   ├── organizze.md         → /finance:organizze command file
 │   │   └── organizze-scripts/   → scripts used by /finance:organizze
 │   ├── fix-conflicts/           → see commands/fix-conflicts/README.md
+│   ├── generate-tests/          → see commands/generate-tests/README.md
 │   ├── graphify-install/        → see commands/graphify-install/README.md
+│   ├── refactor-code/           → see commands/refactor-code/README.md
 │   └── release-notes/           → see commands/release-notes/README.md
 ├── skills/                      # skills
 │   └── github-ops/              → see skills/github-ops/README.md
 └── agents/                      # subagents
-    └── financial-analyst/       → see agents/financial-analyst/README.md
+    ├── backend-architect.md     → /agent backend-architect
+    ├── code-reviewer.md         → /agent code-reviewer
+    ├── debugger.md              → /agent debugger
+    ├── financial-analyst/       → see agents/financial-analyst/README.md
+    ├── frontend-developer.md    → /agent frontend-developer
+    ├── fullstack-developer.md   → /agent fullstack-developer
+    ├── mobile-developer.md      → /agent mobile-developer
+    ├── python-pro.md            → /agent python-pro
+    ├── search-specialist.md     → /agent search-specialist
+    └── ui-ux-designer.md        → /agent ui-ux-designer
 ```
 
 ## CLAUDE.md
@@ -28,12 +40,24 @@ claude-config/
 
 | Type    | Name                                                         | One-liner                                                                   |
 |---------|--------------------------------------------------------------|-----------------------------------------------------------------------------|
+| Command | [`/commit`](./commands/commit/README.md)                     | Stage changes, craft an emoji-enhanced Conventional Commit, and commit via `github-ops`. |
 | Command | [`/finance:organizze`](./commands/finance/README.md#financeorganizze) | Pull personal finance data from Organizze via REST API, build a snapshot, delegate to the `financial-analyst` subagent for a prioritized action plan. |
 | Command | [`/fix-conflicts`](./commands/fix-conflicts/README.md)       | Resolve merge conflicts on a PR or branch, grounding each decision in the commit history of both sides. |
+| Command | [`/generate-tests`](./commands/generate-tests/README.md)     | Generate a comprehensive test suite for a file or function, auto-detecting the project's testing framework. |
 | Command | [`/graphify-install`](./commands/graphify-install/README.md) | Bootstrap [graphify](https://github.com/safishamsi/graphify) inside any git repo end-to-end. |
+| Command | [`/refactor-code`](./commands/refactor-code/README.md)       | Safely refactor a file or function with tests-first, incremental changes, and static analysis verification. |
 | Command | [`/release-notes`](./commands/release-notes/README.md)       | Generate a user-friendly changelog (pt-br/en) from commits since the last tag, inline in the chat. |
 | Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab` with pipe-delimited output. |
+| Agent   | [`backend-architect`](./agents/backend-architect.md)         | Contract-first backend architecture: APIs, database schemas, event-driven systems, and observability from day one. |
+| Agent   | [`code-reviewer`](./agents/code-reviewer.md)                 | Senior code reviewer focused on security, correctness, and performance. Detects the project's package manager automatically. |
+| Agent   | [`debugger`](./agents/debugger.md)                           | Systematic fault-localization debugger. No fix without root cause. Writes a regression test for every bug fixed. |
 | Agent   | [`financial-analyst`](./agents/financial-analyst/README.md)  | Personal finance analyst subagent — consumes pre-built snapshots, respects user memory, outputs prioritized action plans. |
+| Agent   | [`frontend-developer`](./agents/frontend-developer.md)       | React 19+ and Next.js 16 App Router specialist. Biome, shadcn/ui with Base UI, pnpm, strict TypeScript. |
+| Agent   | [`fullstack-developer`](./agents/fullstack-developer.md)     | End-to-end TypeScript feature delivery: Next.js 16, tRPC, Drizzle ORM, Zod, Vitest. |
+| Agent   | [`mobile-developer`](./agents/mobile-developer.md)           | Cross-platform mobile with React Native 0.82+, Expo SDK, iOS 18, and Android 15. Performance-first. |
+| Agent   | [`python-pro`](./agents/python-pro.md)                       | Expert Python 3.12+ developer: FastAPI, Polars, uv, ruff, mypy strict, full type coverage. |
+| Agent   | [`search-specialist`](./agents/search-specialist.md)         | Web research with rigorous source evaluation, contradiction handling, and structured findings reports. |
+| Agent   | [`ui-ux-designer`](./agents/ui-ux-designer.md)               | Research-driven senior UI/UX designer. Evidence-backed critique, WCAG 2.2 AA, anti-generic aesthetics. |
 
 Each command, skill and agent has its own README with the full reference, examples, and rules.
 
