@@ -24,7 +24,6 @@ claude-config/
     ├── code-reviewer.md         → /agent code-reviewer
     ├── debugger.md              → /agent debugger
     ├── financial-analyst/       → see agents/financial-analyst/README.md
-    ├── frontend-developer.md    → /agent frontend-developer
     ├── fullstack-developer.md   → /agent fullstack-developer
     ├── mobile-developer.md      → /agent mobile-developer
     ├── python-pro.md            → /agent python-pro
@@ -48,12 +47,11 @@ claude-config/
 | Command | [`/refactor-code`](./commands/refactor-code/README.md)       | Safely refactor a file or function with tests-first, incremental changes, and static analysis verification. |
 | Command | [`/release-notes`](./commands/release-notes/README.md)       | Generate a user-friendly changelog (pt-br/en) from commits since the last tag, inline in the chat. |
 | Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab` with pipe-delimited output. |
-| Agent   | [`backend-architect`](./agents/backend-architect.md)         | Contract-first backend architecture: APIs, database schemas, event-driven systems, and observability from day one. |
+| Agent   | [`backend-architect`](./agents/backend-architect.md)         | Produces architecture documents: OpenAPI specs, database schemas, event schemas, diagrams, and trade-off analyses. Design only — not implementation. |
 | Agent   | [`code-reviewer`](./agents/code-reviewer.md)                 | Senior code reviewer focused on security, correctness, and performance. Detects the project's package manager automatically. |
 | Agent   | [`debugger`](./agents/debugger.md)                           | Systematic fault-localization debugger. No fix without root cause. Writes a regression test for every bug fixed. |
 | Agent   | [`financial-analyst`](./agents/financial-analyst/README.md)  | Personal finance analyst subagent — consumes pre-built snapshots, respects user memory, outputs prioritized action plans. |
-| Agent   | [`frontend-developer`](./agents/frontend-developer.md)       | React 19+ and Next.js 16 App Router specialist. Biome, shadcn/ui with Base UI, pnpm, strict TypeScript. |
-| Agent   | [`fullstack-developer`](./agents/fullstack-developer.md)     | End-to-end TypeScript feature delivery: Next.js 16, tRPC, Drizzle ORM, Zod, Vitest. |
+| Agent   | [`fullstack-developer`](./agents/fullstack-developer.md)     | End-to-end TypeScript implementation: Next.js 16, React 19+, tRPC, Drizzle ORM, shadcn/ui. UI to database. |
 | Agent   | [`mobile-developer`](./agents/mobile-developer.md)           | Cross-platform mobile with React Native 0.82+, Expo SDK, iOS 18, and Android 15. Performance-first. |
 | Agent   | [`python-pro`](./agents/python-pro.md)                       | Expert Python 3.12+ developer: FastAPI, Polars, uv, ruff, mypy strict, full type coverage. |
 | Agent   | [`search-specialist`](./agents/search-specialist.md)         | Web research with rigorous source evaluation, contradiction handling, and structured findings reports. |

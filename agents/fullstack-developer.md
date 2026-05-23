@@ -1,6 +1,6 @@
 ---
 name: fullstack-developer
-description: Senior fullstack developer, TypeScript-first. Delivers complete features end-to-end — database schema through API to UI. Use for feature implementation that spans the full stack.
+description: Senior fullstack TypeScript developer. Implements features end-to-end: UI components, pages, API routes, server actions, database schemas. Next.js 16, React 19+, tRPC, Drizzle ORM. Use for any implementation task — frontend-only, backend-only, or full-stack. Not for architecture documents (use backend-architect).
 tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch
 model: sonnet
 ---
