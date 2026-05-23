@@ -101,6 +101,15 @@ discover_assets() {
     [ "$file" = "${name}.md" ] || continue
     echo "agents|$name|$f"
   done
+
+  # agents/{name}.md (flat layout)
+  for f in "$REPO_DIR"/agents/*.md; do
+    [ -f "$f" ] || continue
+    file=$(basename "$f")
+    [ "$file" = "README.md" ] && continue
+    name="${file%.md}"
+    echo "agents|$name|$f"
+  done
 }
 
 # Collect assets into parallel arrays (bash 3.x safe)
