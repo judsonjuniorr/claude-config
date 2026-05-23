@@ -123,13 +123,12 @@ fi
 is_installed() {
   local type="$1" name="$2"
   local dest
-  if [ "$type" = "skills" ] || [ "$type" = "commands-ns" ]; then
-    dest="$CLAUDE_DIR/commands/$name"
-  elif [ "$type" = "commands" ]; then
-    dest="$CLAUDE_DIR/commands/$name.md"
-  else
-    dest="$CLAUDE_DIR/$type/$name.md"
-  fi
+  case "$type" in
+    skills)      dest="$CLAUDE_DIR/skills/$name" ;;
+    commands-ns) dest="$CLAUDE_DIR/commands/$name" ;;
+    commands)    dest="$CLAUDE_DIR/commands/$name.md" ;;
+    *)           dest="$CLAUDE_DIR/$type/$name.md" ;;
+  esac
   [ -e "$dest" ] || [ -L "$dest" ]
 }
 
