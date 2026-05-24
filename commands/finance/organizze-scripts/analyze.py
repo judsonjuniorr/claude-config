@@ -238,6 +238,12 @@ def summarize(snapshot: dict) -> str:
         out.append("- (nenhum)")
     out.append("")
 
+    # === Fluxo por conta — projeção diária + dias críticos ===
+    cf_block = render_cashflow_block(snapshot)
+    if cf_block:
+        out.append(cf_block)
+        out.append("")
+
     out.append("## Orçamento do mês corrente (metas vs. realizado)")
     cur_key_y = today.year
     cur_key_m = today.month
@@ -278,13 +284,50 @@ def load_memory_block() -> str:
         return ""
 
 
+def load_plans_block() -> str:
+    """Lê ~/finance-organizze/plans.md e devolve um bloco renderizado para injeção."""
+    plans_path = pathlib.Path.home() / "finance-organizze" / "plans.md"
+    if not plans_path.exists():
+        return ""
+    import subprocess
+    script = pathlib.Path(__file__).parent / "plans.py"
+    try:
+        r = subprocess.run(
+            ["python3", str(script), "render"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return r.stdout.strip()
+    except Exception:
+        return ""
+
+
+def render_cashflow_block(snapshot: dict) -> str:
+    """Roda cashflow.per_account_projection e devolve markdown pronto."""
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).parent))
+        from cashflow import per_account_projection, render_markdown
+        from config import threshold_cents
+        proj = per_account_projection(snapshot, threshold_cents=threshold_cents(), horizon_days=90)
+        return render_markdown(proj).strip()
+    except Exception as e:
+        return f"## Fluxo por conta\n_(erro ao computar projeção: {e})_"
+
+
 def render_prompt(snapshot: dict, framework_md: str) -> str:
     system = extract_system_prompt(framework_md)
     summary = summarize(snapshot)
     memory_block = load_memory_block()
+    plans_block = load_plans_block()
     memory_section = f"\n---\n\n{memory_block}\n" if memory_block else ""
+    plans_section = f"\n---\n\n{plans_block}\n" if plans_block else ""
+
+    # Lista de nomes de contas existentes (para guardrail de transferências)
+    existing_accounts = [a.get("name") for a in (snapshot.get("accounts") or [])
+                         if not a.get("archived") and a.get("type")]
+    accounts_hint = ", ".join(f"`{n}`" for n in existing_accounts if n) or "(nenhuma)"
+
     return f"""{system}
-{memory_section}
+{memory_section}{plans_section}
 ---
 
 # Dados consolidados (Organizze)
@@ -293,21 +336,49 @@ def render_prompt(snapshot: dict, framework_md: str) -> str:
 
 ---
 
-# Tarefa
+# Diretrizes obrigatórias
 
-Com base nos dados acima E respeitando a memória do usuário (se houver), produza EXATAMENTE neste formato:
+1. **Metas por categoria**: o Organizze já define orçamento por categoria (seção "Orçamento do mês corrente"). Sua análise DEVE priorizar atingir essas metas — destaque categorias acima de 80% do orçamento como risco e categorias bem abaixo como oportunidade de realocação.
+
+2. **Objetivos do usuário** (seção acima, se houver): avalie ad-hoc se há espaço no mês para cada objetivo a partir do **saldo atual + tx_future**, sem pressupor aporte mensal fixo. Para cada objetivo `active` diga claramente: "viável neste mês: SIM/NÃO/PARCIAL — R$ X possível", com justificativa numérica.
+
+3. **Conflito objetivo vs. débito iminente**: se algum dia crítico aparece em qualquer conta principal (seção "Fluxo por conta"), **pause objetivos com priority=negociavel neste ciclo** e nomeie-os explicitamente em "Objetivos pausados". Objetivos com priority=inegociavel devem ser mantidos cortando gastos em outras categorias.
+
+4. **Transferências inter-contas (GUARDRAIL ESTRITO)**: contas que EXISTEM neste snapshot: {accounts_hint}. Toda sugestão de transferência deve nomear **duas dessas contas** e cobrir débito específico com data. Se o objetivo do usuário cita uma conta-alvo que NÃO está na lista acima, NÃO invente: diga "reserve R$ X para Y" sem nomear conta.
+
+5. **Tom**: sem floreio, sem hedge. Números primeiro, recomendação depois.
+
+---
+
+# Tarefa — produza EXATAMENTE este formato
 
 **TL;DR** (3 linhas): situação atual + risco mais próximo + maior oportunidade.
 
 **Números-chave** (tabela markdown): saldo atual, projeção 7/30/90d, % comprometido com recorrentes,
-parcelamentos em curso (total restante), atrasadas (despesa/receita), maior categoria do mês, fatura mais próxima.
+parcelamentos em curso (total restante), atrasadas (despesa/receita), maior categoria do mês, fatura mais próxima, nº de dias críticos por conta.
 
 **Atrasadas — ação imediata** (≤3 bullets): para cada transação atrasada relevante, indique
 "pagar/cobrar até <data>".
 
-**Parcelamentos — visão acionável** (≤5 bullets): destaque as que estão "acabando" (cortar custo em breve)
-e as "longe do fim" (alto comprometimento futuro). Não sugira renegociar parcelas que a memória do usuário
-explicitamente exclui.
+**Metas de categoria — status** (≤5 bullets): categorias em risco (>80% gasto) e categorias com folga relevante. Use os números da seção "Orçamento do mês corrente".
+
+**Objetivos do usuário — viabilidade neste mês** (1 bullet por objetivo ativo): nome curto · viável SIM/NÃO/PARCIAL · valor possível neste mês · justificativa em 1 linha. Se não há objetivos ativos, escreva "(sem objetivos ativos)".
+
+**Plano de transferências e poupança** (≤5 bullets): para cada dia crítico relevante OU objetivo viável, formato:
+```
+[CRÍTICO · até <data>] Transferir R$ X de "<conta origem>" para "<conta destino>"
+  Motivo: <débito específico em <data> deixa saldo em <valor>>
+```
+ou
+```
+[POUPANÇA · neste mês] Reservar R$ X para "<conta destino se existe>" OU "<objetivo Y>" se conta não cadastrada
+  Origem: <conta com folga ou sobra mensal>
+```
+Apenas use contas da lista de existentes. Se não há ação clara, escreva "(sem ações de transferência necessárias)".
+
+**Objetivos pausados neste ciclo** (≤3 bullets, omita se vazio): nome do objetivo + razão (dia crítico em <data> ou meta de categoria em risco).
+
+**Parcelamentos — visão acionável** (≤5 bullets): destaque as que estão "acabando" e as "longe do fim". Não sugira renegociar parcelas que a memória do usuário explicitamente exclui.
 
 **3 recomendações priorizadas** no formato:
 ```
@@ -316,7 +387,7 @@ explicitamente exclui.
   Evidência: <transações/categorias específicas dos dados acima>
   Ação: <passo concreto>
 ```
-Nunca proponha algo que contradiga a memória do usuário.
+Nunca proponha algo que contradiga a memória do usuário nem que crie nova conta.
 
 **Próximos passos verificáveis** (≤3 bullets).
 

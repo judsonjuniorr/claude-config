@@ -6,6 +6,8 @@ argument-hint: "[--history-days N] [--future-days N] [--no-analyze]"
 
 # /finance:organizze — Organizze → análise consolidada
 
+> **Subagent recomendado (quando instalado):** o Passo 6 delega a análise ao subagent `financial-analyst` via tool `Agent`. Se o arquivo `~/.claude/agents/financial-analyst.md` não existir, o passo cai automaticamente para `general-purpose` (já documentado abaixo) — o comando continua funcionando. Para instalar o subagent dedicado, rode `install.sh` neste repo e selecione `financial-analyst`.
+
 Quando o usuário invocar `/finance:organizze`, siga estes passos **exatamente**. Não pule nenhum. Não pré-inspecione (não rode `git status`, não liste diretórios, não cheque versões — vá direto aos scripts; eles são auto-contidos).
 
 Argumentos opcionais (parseie de `$ARGUMENTS`):
@@ -78,6 +80,40 @@ Após o primeiro `pull.py`, se `~/finance-organizze/balances.json` ainda não ex
 
 Pule este passo se `balances.json` já existe.
 
+## Passo 2.7 — Mapear conta pagadora de cada cartão (rodar quando faltar)
+
+A projeção de fluxo por conta (Passo 5+) precisa saber **qual conta paga cada cartão** pra debitar a fatura na data certa. Sem isso, faturas não entram na projeção e estouros silenciosos podem passar.
+
+Após o primeiro `pull.py` (Passo 3), rode:
+
+```bash
+python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/config.py cards-missing --snapshot "$SNAP"
+```
+
+Saída: `<card_id>|<card_name>` linha a linha — só cartões sem mapeamento. Se vier vazio, pule este passo.
+
+Para cada linha:
+
+1. Mostre ao usuário as contas principais ativas:
+   ```bash
+   jq '[.accounts[] | select(.archived==false and .institution_id != "cofrinho" and (.type == "checking" or .type == "savings"))] | map({id, name})' "$SNAP"
+   ```
+
+2. `AskUserQuestion`: "De qual conta é debitada a fatura do cartão **<card_name>**?" — opções dinâmicas (uma por conta principal).
+
+3. Grave:
+   ```bash
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/config.py card-account <card_id> <account_id>
+   ```
+
+Opcional — threshold de alerta para dias críticos (default R$ 0, sem margem):
+```bash
+python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/config.py set CASHFLOW_THRESHOLD_CENTS 20000
+```
+(`20000` = R$ 200 de margem; saldo projetado abaixo disso vira "dia crítico".)
+
+Mapeamentos vivem em `~/finance-organizze/.config` (formato `KEY=VALUE`, 0600). Edição manual permitida.
+
 ## Passo 3 — Pull do snapshot
 
 ```bash
@@ -117,7 +153,7 @@ Use a tool `Agent`:
 
 Salve a resposta do subagent em `$REPORT`.
 
-## Passo 6.5 — Capturar nova memória (após apresentar a análise)
+## Passo 6.5a — Capturar nova memória (restrições/contexto)
 
 Antes de fechar a sessão, **pergunte ao usuário** via `AskUserQuestion` (single-select, opção "Pular" disponível):
 
@@ -134,6 +170,38 @@ A memória vai para `~/finance-organizze/memory.md` com timestamp; `analyze.py` 
 Para consultar/limpar:
 - `memory.py list [--recent N]`
 - `memory.py prune --older-than 365`
+
+## Passo 6.5b — Capturar novo objetivo financeiro
+
+Em seguida, pergunte via `AskUserQuestion` (single-select com "Pular"):
+
+> Quer registrar algum objetivo financeiro? Ex.: "guardar R$ 5000 para viagem em dezembro", "quitar dívida X até junho", "construir reserva de emergência de R$ 20000".
+
+Se houver resposta, faça perguntas curtas em sequência (cada uma com "Pular" para opcional):
+
+1. **Texto descritivo**: já capturado acima.
+2. **Valor-alvo (R$)**: pergunte e converta pra centavos (ex.: `5000` → `500000`).
+3. **Prazo (YYYY-MM-DD)**: opcional. Se o usuário disser "dezembro", interprete como último dia do mês informado no ano corrente/seguinte.
+4. **Conta-destino**: opcional. Mostre lista de contas principais + cofrinhos do snapshot; se nada bate, aceite texto livre (será tratado como genérico pelo analista).
+5. **Prioridade**: `negociavel` (default — analista pausa se houver débito iminente) ou `inegociavel` (analista mantém cortando outras categorias).
+
+Grave:
+
+```bash
+python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/plans.py add "<texto>" \
+  --target-cents <N> \
+  [--deadline <YYYY-MM-DD>] \
+  [--account "<nome livre>"] \
+  [--priority negociavel|inegociavel]
+```
+
+Objetivos vão pra `~/finance-organizze/plans.md`; `analyze.py` injeta nas próximas análises e o subagent é instruído a **avaliar viabilidade mês a mês sem assumir aporte fixo**, e a **pausar objetivos negociáveis quando houver dia crítico em alguma conta principal**.
+
+Para consultar/concluir:
+- `plans.py list [--recent N] [--status active|done|paused|cancelled]`
+- `plans.py done "<ts>"` — marca como concluído (usa o timestamp do header)
+- `plans.py status "<ts>" paused|cancelled|active`
+- `plans.py prune --older-than-done 365`
 
 ## Passo 7 — Sugerir atualização de orçamento
 
@@ -159,7 +227,18 @@ Se `--history-days` no Passo 3 foi menor que 180, avise: "histórico curto, conf
 
 Imprima no chat, nesta ordem:
 
-1. O conteúdo do relatório do subagent (TL;DR → Números-chave → 3 recomendações → próximos passos → disclaimer).
+1. O conteúdo do relatório do subagent. Estrutura esperada agora inclui:
+   - TL;DR
+   - Números-chave
+   - Atrasadas — ação imediata
+   - **Metas de categoria — status**
+   - **Objetivos do usuário — viabilidade neste mês**
+   - **Plano de transferências e poupança** (destaque visualmente — é o coração desta análise)
+   - **Objetivos pausados neste ciclo** (se houver)
+   - Parcelamentos — visão acionável
+   - 3 recomendações priorizadas
+   - Próximos passos verificáveis
+   - Disclaimer
 2. Linha final:
    ```
    📄 Snapshot: <path do SNAP>
@@ -176,3 +255,9 @@ Não invente números. Se o subagent não cobrir algum campo dos "Números-chave
 - **Nunca commite** `~/finance-organizze/`. Está fora do repo.
 - **Nunca exponha** o token em logs ou mensagens. Se precisar mostrar, mascare como `org_xxx…xxx`.
 - Se o usuário rodar duas vezes seguidas, cada execução gera arquivos com timestamp distinto — sem corrupção.
+
+## Subagents recomendados
+
+Subagent deste repo (`agents/`) que aprimora o resultado quando instalado. O comando funciona sem ele — o Passo 6 cai automaticamente para `general-purpose`.
+
+- **[`financial-analyst`](../../../agents/financial-analyst/)** — análise financeira pessoal calibrada (consome snapshots Organizze, respeita memórias do usuário, gera plano priorizado conforme o framework `analista-financeiro-claude-code.md`). Instale via `install.sh` selecionando `financial-analyst`.
