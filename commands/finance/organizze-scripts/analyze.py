@@ -114,8 +114,7 @@ def summarize(snapshot: dict) -> str:
     out.append("")
     def is_principal(a):
         return (not a.get("archived")
-                and a.get("institution_id") != "cofrinho"
-                and a.get("type") in ("checking", "savings"))
+                and a.get("type") in ("checking", "savings", "other"))
 
     out.append("## Saldo por conta principal (entra no consolidado)")
     for a in accounts:

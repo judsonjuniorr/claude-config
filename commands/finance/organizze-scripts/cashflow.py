@@ -125,11 +125,10 @@ def per_account_projection(
         aid = card_map.get(cid)
         if aid not in accounts_by_id:
             continue
-        total = int(inv.get("total_cents") or 0)
-        if total == 0:
+        amt = int(inv.get("amount_cents") or inv.get("total_cents") or 0)
+        if amt == 0:
             continue
-        # fatura é despesa → débito negativo
-        amt = -abs(total)
+        amt = -abs(amt)  # fatura é sempre débito
         name = inv.get("_credit_card_name") or "cartão"
         events[aid].append((d, amt, f"Fatura {name}", "invoice"))
 

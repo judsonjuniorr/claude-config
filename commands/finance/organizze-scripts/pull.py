@@ -207,23 +207,44 @@ def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[in
 
 
 def is_principal_account(a: dict) -> bool:
-    """Mesma regra do widget 'Saldo geral' do app: conta bancária ativa, não cofrinho."""
+    """Todas as contas ativas (checking, savings, other) — inclui cofrinhos para bater com o total do Organizze."""
     if a.get("archived"):
         return False
-    if a.get("institution_id") == "cofrinho":
-        return False
-    return a.get("type") in ("checking", "savings")
+    return a.get("type") in ("checking", "savings", "other")
+
+
+def _load_card_account_map() -> dict[int, int]:
+    cfg = HOME / ".config"
+    mapping: dict[int, int] = {}
+    if not cfg.exists():
+        return mapping
+    for line in cfg.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if k.startswith("CARD_PAYMENT_ACCOUNT_"):
+            try:
+                mapping[int(k[len("CARD_PAYMENT_ACCOUNT_"):])] = int(v)
+            except ValueError:
+                pass
+    return mapping
 
 
 def compute_totals(snapshot: dict) -> dict:
     accounts = snapshot.get("accounts") or []
     saldo = sum(int(a.get("_balance_cents") or 0) for a in accounts if is_principal_account(a))
 
+    card_acct_map = _load_card_account_map()
     today = dt.date.today()
+
     def sum_future(days: int) -> int:
         end = today + dt.timedelta(days=days)
         total = 0
         for t in snapshot.get("transactions_future") or []:
+            if t.get("credit_card_id") is not None:
+                continue  # gasto de cartão entra via fatura, não como débito bancário direto
             d = t.get("date", "")[:10]
             try:
                 td = dt.date.fromisoformat(d)
@@ -233,9 +254,27 @@ def compute_totals(snapshot: dict) -> dict:
                 total += int(t.get("amount_cents") or 0)
         return total
 
-    proj_7 = saldo + sum_future(7)
-    proj_30 = saldo + sum_future(30)
-    proj_90 = saldo + sum_future(90)
+    def sum_invoices(days: int) -> int:
+        end = today + dt.timedelta(days=days)
+        total = 0
+        for inv in snapshot.get("invoices") or []:
+            d = (inv.get("date") or "")[:10]
+            try:
+                due = dt.date.fromisoformat(d)
+            except ValueError:
+                continue
+            if today < due <= end:
+                cid = inv.get("_credit_card_id") or inv.get("credit_card_id")
+                if cid not in card_acct_map:
+                    continue
+                amt = int(inv.get("amount_cents") or 0)
+                if amt != 0:
+                    total += amt  # amount_cents já é negativo para faturas a pagar
+        return total
+
+    proj_7 = saldo + sum_future(7) + sum_invoices(7)
+    proj_30 = saldo + sum_future(30) + sum_invoices(30)
+    proj_90 = saldo + sum_future(90) + sum_invoices(90)
 
     # faturas a vencer em 7 dias
     invoices_due_7 = []
