@@ -1,7 +1,7 @@
 ---
 description: Puxa dados do Organizze via API REST e gera análise financeira consolidada (saldo, projeção, recomendações).
 allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, mcp__playwright__browser_navigate, mcp__playwright__browser_close
-argument-hint: "[--history-days N] [--future-days N] [--no-analyze]"
+argument-hint: "[plano|memoria <texto>] [--history-days N] [--future-days N] [--no-analyze]"
 ---
 
 # /finance:organizze — Organizze → análise consolidada
@@ -14,6 +14,62 @@ Argumentos opcionais (parseie de `$ARGUMENTS`):
 - `--history-days N` (default 180)
 - `--future-days N` (default 90)
 - `--no-analyze` → só puxa e salva snapshot, não chama o subagent
+
+---
+
+## Passo 0 — Classificar intenção da mensagem
+
+Se `$ARGUMENTS` estiver vazio ou contiver apenas flags (`--history-days`, `--future-days`, `--no-analyze`), vá direto ao Passo 1 (fluxo normal de análise).
+
+Se `$ARGUMENTS` contém texto em linguagem natural, classifique a intenção **antes** de rodar qualquer script. As três intenções possíveis são:
+
+- **`plano`** — usuário está descrevendo um objetivo/meta financeira a registrar. Sinais: menciona valor + prazo + algo a comprar/contratar/quitar/guardar ("viagem", "quitar X", "guardar R$", "comprar Y até Z", "reserva de emergência de R$"). Tom é declarativo sobre o futuro próprio.
+- **`memoria`** — usuário está informando uma restrição, contexto ou regra que análises futuras devem respeitar. Sinais: declarações sobre o que **não** mudar, prescrições, compromissos inegociáveis ("não consigo diminuir X", "Y é prescrição médica", "Z é não-negociável", "sempre faço W").
+- **`analise`** — qualquer outra coisa: pedido de análise, dúvida, contexto pra interpretar o snapshot, "como estou", "o que cortar", "vou perder algo?".
+
+Em caso de dúvida real entre `plano` e `memoria`, pergunte ao usuário com `AskUserQuestion` antes de prosseguir. Em dúvida entre registrar (plano/memoria) e analisar, pergunte. **Nunca** rode `pull.py`/`analyze.py`/subagent só pra "ter contexto" — eles são caros (minutos) e existem só pro fluxo de análise.
+
+Se a classificação for `plano` ou `memoria`, siga o fluxo rápido correspondente. Se for `analise`, vá ao Passo 1.
+
+O `RESTO` mencionado abaixo = a mensagem do usuário inteira (use como texto descritivo da entrada; o usuário não precisou marcar nada).
+
+### 0A — Fluxo rápido: registrar plano
+
+1. Faça as perguntas curtas em sequência. **Pré-preencha o que já dá pra inferir do texto** (valor, prazo, conta) e use `AskUserQuestion` só pra confirmar/completar o que faltar. Não pergunte o óbvio.
+   - **Valor-alvo (R$)** — obrigatório. Se o texto traz faixa ("9~12k"), proponha a média e confirme. Converta para centavos.
+   - **Prazo (YYYY-MM-DD)** — opcional. Interprete "dezembro" como último dia do mês informado; "junho/julho desse ano" → use o último mês mencionado.
+   - **Conta-destino** — opcional. Texto livre.
+   - **Prioridade** — `negociavel` (default) ou `inegociavel`.
+2. Grave:
+   ```bash
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/plans.py add "<RESTO>" \
+     --target-cents <N> \
+     [--deadline <YYYY-MM-DD>] \
+     [--account "<texto>"] \
+     [--priority negociavel|inegociavel]
+   ```
+3. Confirme ao usuário em 1-2 linhas: o que foi registrado e onde (`~/finance-organizze/plans.md`).
+4. Pergunte via `AskUserQuestion`:
+   > Quer rodar uma análise completa agora com este objetivo já incluído no fluxo? (leva ~1-2min)
+
+   Opções:
+   - **A) Sim, rodar análise agora** (recommended) — caia no Passo 1 do fluxo normal.
+   - **B) Não, só registrar** — encerre. Diga "Registrado. Próxima `/finance:organizze` já vai considerar."
+
+### 0B — Fluxo rápido: registrar memória
+
+1. (Opcional) Sugira uma `--tag` inferida do texto (ex.: `saude`, `casa`, `dizimo`) e confirme via `AskUserQuestion`, com opção "Pular".
+2. Grave:
+   ```bash
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/memory.py add "<RESTO>" [--tag <opcional>]
+   ```
+3. Confirme em 1 linha: o que foi gravado e onde (`~/finance-organizze/memory.md`).
+4. Pergunte via `AskUserQuestion`:
+   > Quer rodar uma análise completa agora com essa memória já aplicada? (leva ~1-2min)
+
+   Opções:
+   - **A) Sim, rodar análise agora** (recommended) — caia no Passo 1 do fluxo normal.
+   - **B) Não, só registrar** — encerre.
 
 Paths absolutos:
 - Scripts: `/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/`
