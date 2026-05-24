@@ -6,6 +6,8 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 # Refactor Code
 
+> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate to `fullstack-developer`; for **Python** targets, delegate to `python-pro`. After the refactor, hand off to `code-reviewer` to verify behavior preservation and flag regressions. Invoke via the `Agent` tool with the matching `subagent_type`. If the agent file is not present at `~/.claude/agents/<name>.md`, execute the steps below directly.
+
 Refactor the target specified in `$ARGUMENTS` while preserving all external behavior. Safety over speed — no behavior change without a test to prove it.
 
 **Core principle:** Every change must be traceable to a concrete improvement goal. If no goal is given, infer one from the code smell (duplication, complexity, naming, coupling).
@@ -72,3 +74,13 @@ Report:
 - Test results before and after.
 - Any remaining issues that were explicitly left out of scope.
 - Suggestions for follow-up refactoring (do not implement unless asked).
+
+## Recommended subagents
+
+These subagents from this repo (`agents/`) sharpen the output when installed. The command works without them — install selectively via `install.sh`.
+
+- **[`fullstack-developer`](../../agents/fullstack-developer.md)** — when refactoring TypeScript/JavaScript (React, Next.js, tRPC, Drizzle). Knows the modern stack idioms to refactor *toward*, not away from.
+- **[`python-pro`](../../agents/python-pro.md)** — when refactoring Python 3.12+. Brings full type coverage, ruff, and mypy strict discipline.
+- **[`code-reviewer`](../../agents/code-reviewer.md)** — after the refactor lands, to confirm no behavior drift, surface missed smells, and check security/performance.
+
+Each is optional. If none are installed, run the steps above inline.

@@ -6,6 +6,8 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 # Generate Tests
 
+> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate the implementation to `fullstack-developer`; for **Python** targets, delegate to `python-pro`. After tests are written, optionally hand off to `code-reviewer` to validate coverage and quality. Invoke via the `Agent` tool with the matching `subagent_type`. If the agent file is not present at `~/.claude/agents/<name>.md`, execute the steps below directly.
+
 Your task is to create a comprehensive test suite for the target specified in `$ARGUMENTS`.
 
 ## Step 1 — Identify the target
@@ -63,3 +65,13 @@ Before finishing, self-check:
 - No hardcoded secrets or production credentials.
 
 Report to the user: file written, framework used, number of tests generated, estimated coverage, and any gaps that require human judgment.
+
+## Recommended subagents
+
+These subagents from this repo (`agents/`) sharpen the output when installed. The command works without them — install selectively via `install.sh`.
+
+- **[`fullstack-developer`](../../agents/fullstack-developer.md)** — when the target is TypeScript/JavaScript (Vitest, Jest, Testing Library). Best for React/Next.js components, tRPC procedures, or Drizzle queries.
+- **[`python-pro`](../../agents/python-pro.md)** — when the target is Python (pytest, pytest-mock). Brings ruff/mypy strict discipline to the generated suite.
+- **[`code-reviewer`](../../agents/code-reviewer.md)** — after tests are written, to audit coverage, mock hygiene, and flag anti-patterns before commit.
+
+Each is optional. If none are installed, run the steps above inline.

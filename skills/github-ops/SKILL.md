@@ -5,6 +5,8 @@ description: GitHub/GitLab workflow operations via gh/glab CLI with token-effici
 
 # github-ops
 
+> **Recommended subagent (when installed):** before crafting the commit message in `ship.sh`'s two-call flow — or before opening a PR — optionally delegate the staged diff to `code-reviewer` for a security/correctness/performance pass. Invoke via the `Agent` tool with `subagent_type: code-reviewer`. If `~/.claude/agents/code-reviewer.md` is not present, skip the delegation and continue with the standard flow below.
+
 Use `gh` (GitHub) or `glab` (GitLab) for all remote operations. Scripts auto-detect the platform from `origin` and return **pipe-delimited** output — 1 line per record, no colors, no labels you don't need.
 
 ## Self-contained — do not pre-inspect
@@ -169,3 +171,9 @@ Do not split automatically. Always ask.
 - `github.com` → uses `gh`. Required: `gh auth login` done.
 - `gitlab.com` / `gitlab.*` → uses `glab`. Required: `glab auth login` done.
 - Anything else → manual fallback to `git` + curl, but flag it to the user first.
+
+## Recommended subagents
+
+These subagents from this repo (`agents/`) sharpen the workflow when installed. The skill works without them — install selectively via `install.sh`.
+
+- **[`code-reviewer`](../../agents/code-reviewer.md)** — between `ship.sh`'s staged-diff emit and the final `--message` call, or before `pr.sh create`. Reviews the staged diff for security vulnerabilities, correctness bugs, and performance regressions. Auto-detects the project's package manager. Skip when the diff is trivial (typo, docstring, formatting-only).
