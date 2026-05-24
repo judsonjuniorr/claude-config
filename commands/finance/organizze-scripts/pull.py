@@ -308,11 +308,17 @@ def build_installments(snapshot: dict) -> list[dict]:
     for (norm, total), txs in bag.items():
         txs_sorted = sorted(txs, key=lambda x: int(x.get("installment") or 0))
         paid_count = sum(1 for x in txs_sorted if x.get("paid"))
+        max_installment = max((int(x.get("installment") or 0) for x in txs_sorted), default=0)
+        # Se a parcela de número mais alto que vemos é a última E está paga, o parcelamento acabou.
+        if max_installment == total and all(x.get("paid") for x in txs_sorted):
+            continue
         last_paid = next((x for x in reversed(txs_sorted) if x.get("paid")), None)
         next_unpaid = next((x for x in txs_sorted if not x.get("paid")), None)
         amounts = [abs(int(x.get("amount_cents") or 0)) for x in txs_sorted if x.get("amount_cents") is not None]
         avg = int(sum(amounts) / len(amounts)) if amounts else 0
         remaining = total - paid_count
+        if remaining <= 0:
+            continue
         # Fim previsto = data da próxima não-paga + (remaining - 1) meses; fallback: última conhecida + meses faltantes
         end_date = None
         anchor = next_unpaid or last_paid or (txs_sorted[0] if txs_sorted else None)
