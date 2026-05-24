@@ -345,7 +345,16 @@ def render_prompt(snapshot: dict, framework_md: str) -> str:
 
 4. **Transferências inter-contas (GUARDRAIL ESTRITO)**: contas que EXISTEM neste snapshot: {accounts_hint}. Toda sugestão de transferência deve nomear **duas dessas contas** e cobrir débito específico com data. Se o objetivo do usuário cita uma conta-alvo que NÃO está na lista acima, NÃO invente: diga "reserve R$ X para Y" sem nomear conta.
 
-5. **Tom**: sem floreio, sem hedge. Números primeiro, recomendação depois.
+5. **Saldo dia-a-dia da origem (REGRA CRÍTICA)**: ao sugerir transferência da conta A para a conta B na data D, **a conta A precisa ter saldo ≥ valor sugerido em D**. Use a seção "Fluxo por conta" para validar — se o dia D aparece com `❌ nenhuma conta principal com folga suficiente` ou se a lista `contas com folga nesse dia` não inclui A com valor suficiente, **NÃO sugira essa transferência**. Em vez disso:
+   (a) adie a transferência para a primeira data em que A tem folga (ex.: após entrada salário/receita confirmada);
+   (b) proponha renegociar/postergar o débito da conta destino para depois da próxima entrada;
+   (c) sugira reordenar pagamentos do mês para encaixar no fluxo.
+   Sempre cite o saldo de origem na data ("Santander em DD/MM: R$ X") como evidência.
+
+6. **Renegociação de vencimentos (use quando o fluxo não fecha)**: se um débito recorrente cai sistematicamente em data sem caixa (ex.: assinatura dia 5 quando salário cai dia 6), recomende **alterar a data de vencimento** ou **mudar a forma de pagamento** (débito em conta → cartão, antecipa boleto, etc.). Inclua no formato:
+   `[RENEGOCIAR · <credor>] Mover vencimento de <data atual> para <data sugerida> — motivo: caixa em <data atual> é R$ X, insuficiente para débito de R$ Y`.
+
+7. **Tom**: sem floreio, sem hedge. Números primeiro, recomendação depois.
 
 ---
 
@@ -365,15 +374,22 @@ parcelamentos em curso (total restante), atrasadas (despesa/receita), maior cate
 
 **Plano de transferências e poupança** (≤5 bullets): para cada dia crítico relevante OU objetivo viável, formato:
 ```
-[CRÍTICO · até <data>] Transferir R$ X de "<conta origem>" para "<conta destino>"
-  Motivo: <débito específico em <data> deixa saldo em <valor>>
+[CRÍTICO · em <data>] Transferir R$ X de "<conta origem>" para "<conta destino>"
+  Saldo origem em <data>: R$ Y  ← obrigatório, deve ser ≥ X
+  Motivo: <débito específico em <data> deixa destino em <valor>>
+```
+ou
+```
+[RENEGOCIAR · <credor>] Mover vencimento/forma de pagamento de <data atual> para <data sugerida>
+  Caixa em <data atual>: R$ Y (insuficiente p/ débito R$ Z)
+  Alvo: encaixar débito em data com folga ≥ R$ Z
 ```
 ou
 ```
 [POUPANÇA · neste mês] Reservar R$ X para "<conta destino se existe>" OU "<objetivo Y>" se conta não cadastrada
   Origem: <conta com folga ou sobra mensal>
 ```
-Apenas use contas da lista de existentes. Se não há ação clara, escreva "(sem ações de transferência necessárias)".
+**Regras**: (a) apenas use contas da lista de existentes; (b) nunca sugira transferência da conta A em data D se a seção "Fluxo por conta" indica que A não tem folga em D; (c) quando nenhuma conta tem folga no dia crítico, prefira `[RENEGOCIAR]` em vez de `[CRÍTICO]`. Se não há ação clara, escreva "(sem ações de transferência necessárias)".
 
 **Objetivos pausados neste ciclo** (≤3 bullets, omita se vazio): nome do objetivo + razão (dia crítico em <data> ou meta de categoria em risco).
 
