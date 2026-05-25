@@ -4,7 +4,7 @@
 A API /accounts não devolve o saldo atual. O pull.py soma transações pagas
 (janela longa) para estimar — mas o saldo inicial configurado pelo usuário
 ao criar a conta não aparece em /transactions. Este script captura a diferença
-como offset em ~/finance-organizze/balances.json, que pull.py soma na próxima
+como offset em ~/finance/organizze/balances.json, que pull.py soma na próxima
 execução.
 
 Modo 1 — pares conta_id=valor_em_centavos via CLI:
@@ -24,8 +24,10 @@ import json
 import pathlib
 import sys
 
-HOME = pathlib.Path.home() / "finance-organizze"
-BALANCES = HOME / "balances.json"
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from _paths import HOME, BALANCES, migrate_legacy  # noqa: E402
+
+migrate_legacy()
 
 
 def cents_to_brl(c: int) -> str:

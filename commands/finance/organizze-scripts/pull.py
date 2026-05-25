@@ -4,7 +4,7 @@
 Usage:
   pull.py --out PATH [--history-days N] [--future-days N]
 
-Reads credentials from ~/finance-organizze/.auth (ORGANIZZE_EMAIL,
+Reads credentials from ~/finance/organizze/.auth (ORGANIZZE_EMAIL,
 ORGANIZZE_TOKEN, ORGANIZZE_USER_AGENT). Stdlib only.
 """
 from __future__ import annotations
@@ -13,7 +13,6 @@ import argparse
 import base64
 import datetime as dt
 import json
-import os
 import pathlib
 import statistics
 import sys
@@ -21,10 +20,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from _paths import HOME, AUTH, CACHE, migrate_legacy  # noqa: E402
+
+migrate_legacy()
+
 API = "https://api.organizze.com.br/rest/v2"
-HOME = pathlib.Path(os.environ.get("ORGANIZZE_HOME", str(pathlib.Path.home() / "finance-organizze")))
-AUTH = HOME / ".auth"
-CACHE = HOME / "cache"
 
 
 # --- auth + http -----------------------------------------------------------
@@ -131,7 +132,7 @@ def compute_account_balances(
     A API /accounts não devolve saldo. Reconstruímos somando o histórico longo,
     excluindo gastos de fatura de cartão (credit_card_id != null) e contas que
     são na verdade cartões (account_id ∈ credit_card_ids).
-    Suporta offset manual em ~/finance-organizze/balances.json:
+    Suporta offset manual em ~/finance/organizze/balances.json:
         {"<account_id>": <offset_cents>}  # somado ao calculado
     """
     today = dt.date.today()

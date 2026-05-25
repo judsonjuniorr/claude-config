@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Objetivos financeiros (planos de poupança/economia).
+"""Objetivos financeiros (planos de poupança/economia) — provider-agnósticos.
 
-Mesmo padrão da memory.py: markdown legível em ~/finance-organizze/plans.md,
+Mesmo padrão da memory.py: markdown legível em ~/finance/plans.md,
 editável à mão. Cada entrada tem metadados inline no header.
 
 Header format:
@@ -23,7 +23,8 @@ import pathlib
 import re
 import sys
 
-PLANS = pathlib.Path.home() / "finance-organizze" / "plans.md"
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from _storage import PLANS, migrate_legacy  # noqa: E402
 
 HEADER_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})(.*)$")
 META_RE = re.compile(r"(\w+)=([^·\]]+?)(?=\s*[·\]]|$)")
@@ -249,6 +250,8 @@ def cmd_prune(args) -> int:
 
 
 def main() -> int:
+    migrate_legacy()
+
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
 

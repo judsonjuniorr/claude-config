@@ -18,6 +18,11 @@ import pathlib
 import sys
 from collections import defaultdict
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from _paths import migrate_legacy  # noqa: E402
+
+migrate_legacy()
+
 DEFAULT_FRAMEWORK = pathlib.Path(__file__).resolve().parents[3] / "analista-financeiro-claude-code.md"
 
 
@@ -266,13 +271,16 @@ def summarize(snapshot: dict) -> str:
     return "\n".join(out)
 
 
+_SHARED_SCRIPTS = pathlib.Path(__file__).resolve().parent.parent / "scripts"
+
+
 def load_memory_block() -> str:
-    """Lê ~/finance-organizze/memory.md e devolve um bloco renderizado para injeção."""
-    mem_path = pathlib.Path.home() / "finance-organizze" / "memory.md"
+    """Lê ~/finance/memory.md e devolve um bloco renderizado para injeção."""
+    mem_path = pathlib.Path.home() / "finance" / "memory.md"
     if not mem_path.exists():
         return ""
     import subprocess
-    script = pathlib.Path(__file__).parent / "memory.py"
+    script = _SHARED_SCRIPTS / "memory.py"
     try:
         r = subprocess.run(
             ["python3", str(script), "render"],
@@ -284,12 +292,12 @@ def load_memory_block() -> str:
 
 
 def load_plans_block() -> str:
-    """Lê ~/finance-organizze/plans.md e devolve um bloco renderizado para injeção."""
-    plans_path = pathlib.Path.home() / "finance-organizze" / "plans.md"
+    """Lê ~/finance/plans.md e devolve um bloco renderizado para injeção."""
+    plans_path = pathlib.Path.home() / "finance" / "plans.md"
     if not plans_path.exists():
         return ""
     import subprocess
-    script = pathlib.Path(__file__).parent / "plans.py"
+    script = _SHARED_SCRIPTS / "plans.py"
     try:
         r = subprocess.run(
             ["python3", str(script), "render"],

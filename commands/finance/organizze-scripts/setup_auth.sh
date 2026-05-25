@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # First-run onboarding: opens Organizze API tokens page via Playwright MCP (caller),
-# then reads email + token from stdin (one per line) and persists to ~/finance-organizze/.auth
+# then reads email + token from stdin (one per line) and persists to ~/finance/organizze/.auth
 # Usage:
 #   echo -e "$EMAIL\n$TOKEN" | bash setup_auth.sh
 # Or interactively if you have a TTY.

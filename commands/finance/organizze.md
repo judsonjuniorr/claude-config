@@ -1,87 +1,49 @@
 ---
 description: Puxa dados do Organizze via API REST e gera análise financeira consolidada (saldo, projeção, recomendações).
 allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, mcp__playwright__browser_navigate, mcp__playwright__browser_close
-argument-hint: "[plano|memoria <texto>] [--history-days N] [--future-days N] [--no-analyze]"
+argument-hint: "[<texto livre> | --history-days N | --future-days N | --no-analyze]"
 ---
 
 # /finance:organizze — Organizze → análise consolidada
 
-> **Subagent recomendado (quando instalado):** o Passo 6 delega a análise ao subagent `financial-analyst` via tool `Agent`. Se o arquivo `~/.claude/agents/financial-analyst.md` não existir, o passo cai automaticamente para `general-purpose` (já documentado abaixo) — o comando continua funcionando. Para instalar o subagent dedicado, rode `install.sh` neste repo e selecione `financial-analyst`.
+> **Subagent recomendado (quando instalado):** o Passo 6 delega a análise ao subagent `financial-analyst` via tool `Agent`. Se o arquivo `~/.claude/agents/financial-analyst.md` não existir, o passo cai automaticamente para `general-purpose` — o comando continua funcionando. Para instalar o subagent dedicado, rode `install.sh` neste repo e selecione `financial-analyst`.
 
-Quando o usuário invocar `/finance:organizze`, siga estes passos **exatamente**. Não pule nenhum. Não pré-inspecione (não rode `git status`, não liste diretórios, não cheque versões — vá direto aos scripts; eles são auto-contidos).
+Quando o usuário invocar `/finance:organizze`, siga estes passos **exatamente**. Não pule nenhum. Não pré-inspecione (não rode `git status`, não liste diretórios, não cheque versões — vá direto aos scripts; eles são auto-contidos e fazem migração legacy sozinhos).
 
 Argumentos opcionais (parseie de `$ARGUMENTS`):
 - `--history-days N` (default 180)
 - `--future-days N` (default 90)
 - `--no-analyze` → só puxa e salva snapshot, não chama o subagent
 
+**Paths absolutos**:
+- Scripts globais (provider-agnósticos): `/Users/judson/sources/personal/claude-config/commands/finance/scripts/`
+- Scripts Organizze: `/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/`
+- Storage global: `~/finance/` (`memory.md`, `plans.md`)
+- Storage Organizze: `~/finance/organizze/` (`snapshots/`, `reports/`, `budget-suggestions/`, `.auth`, `.config`, `balances.json`)
+- Framework de análise (lido por `analyze.py`): `/Users/judson/sources/personal/claude-config/analista-financeiro-claude-code.md`
+
 ---
 
-## Passo 0 — Classificar intenção da mensagem
+## Passo 0 — Roteamento de intenção
 
 Se `$ARGUMENTS` estiver vazio ou contiver apenas flags (`--history-days`, `--future-days`, `--no-analyze`), vá direto ao Passo 1 (fluxo normal de análise).
 
-Se `$ARGUMENTS` contém texto em linguagem natural, classifique a intenção **antes** de rodar qualquer script. As três intenções possíveis são:
+Se `$ARGUMENTS` contém texto em linguagem natural, **não rode pull/analyze para "ter contexto"** — eles são caros (minutos) e existem só pro fluxo de análise. Classifique:
 
-- **`plano`** — usuário está descrevendo um objetivo/meta financeira a registrar. Sinais: menciona valor + prazo + algo a comprar/contratar/quitar/guardar ("viagem", "quitar X", "guardar R$", "comprar Y até Z", "reserva de emergência de R$"). Tom é declarativo sobre o futuro próprio.
-- **`memoria`** — usuário está informando uma restrição, contexto ou regra que análises futuras devem respeitar. Sinais: declarações sobre o que **não** mudar, prescrições, compromissos inegociáveis ("não consigo diminuir X", "Y é prescrição médica", "Z é não-negociável", "sempre faço W").
-- **`analise`** — qualquer outra coisa: pedido de análise, dúvida, contexto pra interpretar o snapshot, "como estou", "o que cortar", "vou perder algo?".
+- **Objetivo/meta financeira** (valor + prazo + algo a comprar/contratar/quitar/guardar — "viagem", "quitar X", "guardar R$ Y até Z", "reserva de emergência"): **redirecione para `/finance:goal`** dizendo ao usuário em 1 linha "Isso parece um objetivo — abrindo `/finance:goal`" e siga as instruções daquele comando passando `$ARGUMENTS` como texto.
 
-Em caso de dúvida real entre `plano` e `memoria`, pergunte ao usuário com `AskUserQuestion` antes de prosseguir. Em dúvida entre registrar (plano/memoria) e analisar, pergunte. **Nunca** rode `pull.py`/`analyze.py`/subagent só pra "ter contexto" — eles são caros (minutos) e existem só pro fluxo de análise.
+- **Restrição/contexto** (declarações sobre o que **não** mudar, prescrições, inegociáveis — "não consigo diminuir X", "Y é prescrição médica", "Z é não-negociável"): **redirecione para `/finance:context`** com a mesma lógica.
 
-Se a classificação for `plano` ou `memoria`, siga o fluxo rápido correspondente. Se for `analise`, vá ao Passo 1.
+- **Pedido de análise/dúvida** (qualquer outra coisa: "como estou", "o que cortar", "vou perder algo?"): siga ao Passo 1.
 
-O `RESTO` mencionado abaixo = a mensagem do usuário inteira (use como texto descritivo da entrada; o usuário não precisou marcar nada).
-
-### 0A — Fluxo rápido: registrar plano
-
-1. Faça as perguntas curtas em sequência. **Pré-preencha o que já dá pra inferir do texto** (valor, prazo, conta) e use `AskUserQuestion` só pra confirmar/completar o que faltar. Não pergunte o óbvio.
-   - **Valor-alvo (R$)** — obrigatório. Se o texto traz faixa ("9~12k"), proponha a média e confirme. Converta para centavos.
-   - **Prazo (YYYY-MM-DD)** — opcional. Interprete "dezembro" como último dia do mês informado; "junho/julho desse ano" → use o último mês mencionado.
-   - **Conta-destino** — opcional. Texto livre.
-   - **Prioridade** — `negociavel` (default) ou `inegociavel`.
-2. Grave:
-   ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/plans.py add "<RESTO>" \
-     --target-cents <N> \
-     [--deadline <YYYY-MM-DD>] \
-     [--account "<texto>"] \
-     [--priority negociavel|inegociavel]
-   ```
-3. Confirme ao usuário em 1-2 linhas: o que foi registrado e onde (`~/finance-organizze/plans.md`).
-4. Pergunte via `AskUserQuestion`:
-   > Quer rodar uma análise completa agora com este objetivo já incluído no fluxo? (leva ~1-2min)
-
-   Opções:
-   - **A) Sim, rodar análise agora** (recommended) — caia no Passo 1 do fluxo normal.
-   - **B) Não, só registrar** — encerre. Diga "Registrado. Próxima `/finance:organizze` já vai considerar."
-
-### 0B — Fluxo rápido: registrar memória
-
-1. (Opcional) Sugira uma `--tag` inferida do texto (ex.: `saude`, `casa`, `dizimo`) e confirme via `AskUserQuestion`, com opção "Pular".
-2. Grave:
-   ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/memory.py add "<RESTO>" [--tag <opcional>]
-   ```
-3. Confirme em 1 linha: o que foi gravado e onde (`~/finance-organizze/memory.md`).
-4. Pergunte via `AskUserQuestion`:
-   > Quer rodar uma análise completa agora com essa memória já aplicada? (leva ~1-2min)
-
-   Opções:
-   - **A) Sim, rodar análise agora** (recommended) — caia no Passo 1 do fluxo normal.
-   - **B) Não, só registrar** — encerre.
-
-Paths absolutos:
-- Scripts: `/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/`
-- Storage: `~/finance-organizze/`
-- Framework de análise (lido por `analyze.py`): `/Users/judson/sources/personal/claude-config/analista-financeiro-claude-code.md`
+Em dúvida real entre objetivo e restrição, pergunte ao usuário com `AskUserQuestion` qual dos dois comandos quer abrir. Em dúvida entre registrar e analisar, pergunte.
 
 ---
 
 ## Passo 1 — Verificar auth
 
 ```bash
-ls ~/finance-organizze/.auth 2>/dev/null
+ls ~/finance/organizze/.auth 2>/dev/null
 ```
 
 - **Arquivo existe** → pule para Passo 3.
@@ -118,7 +80,7 @@ ls ~/finance-organizze/.auth 2>/dev/null
 
 A API `/accounts` do Organizze **não devolve saldo atual** — o `pull.py` calcula somando as transações pagas dos últimos 5 anos. O saldo inicial que o usuário informou ao criar a conta no app **não está exposto** e gera divergência.
 
-Após o primeiro `pull.py`, se `~/finance-organizze/balances.json` ainda não existir:
+Após o primeiro `pull.py`, se `~/finance/organizze/balances.json` ainda não existir:
 
 1. Mostre ao usuário, com `jq '.accounts | map(select(.archived==false and .institution_id != "cofrinho" and (.type == "checking" or .type == "savings"))) | map({id, name, calculado: (._balance_cents / 100)})' "$SNAP"`, o saldo calculado de cada conta principal.
 
@@ -126,11 +88,11 @@ Após o primeiro `pull.py`, se `~/finance-organizze/balances.json` ainda não ex
 
 3. Chame:
    ```bash
-   python3 commands/finance/organizze-scripts/reconcile.py --snapshot "$SNAP" <id>=<centavos> [<id>=<centavos> ...]
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/reconcile.py --snapshot "$SNAP" <id>=<centavos> [<id>=<centavos> ...]
    ```
    Ex.: `1575443=80174 5044376=194746` (R$ 801,74 e R$ 1.947,46).
 
-4. O script grava `~/finance-organizze/balances.json` com o offset por conta. Pulls futuros aplicam automaticamente — não precisa repetir.
+4. O script grava `~/finance/organizze/balances.json` com o offset por conta. Pulls futuros aplicam automaticamente — não precisa repetir.
 
 5. Re-rode o `pull.py` (Passo 3) para validar.
 
@@ -168,12 +130,12 @@ python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-
 ```
 (`20000` = R$ 200 de margem; saldo projetado abaixo disso vira "dia crítico".)
 
-Mapeamentos vivem em `~/finance-organizze/.config` (formato `KEY=VALUE`, 0600). Edição manual permitida.
+Mapeamentos vivem em `~/finance/organizze/.config` (formato `KEY=VALUE`, 0600). Edição manual permitida.
 
 ## Passo 3 — Pull do snapshot
 
 ```bash
-SNAP=~/finance-organizze/snapshots/$(date +%F-%H%M).json
+SNAP=~/finance/organizze/snapshots/$(date +%F-%H%M).json
 python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/pull.py \
   --out "$SNAP" \
   --history-days <N ou 180> \
@@ -183,8 +145,8 @@ python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-
 O script imprime linhas `info|...` no stderr (contagens por endpoint) e uma linha final `ok|snapshot|<path>` no stdout. Em caso de erro: `err|<code>|<detail>`.
 
 Tratamento de erros:
-- `err|http-401|...` → token rejeitado. Apague `~/finance-organizze/.auth` e volte ao Passo 2.
-- `err|http-400|...` → User-Agent rejeitado. Verifique `~/finance-organizze/.auth` (campo `ORGANIZZE_USER_AGENT`).
+- `err|http-401|...` → token rejeitado. Apague `~/finance/organizze/.auth` e volte ao Passo 2.
+- `err|http-400|...` → User-Agent rejeitado. Verifique `~/finance/organizze/.auth` (campo `ORGANIZZE_USER_AGENT`).
 - `err|network|...` → falhe rápido, reporte ao usuário.
 
 ## Passo 4 — Se `--no-analyze`, pare aqui
@@ -194,11 +156,11 @@ Imprima o path do snapshot e os totais (use `jq '.meta.totais' "$SNAP"`). Não c
 ## Passo 5 — Renderizar prompt da análise
 
 ```bash
-REPORT=~/finance-organizze/reports/$(date +%F-%H%M).md
+REPORT=~/finance/organizze/reports/$(date +%F-%H%M).md
 PROMPT=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py --snapshot "$SNAP")
 ```
 
-`analyze.py` lê o snapshot + a seção 4.1 do framework `analista-financeiro-claude-code.md` e devolve um prompt único pronto para o subagent.
+`analyze.py` lê o snapshot + a seção 4.1 do framework `analista-financeiro-claude-code.md` + injeta `memory.md` e `plans.md` (de `~/finance/`) e devolve um prompt único pronto para o subagent.
 
 ## Passo 6 — Delegar ao subagent `financial-analyst`
 
@@ -209,55 +171,47 @@ Use a tool `Agent`:
 
 Salve a resposta do subagent em `$REPORT`.
 
-## Passo 6.5a — Capturar nova memória (restrições/contexto)
+## Passo 6.5 — Capturar nova memória/objetivo (opcional)
 
-Antes de fechar a sessão, **pergunte ao usuário** via `AskUserQuestion` (single-select, opção "Pular" disponível):
+Após a análise, ofereça registrar contexto/objetivos novos. Cada bloco é independente; pule se o usuário não tiver nada.
+
+**6.5a — Memória/restrição** — pergunte via `AskUserQuestion` (single-select com "Pular"):
 
 > Quer registrar alguma restrição ou contexto para futuras análises? Exemplos: "não consigo diminuir parcela da casa", "Mounjaro é prescrição médica", "dízimo é não-negociável".
 
 Se houver resposta, grave:
 
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/memory.py add "<texto do usuário>" [--tag <opcional>]
+python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py add "<texto do usuário>" [--tag <opcional>]
 ```
 
-A memória vai para `~/finance-organizze/memory.md` com timestamp; `analyze.py` injeta automaticamente nas próximas análises e o subagent é instruído a **não sugerir nada que a contradiga**.
+(Ou diga ao usuário que pode rodar `/finance:context` depois.)
 
-Para consultar/limpar:
-- `memory.py list [--recent N]`
-- `memory.py prune --older-than 365`
-
-## Passo 6.5b — Capturar novo objetivo financeiro
-
-Em seguida, pergunte via `AskUserQuestion` (single-select com "Pular"):
+**6.5b — Objetivo financeiro** — pergunte via `AskUserQuestion` (single-select com "Pular"):
 
 > Quer registrar algum objetivo financeiro? Ex.: "guardar R$ 5000 para viagem em dezembro", "quitar dívida X até junho", "construir reserva de emergência de R$ 20000".
 
 Se houver resposta, faça perguntas curtas em sequência (cada uma com "Pular" para opcional):
 
-1. **Texto descritivo**: já capturado acima.
+1. **Texto descritivo**: já capturado.
 2. **Valor-alvo (R$)**: pergunte e converta pra centavos (ex.: `5000` → `500000`).
-3. **Prazo (YYYY-MM-DD)**: opcional. Se o usuário disser "dezembro", interprete como último dia do mês informado no ano corrente/seguinte.
-4. **Conta-destino**: opcional. Mostre lista de contas principais + cofrinhos do snapshot; se nada bate, aceite texto livre (será tratado como genérico pelo analista).
-5. **Prioridade**: `negociavel` (default — analista pausa se houver débito iminente) ou `inegociavel` (analista mantém cortando outras categorias).
+3. **Prazo (YYYY-MM-DD)**: opcional. "dezembro" → último dia do mês informado.
+4. **Conta-destino**: opcional. Mostre lista de contas principais + cofrinhos do snapshot.
+5. **Prioridade**: `negociavel` (default) ou `inegociavel`.
 
 Grave:
 
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/plans.py add "<texto>" \
+python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py add "<texto>" \
   --target-cents <N> \
   [--deadline <YYYY-MM-DD>] \
   [--account "<nome livre>"] \
   [--priority negociavel|inegociavel]
 ```
 
-Objetivos vão pra `~/finance-organizze/plans.md`; `analyze.py` injeta nas próximas análises e o subagent é instruído a **avaliar viabilidade mês a mês sem assumir aporte fixo**, e a **pausar objetivos negociáveis quando houver dia crítico em alguma conta principal**.
+(Ou diga ao usuário que pode rodar `/finance:goal` depois.)
 
-Para consultar/concluir:
-- `plans.py list [--recent N] [--status active|done|paused|cancelled]`
-- `plans.py done "<ts>"` — marca como concluído (usa o timestamp do header)
-- `plans.py status "<ts>" paused|cancelled|active`
-- `plans.py prune --older-than-done 365`
+Memória e objetivos vivem em `~/finance/{memory,plans}.md` — provider-agnósticos. `analyze.py` injeta automaticamente nas próximas análises. Para gerenciar fora do fluxo de análise: `/finance:context` e `/finance:goal`.
 
 ## Passo 7 — Sugerir atualização de orçamento
 
@@ -271,7 +225,7 @@ python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-
 O script:
 - Calcula, por categoria, `max(mediana 3m, p75 6m)`, garante ≥ realizado do mês corrente, arredonda em R$ 10.
 - Imprime tabela markdown: Atual | Realizado | Mediana 3m | p75 6m | **Sugerido** | Δ | Confiança.
-- Grava JSON em `~/finance-organizze/budget-suggestions/YYYY-MM-DD-HHMM.json` com os payloads (current_month + next_month).
+- Grava JSON em `~/finance/organizze/budget-suggestions/YYYY-MM-DD-HHMM.json` com os payloads (current_month + next_month).
 
 Apresente a tabela ao usuário e diga:
 
@@ -283,7 +237,7 @@ Se `--history-days` no Passo 3 foi menor que 180, avise: "histórico curto, conf
 
 Imprima no chat, nesta ordem:
 
-1. O conteúdo do relatório do subagent. Estrutura esperada agora inclui:
+1. O conteúdo do relatório do subagent. Estrutura esperada:
    - TL;DR
    - Números-chave
    - Atrasadas — ação imediata
@@ -308,9 +262,17 @@ Não invente números. Se o subagent não cobrir algum campo dos "Números-chave
 ## Regras gerais
 
 - **Não pré-inspecione** o filesystem antes do Passo 1. Vá direto.
-- **Nunca commite** `~/finance-organizze/`. Está fora do repo.
+- **Nunca commite** `~/finance/`. Está fora do repo.
 - **Nunca exponha** o token em logs ou mensagens. Se precisar mostrar, mascare como `org_xxx…xxx`.
 - Se o usuário rodar duas vezes seguidas, cada execução gera arquivos com timestamp distinto — sem corrupção.
+- Migração legacy de `~/finance-organizze/` → `~/finance/{,organizze/}` é automática na primeira execução de qualquer script. Não rode nada manualmente.
+
+## Comandos relacionados
+
+- **`/finance:goal`** — CRUD de objetivos financeiros (`~/finance/plans.md`).
+- **`/finance:context`** — CRUD de restrições/contexto (`~/finance/memory.md`).
+
+Ambos são provider-agnósticos: qualquer provider futuro consome o mesmo storage.
 
 ## Subagents recomendados
 

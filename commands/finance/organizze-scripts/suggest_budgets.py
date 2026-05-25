@@ -10,7 +10,7 @@ Estratégia default:
 
 A API REST do Organizze não expõe PUT/POST de /budgets — este script apenas
 gera sugestões. Use --open para abrir a página de metas no Playwright e
-aplicar manualmente (rápido); o JSON em ~/finance-organizze/budget-suggestions/
+aplicar manualmente (rápido); o JSON em ~/finance/organizze/budget-suggestions/
 documenta o que aplicar.
 
 Usage:
@@ -27,8 +27,10 @@ import statistics
 import sys
 from collections import defaultdict
 
-HOME = pathlib.Path.home() / "finance-organizze"
-OUT_DIR = HOME / "budget-suggestions"
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from _paths import HOME, BUDGET_SUGGESTIONS as OUT_DIR, migrate_legacy  # noqa: E402
+
+migrate_legacy()
 
 
 def cents_to_brl(c: int | float | None) -> str:
@@ -71,7 +73,7 @@ def next_month(d: dt.date) -> tuple[int, int]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", required=True)
-    ap.add_argument("--out", default=None, help="path do JSON com sugestões (default: ~/finance-organizze/budget-suggestions/YYYY-MM-DD-HHMM.json)")
+    ap.add_argument("--out", default=None, help="path do JSON com sugestões (default: ~/finance/organizze/budget-suggestions/YYYY-MM-DD-HHMM.json)")
     ap.add_argument("--top", type=int, default=30, help="máximo de categorias na tabela")
     args = ap.parse_args()
 

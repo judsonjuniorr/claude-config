@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Memória financeira persistente.
+"""Memória financeira persistente (provider-agnóstica).
 
 Armazena restrições, contextos e preferências do usuário que a IA deve respeitar
 nas análises futuras. Exemplo: "não consigo diminuir a parcela da casa" — daí
@@ -8,7 +8,7 @@ em diante o subagent não sugere isso.
 Cada entrada vai com timestamp; entradas mais recentes pesam mais (mas nada é
 descartado automaticamente — use `prune` para remover obsoletas).
 
-Arquivo: ~/finance-organizze/memory.md (markdown legível, editável manualmente).
+Arquivo: ~/finance/memory.md (markdown legível, editável manualmente).
 
 Usage:
   memory.py add "<texto>"           # adiciona entrada
@@ -25,7 +25,9 @@ import pathlib
 import re
 import sys
 
-MEM = pathlib.Path.home() / "finance-organizze" / "memory.md"
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from _storage import MEM, migrate_legacy  # noqa: E402
+
 ENTRY_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: \[(?P<tag>[^\]]+)\])?\s*$")
 
 
@@ -44,7 +46,6 @@ def _load() -> list[dict]:
             current["lines"].append(line)
     if current:
         entries.append(current)
-    # normaliza body
     for e in entries:
         e["body"] = "\n".join(e["lines"]).strip()
         del e["lines"]
@@ -139,6 +140,8 @@ def cmd_prune(args) -> int:
 
 
 def main() -> int:
+    migrate_legacy()
+
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
 

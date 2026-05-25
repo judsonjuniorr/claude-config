@@ -5,7 +5,7 @@ Para cada conta principal (checking/savings, não-arquivada, não-cofrinho):
 - saldo inicial = _balance_cents (já reconciliado pelo pull.py)
 - aplica transactions_future com account_id correspondente, em ordem cronológica
 - aplica débitos de faturas de cartão na data de vencimento, na conta pagadora
-  declarada em ~/finance-organizze/.config (CARD_PAYMENT_ACCOUNT_<card_id>)
+  declarada em ~/finance/organizze/.config (CARD_PAYMENT_ACCOUNT_<card_id>)
 - emite dias críticos: saldo projetado < threshold (default 0, configurável)
 - para cada dia crítico, lista contas com folga (saldo projetado no mesmo dia
   > shortfall) como candidatas a transferência
@@ -261,7 +261,7 @@ def main() -> int:
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--horizon-days", type=int, default=90)
     ap.add_argument("--threshold-cents", type=int, default=None,
-                    help="default: lê de ~/finance-organizze/.config CASHFLOW_THRESHOLD_CENTS")
+                    help="default: lê de ~/finance/organizze/.config CASHFLOW_THRESHOLD_CENTS")
     ap.add_argument("--json", action="store_true", help="emite JSON cru em vez de markdown")
     args = ap.parse_args()
 
