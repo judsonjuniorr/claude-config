@@ -502,6 +502,89 @@ def load_plans_block() -> str:
         return ""
 
 
+def list_research_targets(snapshot: dict, limit: int = 3) -> list[dict]:
+    """Devolve as N categorias-alvo para pesquisa de mercado paralela.
+
+    Cada item: {name, total_cents, median_6m_cents, top_txs: [(date, desc, amount_cents), ...]}.
+    Excluindo categorias de pagamento de fatura (filtro `_is_invoice_category_name`)."""
+    targets = top_categories_effective(snapshot, limit=limit)
+    out: list[dict] = []
+    for name, total in targets:
+        top5 = top_transactions_of_category(snapshot, name, limit=5)
+        out.append({
+            "name": name,
+            "total_cents": total,
+            "median_6m_cents": category_median_6m(snapshot, name),
+            "top_txs": [
+                {"date": (t.get("date") or "")[:10],
+                 "description": t.get("description") or "?",
+                 "amount_cents": int(t.get("amount_cents") or 0)}
+                for t in top5
+            ],
+        })
+    return out
+
+
+def _profile_city() -> str:
+    """Lê cidade do perfil; '(sem dados)' se vazio."""
+    import subprocess
+    script = _SHARED_SCRIPTS / "profile.py"
+    try:
+        r = subprocess.run(
+            ["python3", str(script), "get", "cidade"],
+            capture_output=True, text=True, timeout=5,
+        )
+        v = (r.stdout or "").strip()
+        return v if v else "(sem dados)"
+    except Exception:
+        return "(sem dados)"
+
+
+def render_list_targets(snapshot: dict) -> str:
+    """Saída pipe-delimited para consumo do organizze.md (disparo paralelo)."""
+    city = _profile_city()
+    lines: list[str] = [f"profile|cidade|{city}"]
+    for tgt in list_research_targets(snapshot):
+        top_str = "; ".join(
+            f"{t['description']} ({cents_to_brl(t['amount_cents'])})"
+            for t in tgt["top_txs"]
+        )
+        lines.append(
+            f"target|{tgt['name']}|{tgt['total_cents']}|"
+            f"{tgt['median_6m_cents']}|{top_str}"
+        )
+    return "\n".join(lines)
+
+
+def load_research_block(research_dir: pathlib.Path | None) -> str:
+    """Lê os arquivos `<slug>.md` em `research_dir/` (resultados pré-coletados
+    por agentes search-specialist em paralelo) e devolve bloco markdown pronto
+    pra anexar ao prompt do analyst.
+
+    Cada arquivo é um relatório de pesquisa de uma categoria. Espera-se que o
+    organizze.md tenha disparado os agentes e salvo os resultados aqui.
+    """
+    if not research_dir or not research_dir.exists():
+        return ""
+    files = sorted(research_dir.glob("*.md"))
+    if not files:
+        return ""
+    out: list[str] = []
+    out.append("# Pesquisa de mercado (PRÉ-COLETADA — NÃO REFAÇA WebSearch)")
+    out.append("")
+    out.append("Cada categoria abaixo foi pesquisada em paralelo por um agente "
+               "`search-specialist` dedicado, ANTES desta análise. **Consuma "
+               "estes resultados** na seção 'Alternativas de mercado' do "
+               "relatório — não desperdice tokens repetindo a pesquisa.")
+    out.append("")
+    for f in files:
+        out.append(f"## {f.stem}")
+        out.append("")
+        out.append(f.read_text().strip())
+        out.append("")
+    return "\n".join(out)
+
+
 def render_cashflow_block(snapshot: dict) -> str:
     """Roda cashflow.per_account_projection e devolve markdown pronto."""
     try:
@@ -514,15 +597,18 @@ def render_cashflow_block(snapshot: dict) -> str:
         return f"## Fluxo por conta\n_(erro ao computar projeção: {e})_"
 
 
-def render_prompt(snapshot: dict, framework_md: str) -> str:
+def render_prompt(snapshot: dict, framework_md: str,
+                   research_dir: pathlib.Path | None = None) -> str:
     system = extract_system_prompt(framework_md)
     summary = summarize(snapshot)
     profile_block = load_profile_block()
     memory_block = load_memory_block()
     plans_block = load_plans_block()
+    research_block = load_research_block(research_dir)
     profile_section = f"\n---\n\n{profile_block}\n" if profile_block else ""
     memory_section = f"\n---\n\n{memory_block}\n" if memory_block else ""
     plans_section = f"\n---\n\n{plans_block}\n" if plans_block else ""
+    research_section = f"\n---\n\n{research_block}\n" if research_block else ""
 
     # Lista de nomes de contas existentes (para guardrail de transferências)
     existing_accounts = [a.get("name") for a in (snapshot.get("accounts") or [])
@@ -530,7 +616,7 @@ def render_prompt(snapshot: dict, framework_md: str) -> str:
     accounts_hint = ", ".join(f"`{n}`" for n in existing_accounts if n) or "(nenhuma)"
 
     return f"""{system}
-{profile_section}{memory_section}{plans_section}
+{profile_section}{memory_section}{plans_section}{research_section}
 ---
 
 # Dados consolidados (Organizze)
@@ -564,7 +650,7 @@ def render_prompt(snapshot: dict, framework_md: str) -> str:
 
 9. **Cortes merchant-level (3-5 obrigatórios)**: usando a tabela "Top 20 transações do mês corrente", identifique 3-5 transações específicas para cortar/substituir. Cada item no formato `[CORTE] <merchant/descrição> · R$ X/mês → alternativa Y · economia R$ Z/mês · R$ Z*12/ano`. Use a `descrição` real do snapshot, não invente nome de merchant.
 
-10. **Pesquisa de mercado WebSearch (1 por categoria-alvo)**: para cada categoria com marca `TARGET-WEBSEARCH`, faça **1 `WebSearch`** buscando alternativas mais baratas, usando a `cidade` do perfil quando aplicável (ex.: "plano de celular pré-pago mais barato São Paulo SP 2026"). Cite a URL e o preço atual encontrado. Sem fonte = `(sem alternativa encontrada)`. Não pesquise nada além das 3 categorias-alvo (custo controlado).
+10. **Pesquisa de mercado — CONSUMA, NÃO REFAÇA.** O comando que te invocou disparou agentes `search-specialist` em paralelo (1 por categoria-alvo) ANTES desta análise; os resultados estão no bloco "Pesquisa de mercado (PRÉ-COLETADA)" acima — se esse bloco existe, **use-o** na seção 'Alternativas de mercado' (cite URLs e preços direto dele, não invoque WebSearch). **Use WebSearch apenas como fallback** quando esse bloco estiver ausente OU não cobrir uma categoria-alvo específica — nesse caso faça no máximo 1 busca extra por categoria descoberta. Sem fonte útil = `(sem alternativa encontrada)`.
 
 11. **Quitação priorizada**: liste parcelamentos e dívidas detectáveis no snapshot ordenados por estratégia escolhida: **avalanche** (maior juros/parcela primeiro — racional, economiza mais) ou **snowball** (menor saldo primeiro — psicológico, motiva). Escolha pela `tolerancia_risco` do perfil (`conservador`/`moderado` → snowball; `agressivo` → avalanche). Respeite memória do usuário (não propor quitar item marcado "não-negociável" ou "essencial").
 
@@ -658,12 +744,23 @@ def main() -> int:
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--framework", default=str(DEFAULT_FRAMEWORK))
     ap.add_argument("--out", default=None)
+    ap.add_argument("--research-dir", default=None,
+                    help="dir com relatórios de pesquisa pré-coletada (1 .md por categoria)")
+    ap.add_argument("--list-targets", action="store_true",
+                    help="apenas imprime as 3 categorias-alvo (pipe-delimited) e sai — "
+                         "consumido pelo organizze.md pra disparar agentes em paralelo")
     ap.add_argument("--dry-run", action="store_true", help="apenas imprime o prompt")
     args = ap.parse_args()
 
     snap = json.loads(pathlib.Path(args.snapshot).read_text())
+
+    if args.list_targets:
+        sys.stdout.write(render_list_targets(snap) + "\n")
+        return 0
+
     fw = pathlib.Path(args.framework).read_text() if pathlib.Path(args.framework).exists() else ""
-    prompt = render_prompt(snap, fw)
+    research_dir = pathlib.Path(args.research_dir) if args.research_dir else None
+    prompt = render_prompt(snap, fw, research_dir=research_dir)
 
     if args.out:
         pathlib.Path(args.out).write_text(prompt)

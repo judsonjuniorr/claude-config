@@ -195,21 +195,88 @@ Tratamento de erros:
 
 Imprima o path do snapshot e os totais (use `jq '.meta.totais' "$SNAP"`). Não chame o subagent.
 
-## Passo 5 — Renderizar prompt da análise
+## Passo 5 — Renderizar prompt base da análise
 
 ```bash
-REPORT=~/finance/organizze/reports/$(date +%F-%H%M).md
-PROMPT=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py --snapshot "$SNAP")
+TS=$(date +%F-%H%M)
+REPORT=~/finance/organizze/reports/$TS.md
+RESEARCH_DIR=~/finance/organizze/research/$TS
+mkdir -p "$RESEARCH_DIR"
+PROMPT_FILE=~/finance/organizze/reports/$TS.prompt.md
 ```
 
-`analyze.py` lê o snapshot + a seção 4.1 do framework `analista-financeiro-claude-code.md` + injeta `memory.md` e `plans.md` (de `~/finance/`) e devolve um prompt único pronto para o subagent.
+Não invoque `analyze.py` ainda — primeiro precisamos disparar as pesquisas (Passo 5.5) e depois renderizar o prompt já com `--research-dir` apontando pra elas.
+
+`analyze.py` lê o snapshot + seção 4.1 do framework `analista-financeiro-claude-code.md` + injeta `profile.md`, `memory.md`, `plans.md`, e o conteúdo de `$RESEARCH_DIR` (pesquisa pré-coletada) — devolve um prompt único pronto pra entregar ao subagent.
+
+## Passo 5.5 — Pesquisa de mercado em paralelo
+
+Em vez de o `financial-analyst` rodar 3 `WebSearch` sequencialmente dentro do próprio contexto (lento e consome tokens dele), **dispare 3 agentes `search-specialist` em paralelo agora** e salve os relatórios em `$RESEARCH_DIR/<categoria>.md` — o `analyze.py` injeta como bloco "Pesquisa de mercado (PRÉ-COLETADA)".
+
+1. Liste as categorias-alvo + cidade do perfil (saída pipe-delimited):
+   ```bash
+   TARGETS=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py --snapshot "$SNAP" --list-targets)
+   echo "$TARGETS"
+   ```
+   Formato esperado, 1 registro por linha:
+   - `profile|cidade|<cidade ou "(sem dados)">`
+   - `target|<nome categoria>|<total_cents>|<mediana_6m_cents>|<top5 transações separadas por ';'>`
+
+2. Parseie:
+   - `CITY` = valor da linha `profile|cidade|...` (use `"a cidade do usuário"` literal se for `(sem dados)`).
+   - Cada linha `target|...` vira uma entrada com `name`, `total_cents`, `top_txs`.
+
+3. **Dispare TODOS os agentes em UMA ÚNICA mensagem com múltiplos tool calls `Agent` paralelos** (1 por categoria — tipicamente 3). NÃO faça em série. Configuração de cada chamada:
+   - `subagent_type`: `search-specialist`
+   - `description`: `Pesquisa de mercado: <categoria>`
+   - `prompt` (em PT-BR — o agent default fala inglês, exija PT-BR explicitamente):
+     ```
+     RESPONDA EM PORTUGUÊS BRASILEIRO.
+     
+     Pesquise alternativas mais baratas para gastos da categoria "<NOME CATEGORIA>" considerando que o usuário mora em "<CITY>".
+     
+     Gasto mensal atual nesta categoria: R$ <total formatado>.
+     Mediana 6 meses: R$ <mediana>.
+     Top 5 transações deste mês nesta categoria:
+       - <transação 1>
+       - <transação 2>
+       - ... (até 5)
+     
+     Objetivo: encontrar 3-5 alternativas legítimas e mais baratas, viáveis para o usuário. Foque em opções comparáveis em qualidade (não comparar carro com bicicleta). Para cada uma:
+       - Nome da opção
+       - Preço atual (R$/mês ou R$/unit, conforme aplicável)
+       - URL fonte (priorize sites oficiais — sites de comparadores como Buscapé/Zoom OK se oficial não tiver preço)
+       - Diferencial / catch / restrição que o usuário deve saber (ex.: cobertura limitada, fidelidade, qualidade percebida)
+     
+     Saída obrigatória em PT-BR:
+       1. Resumo de 1 parágrafo (alternativa mais recomendada + por quê).
+       2. Lista de 3-5 alternativas no formato acima.
+       3. Tabela de fontes consultadas (URL, data, autoridade H/M/L).
+     
+     Se não encontrar nada útil (categoria muito específica ou sem alternativa pública), responda apenas "(sem alternativa encontrada)" e justifique em 1 linha.
+     ```
+
+4. Após cada agent retornar, salve o relatório (texto bruto retornado) em arquivo separado:
+   ```bash
+   # Para cada categoria, escreva o relatório retornado pelo agent em:
+   # $RESEARCH_DIR/<nome_categoria>.md
+   # (mantenha o nome exato da categoria — analyze.py usa o stem do arquivo como header)
+   ```
+
+5. Se TODOS os agents falharem (raro), `$RESEARCH_DIR` fica vazio — `analyze.py` simplesmente não injeta o bloco, e a regra 14 do analyst orienta a usar WebSearch como fallback.
+
+6. Agora renderize o prompt **com** o `--research-dir`:
+   ```bash
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py \
+     --snapshot "$SNAP" --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"
+   ```
 
 ## Passo 6 — Delegar ao subagent `financial-analyst`
 
 Use a tool `Agent`:
 - `subagent_type`: `financial-analyst` se existir em `~/.claude/agents/financial-analyst.md`. Caso não exista, **avise o usuário** ("subagent não instalado — use `general-purpose` desta vez? Para instalar, rode `ln -sf <claude-config-root>/agents/financial-analyst/financial-analyst.md ~/.claude/agents/`") e prossiga com `general-purpose`.
 - `description`: `Análise financeira mensal Organizze`
-- `prompt`: o conteúdo de `$PROMPT` (renderizado no passo 5).
+- `prompt`: o conteúdo de `$PROMPT_FILE` (renderizado no passo 5.5 com pesquisa pré-coletada).
 
 Salve a resposta do subagent em `$REPORT`.
 

@@ -35,7 +35,7 @@ A general-purpose agent given raw financial data wanders: invents averages, igno
 - **Memory as law** — if the user said "don't touch the mortgage", the agent never proposes it again.
 - **Overdue first** — unpaid past transactions surface before any optimization.
 - **Merchant-level cuts** — uses the actual `description` from the snapshot, never invents merchant names. 3-5 specific cuts per analysis.
-- **Market research** — runs WebSearch on the top 3 effective-spend categories (excluding card-invoice categories) to find real cheaper alternatives in the user's city.
+- **Market research arrives pre-collected** — the caller (`/finance:organizze`) dispatches `search-specialist` agents **in parallel** (one per target category) before invoking this agent; results are injected as a "Pesquisa de mercado (PRÉ-COLETADA)" block. The analyst consumes the block instead of running WebSearch itself (~3x faster, saves the analyst's tokens). Falls back to its own WebSearch only when the block is missing or incomplete.
 - **Parcela semantics** — "acabando" (≤3 left → cash relief incoming, don't replace) vs "longe do fim" (≥12 total + half remaining → real future drag).
 - **Payoff strategy by risk profile** — avalanche (highest interest first) for `agressivo`, snowball (smallest balance first) for `conservador`/`moderado`. Justified, never silent.
 - **Numbers are sourced** — no invented metrics; everything traces to the snapshot or to a cited WebSearch URL.
@@ -101,7 +101,7 @@ Every response follows this exact order (15 sections):
 11. Proactive renegotiation when recurring debit consistently lands on a no-cash day.
 12. **Profile personalization is mandatory** — every recommendation cites ≥1 field from the user profile.
 13. **3-5 merchant-level cuts** — using the actual snapshot description, never inventing.
-14. **WebSearch on the 3 target categories** — exactly once per category, using the user's city.
+14. **Consume the pre-collected market research block** — `search-specialist` agents already searched in parallel; only use WebSearch as fallback when block is missing/incomplete.
 15. **Payoff strategy chosen by risk tolerance** — avalanche for `agressivo`, snowball for `conservador`/`moderado`.
 16. **Up to 3 `[PERGUNTA]` markers** at the end when critical context is missing; the calling command captures them.
 
