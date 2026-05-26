@@ -8,11 +8,11 @@ como offset em ~/finance/organizze/balances.json, que pull.py soma na próxima
 execução.
 
 Modo 1 — pares conta_id=valor_em_centavos via CLI:
-  reconcile.py --snapshot PATH 1575443=80174 5044376=194746
-                                ↑ NuConta R$ 801,74   ↑ Santander R$ 1.947,46
+  reconcile.py --snapshot PATH <conta_id_1>=<centavos> <conta_id_2>=<centavos>
+  ex.: reconcile.py --snapshot PATH 1234567=80174 7654321=194746
 
 Modo 2 — JSON via stdin:
-  echo '{"1575443": 80174, "5044376": 194746}' | reconcile.py --snapshot PATH -
+  echo '{"1234567": 80174, "7654321": 194746}' | reconcile.py --snapshot PATH -
 
 Modo 3 — interativo (default sem args):
   reconcile.py --snapshot PATH

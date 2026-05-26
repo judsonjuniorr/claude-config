@@ -30,7 +30,7 @@ Quando o usuário invocar `/finance:context`, classifique `$ARGUMENTS` e siga o 
 
 ## Modo 2 — Texto livre (registrar)
 
-`$ARGUMENTS` traz uma restrição ou contexto (ex.: "Mounjaro é prescrição médica", "dízimo é não-negociável", "não consigo diminuir parcela da casa").
+`$ARGUMENTS` traz uma restrição ou contexto (ex.: "remédio X é prescrição médica", "dízimo é não-negociável", "não consigo diminuir parcela da casa").
 
 1. (Opcional) Sugira uma `--tag` inferida do texto (`saude`, `casa`, `dizimo`, `assinatura`, `dívida`, `metodologia`, ...) via `AskUserQuestion` com opção "Pular".
 

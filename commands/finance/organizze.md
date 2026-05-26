@@ -92,7 +92,7 @@ Após o primeiro `pull.py`, se `~/finance/organizze/balances.json` ainda não ex
    ```bash
    python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/reconcile.py --snapshot "$SNAP" <id>=<centavos> [<id>=<centavos> ...]
    ```
-   Ex.: `1575443=80174 5044376=194746` (R$ 801,74 e R$ 1.947,46).
+   Ex.: `1234567=80174 7654321=194746` (R$ 801,74 e R$ 1.947,46 — IDs ilustrativos).
 
 4. O script grava `~/finance/organizze/balances.json` com o offset por conta. Pulls futuros aplicam automaticamente — não precisa repetir.
 
@@ -307,7 +307,7 @@ Após a análise, ofereça registrar contexto/objetivos novos. Cada bloco é ind
 
 **6.5a — Memória/restrição** — pergunte via `AskUserQuestion` (single-select com "Pular"):
 
-> Quer registrar alguma restrição ou contexto para futuras análises? Exemplos: "não consigo diminuir parcela da casa", "Mounjaro é prescrição médica", "dízimo é não-negociável".
+> Quer registrar alguma restrição ou contexto para futuras análises? Exemplos: "não consigo diminuir parcela da casa", "remédio X é prescrição médica", "dízimo é não-negociável".
 
 Se houver resposta, grave:
 

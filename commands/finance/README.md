@@ -115,7 +115,7 @@ Fix: on the first run, calibrate with the real balance shown in the app's "Minha
 ```bash
 python3 organizze-scripts/reconcile.py --snapshot <latest-snapshot.json> \
   <account_id>=<balance_in_cents> [<account_id>=<balance_in_cents> ...]
-# Example: 1575443=80174 5044376=194746  (R$ 801,74 and R$ 1.947,46)
+# Example: 1234567=80174 7654321=194746  (R$ 801.74 and R$ 1,947.46 — sample IDs)
 ```
 
 This writes `~/finance/organizze/balances.json` (per-`account_id` offset in cents). Future pulls apply it automatically.
@@ -156,7 +156,7 @@ Wrapper conversacional sobre `scripts/memory.py`. Restrições e contexto que an
 
 ```bash
 /finance:context
-/finance:context "Mounjaro é prescrição médica — não cortar"
+/finance:context "remédio X é prescrição médica — não cortar"
 /finance:context list
 
 # Ou direto:
