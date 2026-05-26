@@ -18,7 +18,7 @@ Argumentos opcionais (parseie de `$ARGUMENTS`):
 **Paths absolutos**:
 - Scripts globais (provider-agnósticos): `/Users/judson/sources/personal/claude-config/commands/finance/scripts/`
 - Scripts Organizze: `/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/`
-- Storage global: `~/finance/` (`memory.md`, `plans.md`)
+- Storage global: `~/finance/` (`memory.md`, `plans.md`, `profile.md`)
 - Storage Organizze: `~/finance/organizze/` (`snapshots/`, `reports/`, `budget-suggestions/`, `.auth`, `.config`, `balances.json`)
 - Framework de análise (lido por `analyze.py`): `/Users/judson/sources/personal/claude-config/analista-financeiro-claude-code.md`
 
@@ -34,9 +34,11 @@ Se `$ARGUMENTS` contém texto em linguagem natural, **não rode pull/analyze par
 
 - **Restrição/contexto** (declarações sobre o que **não** mudar, prescrições, inegociáveis — "não consigo diminuir X", "Y é prescrição médica", "Z é não-negociável"): **redirecione para `/finance:context`** com a mesma lógica.
 
+- **Atualização de perfil pessoal** (declarações sobre identidade/vida — "tenho 32 anos", "moro em SP", "ganho R$ 12k", "sou casado", "tenho 2 filhos", "trabalho como dev"): **redirecione para `/finance:profile`** dizendo "Isso parece atualização de perfil — abrindo `/finance:profile`" e siga as instruções daquele comando passando `$ARGUMENTS`.
+
 - **Pedido de análise/dúvida** (qualquer outra coisa: "como estou", "o que cortar", "vou perder algo?"): siga ao Passo 1.
 
-Em dúvida real entre objetivo e restrição, pergunte ao usuário com `AskUserQuestion` qual dos dois comandos quer abrir. Em dúvida entre registrar e analisar, pergunte.
+Em dúvida real entre os 3 destinos, pergunte ao usuário com `AskUserQuestion` qual quer abrir. Em dúvida entre registrar e analisar, pergunte.
 
 ---
 
@@ -132,6 +134,46 @@ python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-
 
 Mapeamentos vivem em `~/finance/organizze/.config` (formato `KEY=VALUE`, 0600). Edição manual permitida.
 
+## Passo 2.8 — Preencher campos faltantes do perfil pessoal
+
+A personalização das recomendações depende do perfil em `~/finance/profile.md` (idade, profissão, renda, família, moradia, cidade, tolerância a risco). Se algum campo crítico está vazio, o subagent vai emitir `[PERGUNTA]` no final — melhor preencher antes da análise.
+
+1. Cheque se vale perguntar agora:
+   ```bash
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py should-ask
+   ```
+   - Exit code 1 → perfil completo OU silenciado (`last_skip` < 7d). Pule para Passo 3.
+   - Exit code 0 → há campos faltantes e não está silenciado. Siga.
+
+2. Liste os campos faltantes:
+   ```bash
+   MISSING=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py missing)
+   ```
+
+3. Para cada campo em `$MISSING` (limite **6 perguntas por execução** — os restantes ficam pra próxima):
+   - Use `AskUserQuestion` com formato adequado ao campo (single-select com enum + "Pular" para `estado_civil`, `moradia_tipo`, `tolerancia_risco`; texto aberto para os demais).
+   - Sugestões de pergunta por campo (idêntico ao Modo 4 do `/finance:profile`):
+     - `idade`: "Qual sua idade?"
+     - `profissao`: "Qual sua profissão / como você ganha dinheiro?"
+     - `renda_liquida_mensal_cents`: "Qual sua renda líquida média mensal em R$?" → converta pra centavos.
+     - `estado_civil`: opções `solteiro / relacionamento / casado / divorciado / viuvo` + Pular.
+     - `dependentes`: "Tem dependentes? Quantos e idades, ou 'nenhum'."
+     - `moradia_tipo`: opções `própria quitada / própria financiada / alugada / cedida / outra` + Pular. Mapeie para enum: "própria quitada" → `propria_quitada`, etc.
+     - `moradia_custo_cents`: "Quanto paga de moradia por mês (parcela ou aluguel) em R$? Use 0 se zero." → converta pra centavos.
+     - `cidade`: "Em que cidade/estado mora? Ex.: 'São Paulo, SP'." — usada nas pesquisas de mercado.
+     - `tolerancia_risco`: opções `conservador / moderado / agressivo` + Pular. Inclua descrição curta de cada.
+   - Para cada resposta válida (não "Pular"), grave imediatamente:
+     ```bash
+     python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py set <key> "<value>"
+     ```
+
+4. Se o usuário pulou **todos** os campos perguntados, grave silêncio de 7 dias:
+   ```bash
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py mark-skip
+   ```
+
+5. Prossiga para o Passo 3 (Pull). O perfil atualizado vai entrar no prompt do Passo 5.
+
 ## Passo 3 — Pull do snapshot
 
 ```bash
@@ -213,6 +255,30 @@ python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/pl
 
 Memória e objetivos vivem em `~/finance/{memory,plans}.md` — provider-agnósticos. `analyze.py` injeta automaticamente nas próximas análises. Para gerenciar fora do fluxo de análise: `/finance:context` e `/finance:goal`.
 
+## Passo 6.6 — Responder perguntas em aberto do subagent
+
+O subagent emite até 3 perguntas no final do relatório, no formato exato `[PERGUNTA] <texto>` (uma por linha, sem hífen/bullet na frente). Captura-as e leva ao usuário.
+
+1. Parseie o `$REPORT` salvo no Passo 6 — tolere bullet/hífen/indentação que o subagent possa colocar:
+   ```bash
+   QUESTIONS=$(grep -oE '\[PERGUNTA\][^[:cntrl:]]*' "$REPORT" | sed 's/^\[PERGUNTA\][[:space:]]*//')
+   ```
+
+2. Se vazio (ou contém apenas `(sem perguntas em aberto)`), pule para o Passo 7.
+
+3. Para cada pergunta (máx 3), use `AskUserQuestion` (single-select com "Pular"):
+   - Header da pergunta: derive 1-2 palavras do conteúdo (ex.: "Reserva", "Plano celular", "Dívida externa").
+   - Opções: 2-3 respostas razoáveis quando inferíveis (ex.: para "essa assinatura é essencial?", ofereça "Sim — manter / Não — posso cortar / Depende — explicar"); senão, formato aberto.
+   - "Pular" sempre disponível.
+
+4. Para cada resposta válida (não "Pular"), grave em memória:
+   ```bash
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py add "<pergunta + resposta condensada>" --tag <tag derivada>
+   ```
+   - Exemplo de tag: `assinatura`, `divida`, `casa`, `transporte`, `objetivo`.
+
+5. Confirme em 1 linha: "N memórias gravadas — próximo `/finance:organizze` já considera." **Não re-invoque o subagent** neste turno.
+
 ## Passo 7 — Sugerir atualização de orçamento
 
 Após a análise do subagent, rode:
@@ -237,8 +303,8 @@ Se `--history-days` no Passo 3 foi menor que 180, avise: "histórico curto, conf
 
 Imprima no chat, nesta ordem:
 
-1. O conteúdo do relatório do subagent. Estrutura esperada:
-   - TL;DR
+1. O conteúdo do relatório do subagent. Estrutura esperada (15 seções):
+   - TL;DR (cita ≥1 campo do perfil)
    - Números-chave
    - Atrasadas — ação imediata
    - **Metas de categoria — status**
@@ -246,8 +312,12 @@ Imprima no chat, nesta ordem:
    - **Plano de transferências e poupança** (destaque visualmente — é o coração desta análise)
    - **Objetivos pausados neste ciclo** (se houver)
    - Parcelamentos — visão acionável
-   - 3 recomendações priorizadas
+   - **Cortes específicos sugeridos** (NOVO — 3-5 `[CORTE]` merchant-level)
+   - **Quitação priorizada** (NOVO — avalanche/snowball + lista ordenada)
+   - **Alternativas de mercado** (NOVO — 3 blocos com URL+preço da pesquisa WebSearch)
+   - 3 recomendações priorizadas (cada uma com "Por que pra você" referenciando perfil)
    - Próximos passos verificáveis
+   - **Perguntas em aberto** (NOVO — linhas `[PERGUNTA]` capturadas no Passo 6.6)
    - Disclaimer
 2. Linha final:
    ```
@@ -271,8 +341,9 @@ Não invente números. Se o subagent não cobrir algum campo dos "Números-chave
 
 - **`/finance:goal`** — CRUD de objetivos financeiros (`~/finance/plans.md`).
 - **`/finance:context`** — CRUD de restrições/contexto (`~/finance/memory.md`).
+- **`/finance:profile`** — CRUD do perfil pessoal (`~/finance/profile.md`) — usado para personalizar recomendações.
 
-Ambos são provider-agnósticos: qualquer provider futuro consome o mesmo storage.
+Os três são provider-agnósticos: qualquer provider futuro consome o mesmo storage.
 
 ## Subagents recomendados
 

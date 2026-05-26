@@ -6,6 +6,7 @@ Provider-agnostic data lives in ~/finance/. Provider-specific data lives in
 - BASE     : ~/finance/
 - MEM      : ~/finance/memory.md
 - PLANS    : ~/finance/plans.md
+- PROFILE  : ~/finance/profile.md
 - migrate_legacy(): one-shot move of pre-refactor layout
     ~/finance-organizze/memory.md   -> ~/finance/memory.md
     ~/finance-organizze/plans.md    -> ~/finance/plans.md
@@ -25,6 +26,7 @@ HOME = pathlib.Path.home()
 BASE = HOME / "finance"
 MEM = BASE / "memory.md"
 PLANS = BASE / "plans.md"
+PROFILE = BASE / "profile.md"
 LEGACY = HOME / "finance-organizze"
 
 # Provider-specific files moved into BASE/<provider>/
@@ -41,7 +43,7 @@ _PROVIDER_MOVES = {
 }
 
 # Top-level files migrated to BASE (global)
-_GLOBAL_MOVES = ["memory.md", "plans.md"]
+_GLOBAL_MOVES = ["memory.md", "plans.md", "profile.md"]
 
 
 def _move(src: pathlib.Path, dst: pathlib.Path) -> None:

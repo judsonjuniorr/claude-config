@@ -15,6 +15,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+import re
 import sys
 from collections import defaultdict
 
@@ -56,6 +57,27 @@ def extract_system_prompt(framework_md: str) -> str:
     return text or "Você é um analista financeiro pessoal sênior."
 
 
+_INVOICE_NAME_RE = re.compile(
+    r"(^\s*fatura\b|fatura\s+de\s+cart[aã]o|pagamento\s+de\s+fatura|^\s*invoice\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_invoice_category_name(name: str | None) -> bool:
+    """True se o nome da categoria parece ser pagamento de fatura de cartão.
+
+    Usado pra excluir essas categorias do top de gastos efetivos (elas inflam
+    artificialmente: o gasto real foi a compra no cartão, e a fatura é só
+    a quitação correspondente).
+
+    Conservador: casa apenas variações claras de "fatura" / "pagamento de
+    fatura" / "fatura de cartão". NÃO filtra categorias como "Cartão Refeição"
+    ou "Cartão Alimentação" (vale-refeição/alimentação, gastos efetivos reais)."""
+    if not name:
+        return False
+    return bool(_INVOICE_NAME_RE.search(name))
+
+
 def top_categories(snapshot: dict, month: dt.date | None = None) -> list[tuple[str, int]]:
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     totals: dict[str, int] = defaultdict(int)
@@ -69,6 +91,99 @@ def top_categories(snapshot: dict, month: dt.date | None = None) -> list[tuple[s
         name = cats.get(t.get("category_id")) or "Sem categoria"
         totals[name] += -amt
     return sorted(totals.items(), key=lambda x: -x[1])[:10]
+
+
+def top_categories_effective(snapshot: dict, month: dt.date | None = None,
+                              limit: int = 3) -> list[tuple[str, int]]:
+    """Top N categorias de gasto efetivo do mês, EXCLUINDO categorias cujo nome
+    contém 'fatura'/'cartão'/'invoice' (pagamentos de fatura, que não são
+    gastos novos)."""
+    cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
+    totals: dict[str, int] = defaultdict(int)
+    target_month = (month or dt.date.today()).strftime("%Y-%m")
+    for t in snapshot.get("transactions_past") or []:
+        if (t.get("date") or "")[:7] != target_month:
+            continue
+        amt = int(t.get("amount_cents") or 0)
+        if amt >= 0:
+            continue
+        name = cats.get(t.get("category_id")) or "Sem categoria"
+        if _is_invoice_category_name(name):
+            continue
+        totals[name] += -amt
+    return sorted(totals.items(), key=lambda x: -x[1])[:limit]
+
+
+def top_transactions_of_category(snapshot: dict, cat_name: str,
+                                  month: dt.date | None = None,
+                                  limit: int = 5) -> list[dict]:
+    cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
+    target_month = (month or dt.date.today()).strftime("%Y-%m")
+    rows: list[dict] = []
+    for t in snapshot.get("transactions_past") or []:
+        if (t.get("date") or "")[:7] != target_month:
+            continue
+        amt = int(t.get("amount_cents") or 0)
+        if amt >= 0:
+            continue
+        name = cats.get(t.get("category_id")) or "Sem categoria"
+        if name != cat_name:
+            continue
+        rows.append(t)
+    rows.sort(key=lambda x: int(x.get("amount_cents") or 0))
+    return rows[:limit]
+
+
+def category_median_6m(snapshot: dict, cat_name: str) -> int:
+    """Mediana mensal dos últimos 6 meses para a categoria (em centavos, despesa)."""
+    cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
+    today = dt.date.today()
+    months: list[str] = []
+    y, m = today.year, today.month
+    for _ in range(6):
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+        months.append(f"{y:04d}-{m:02d}")
+    totals: dict[str, int] = defaultdict(int)
+    for t in snapshot.get("transactions_past") or []:
+        key = (t.get("date") or "")[:7]
+        if key not in months:
+            continue
+        amt = int(t.get("amount_cents") or 0)
+        if amt >= 0:
+            continue
+        name = cats.get(t.get("category_id")) or "Sem categoria"
+        if name != cat_name:
+            continue
+        totals[key] += -amt
+    vals = sorted(totals.values())
+    if not vals:
+        return 0
+    n = len(vals)
+    return vals[n // 2] if n % 2 else (vals[n // 2 - 1] + vals[n // 2]) // 2
+
+
+def top_transactions_of_month(snapshot: dict, month: dt.date | None = None,
+                               limit: int = 20) -> list[dict]:
+    """Top N despesas do mês ordenadas por valor absoluto, excluindo categorias
+    de pagamento de fatura (que duplicam gastos do cartão)."""
+    cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
+    target_month = (month or dt.date.today()).strftime("%Y-%m")
+    rows: list[dict] = []
+    for t in snapshot.get("transactions_past") or []:
+        if (t.get("date") or "")[:7] != target_month:
+            continue
+        amt = int(t.get("amount_cents") or 0)
+        if amt >= 0:
+            continue
+        name = cats.get(t.get("category_id")) or "Sem categoria"
+        if _is_invoice_category_name(name):
+            continue
+        rows.append(t)
+    rows.sort(key=lambda x: int(x.get("amount_cents") or 0))
+    return rows[:limit]
 
 
 def category_delta(snapshot: dict) -> list[tuple[str, int, int, float]]:
@@ -248,6 +363,67 @@ def summarize(snapshot: dict) -> str:
         out.append(cf_block)
         out.append("")
 
+    # === Top 20 transações do mês (gasto efetivo, ex-faturas de cartão) ===
+    out.append("## Top 20 transações do mês corrente (despesas, ex-pagamentos de fatura)")
+    out.append("")
+    out.append("Use esta tabela para sugerir cortes/substituições merchant-level "
+               "(regra inviolável `[CORTE]`). Cada linha é um gasto real do mês "
+               "— compras no cartão entram aqui (categorias rotuladas como "
+               "'Fatura/Cartão' foram filtradas pra não duplicar).")
+    out.append("")
+    cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
+    accounts_by_id = {a.get("id"): a.get("name") for a in snapshot.get("accounts") or []}
+    cards_by_id = {c.get("id"): c.get("name") for c in snapshot.get("credit_cards") or []}
+    top_tx = top_transactions_of_month(snapshot)
+    if not top_tx:
+        out.append("- (sem despesas no mês corrente)")
+    else:
+        out.append("| Data | Descrição | Categoria | Origem | Valor | Paga? | Recorrente? |")
+        out.append("|---|---|---|---|---:|:---:|:---:|")
+        for t in top_tx:
+            d = (t.get("date") or "")[:10]
+            desc = (t.get("description") or "?").replace("|", "/")[:48]
+            cat_name = cats.get(t.get("category_id")) or "Sem categoria"
+            if t.get("credit_card_id"):
+                origin = f"💳 {cards_by_id.get(t.get('credit_card_id')) or '?'}"
+            else:
+                origin = accounts_by_id.get(t.get("account_id")) or "?"
+            amt = cents_to_brl(t.get("amount_cents"))
+            paid = "✓" if t.get("paid") else "✗"
+            rec = "✓" if t.get("is_recurring") else ""
+            out.append(f"| {d} | {desc} | {cat_name} | {origin} | {amt} | {paid} | {rec} |")
+    out.append("")
+
+    # === Categorias-alvo para pesquisa de mercado (top 3 ex-faturas) ===
+    out.append("## Categorias-alvo para pesquisa de mercado (TARGET-WEBSEARCH)")
+    out.append("")
+    out.append("Top 3 categorias de gasto efetivo do mês (excluindo pagamentos "
+               "de fatura). **Para cada uma, você DEVE rodar 1 `WebSearch` "
+               "buscando alternativas mais baratas considerando a `cidade` do "
+               "perfil do usuário** (regra inviolável 14). Apresente o resultado "
+               "na seção 'Alternativas de mercado' do relatório com URL + preço "
+               "encontrado. Se não houver alternativa razoável, marque "
+               "`(sem alternativa encontrada)`.")
+    out.append("")
+    targets = top_categories_effective(snapshot, limit=3)
+    if not targets:
+        out.append("- (sem categorias de gasto efetivo no mês corrente)")
+    else:
+        for cat_name, total in targets:
+            median = category_median_6m(snapshot, cat_name)
+            out.append(f"### TARGET-WEBSEARCH: {cat_name}")
+            out.append(f"- Total mês: **{cents_to_brl(total)}** · "
+                       f"mediana 6m: {cents_to_brl(median)}")
+            top5 = top_transactions_of_category(snapshot, cat_name, limit=5)
+            if top5:
+                out.append("- Top 5 transações desta categoria no mês:")
+                for t in top5:
+                    d = (t.get("date") or "")[:10]
+                    desc = (t.get("description") or "?")[:60]
+                    out.append(f"  - {d} · {desc} · {cents_to_brl(t.get('amount_cents'))}")
+            out.append("")
+    out.append("")
+
     out.append("## Orçamento do mês corrente (metas vs. realizado)")
     cur_key_y = today.year
     cur_key_m = today.month
@@ -291,6 +467,24 @@ def load_memory_block() -> str:
         return ""
 
 
+def load_profile_block() -> str:
+    """Lê ~/finance/profile.md e devolve um bloco renderizado para injeção.
+
+    Sempre renderiza algo: se o perfil não existe, mostra o bloco com todos os
+    campos marcados (sem dados) — isso sinaliza ao subagent para emitir
+    [PERGUNTA] no relatório final."""
+    import subprocess
+    script = _SHARED_SCRIPTS / "profile.py"
+    try:
+        r = subprocess.run(
+            ["python3", str(script), "render"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return r.stdout.strip()
+    except Exception:
+        return ""
+
+
 def load_plans_block() -> str:
     """Lê ~/finance/plans.md e devolve um bloco renderizado para injeção."""
     plans_path = pathlib.Path.home() / "finance" / "plans.md"
@@ -323,8 +517,10 @@ def render_cashflow_block(snapshot: dict) -> str:
 def render_prompt(snapshot: dict, framework_md: str) -> str:
     system = extract_system_prompt(framework_md)
     summary = summarize(snapshot)
+    profile_block = load_profile_block()
     memory_block = load_memory_block()
     plans_block = load_plans_block()
+    profile_section = f"\n---\n\n{profile_block}\n" if profile_block else ""
     memory_section = f"\n---\n\n{memory_block}\n" if memory_block else ""
     plans_section = f"\n---\n\n{plans_block}\n" if plans_block else ""
 
@@ -334,7 +530,7 @@ def render_prompt(snapshot: dict, framework_md: str) -> str:
     accounts_hint = ", ".join(f"`{n}`" for n in existing_accounts if n) or "(nenhuma)"
 
     return f"""{system}
-{memory_section}{plans_section}
+{profile_section}{memory_section}{plans_section}
 ---
 
 # Dados consolidados (Organizze)
@@ -363,6 +559,16 @@ def render_prompt(snapshot: dict, framework_md: str) -> str:
    `[RENEGOCIAR · <credor>] Mover vencimento de <data atual> para <data sugerida> — motivo: caixa em <data atual> é R$ X, insuficiente para débito de R$ Y`.
 
 7. **Tom**: sem floreio, sem hedge. Números primeiro, recomendação depois.
+
+8. **Personalização via perfil (CRÍTICO)**: o bloco "Perfil do usuário" no topo traz idade, renda, dependentes, moradia, cidade, tolerância a risco. **Toda recomendação cita ao menos um campo do perfil**. Ex.: "para alguém com `2 filhos pequenos` em `São Paulo, SP` financiando casa (`R$ 2.500/mês`), reserva mínima sugerida = 6 meses de despesas (~R$ X)". Se algum campo crítico estiver `(sem dados)`, emita uma `[PERGUNTA]` no bloco final.
+
+9. **Cortes merchant-level (3-5 obrigatórios)**: usando a tabela "Top 20 transações do mês corrente", identifique 3-5 transações específicas para cortar/substituir. Cada item no formato `[CORTE] <merchant/descrição> · R$ X/mês → alternativa Y · economia R$ Z/mês · R$ Z*12/ano`. Use a `descrição` real do snapshot, não invente nome de merchant.
+
+10. **Pesquisa de mercado WebSearch (1 por categoria-alvo)**: para cada categoria com marca `TARGET-WEBSEARCH`, faça **1 `WebSearch`** buscando alternativas mais baratas, usando a `cidade` do perfil quando aplicável (ex.: "plano de celular pré-pago mais barato São Paulo SP 2026"). Cite a URL e o preço atual encontrado. Sem fonte = `(sem alternativa encontrada)`. Não pesquise nada além das 3 categorias-alvo (custo controlado).
+
+11. **Quitação priorizada**: liste parcelamentos e dívidas detectáveis no snapshot ordenados por estratégia escolhida: **avalanche** (maior juros/parcela primeiro — racional, economiza mais) ou **snowball** (menor saldo primeiro — psicológico, motiva). Escolha pela `tolerancia_risco` do perfil (`conservador`/`moderado` → snowball; `agressivo` → avalanche). Respeite memória do usuário (não propor quitar item marcado "não-negociável" ou "essencial").
+
+12. **Perguntas em aberto (bloco final)**: ao final do relatório, liste **até 3 perguntas concretas** que melhorariam a próxima análise, no formato exato `[PERGUNTA] <texto da pergunta>` (uma por linha, sem bullets nem hifens à frente). Exemplos: "[PERGUNTA] Você tem alguma dívida fora do Organizze (financiamento, empréstimo família)?", "[PERGUNTA] A assinatura X de R$ Y é essencial?". O comando que te invocou vai capturar essas perguntas e levar ao usuário. Sem perguntas? Escreva apenas: `(sem perguntas em aberto)`.
 
 ---
 
@@ -403,16 +609,45 @@ ou
 
 **Parcelamentos — visão acionável** (≤5 bullets): destaque as que estão "acabando" e as "longe do fim". Não sugira renegociar parcelas que a memória do usuário explicitamente exclui.
 
+**Cortes específicos sugeridos** (3-5 itens, formato `[CORTE]`): usando a tabela "Top 20 transações do mês corrente" e "Transações recorrentes detectadas", identifique gastos cortáveis ou substituíveis. Formato exato:
+```
+[CORTE] <descrição/merchant do snapshot> · R$ X/mês
+  Alternativa: <substituto concreto>
+  Economia: R$ Z/mês · R$ Z*12/ano
+  Justificativa: <1 linha citando perfil ou memória>
+```
+Se nada cortável (perfil já enxuto), escreva `(sem cortes recomendados — gasto já alinhado ao perfil)` e explique por quê em 1 linha.
+
+**Quitação priorizada** (lista ordenada, 1 linha por item): para cada parcelamento/dívida detectável no snapshot, ordene pela estratégia escolhida (avalanche ou snowball) e cite a primeira linha justificando a escolha pela `tolerancia_risco` do perfil. Formato:
+```
+Estratégia: avalanche|snowball — escolhida pela tolerância `<valor>` do perfil.
+1. <descrição parcelamento/dívida> · R$ X restantes · <faltam N parcelas> · prioridade <Y>
+2. ...
+```
+Se não houver dívidas elegíveis (zero parcelamentos ativos), escreva `(sem dívidas elegíveis para quitação acelerada)`.
+
+**Alternativas de mercado** (1 bloco por categoria-alvo `TARGET-WEBSEARCH`): para cada uma das top 3 categorias, mostre o resultado da pesquisa WebSearch. Formato:
+```
+### <Categoria>: <opção mais barata encontrada> · ~R$ X/mês
+  Fonte: <URL>
+  Economia potencial vs. atual: R$ Z/mês
+  Observação: <ressalva se cabível, ex.: 'preço varia por bairro'>
+```
+Se WebSearch não retornou nada útil, escreva `(sem alternativa encontrada para <categoria>)`.
+
 **3 recomendações priorizadas** no formato:
 ```
 [ALTO/MÉDIO IMPACTO · BAIXO/MÉDIO ESFORÇO] <título curto>
   Economia/ganho: <valor mensal · anual>
   Evidência: <transações/categorias específicas dos dados acima>
   Ação: <passo concreto>
+  Por que pra você: <referência ao perfil — idade, renda, dependentes, moradia, etc.>
 ```
 Nunca proponha algo que contradiga a memória do usuário nem que crie nova conta.
 
 **Próximos passos verificáveis** (≤3 bullets).
+
+**Perguntas em aberto** (até 3, formato exato `[PERGUNTA] <texto>` — uma por linha, sem hífen/bullet): se algum dado pessoal crítico falta no perfil OU se há ambiguidade sobre um gasto/dívida específico, pergunte aqui. O comando que te invocou vai levar essas perguntas ao usuário e gravar as respostas para a próxima análise. Sem perguntas → escreva `(sem perguntas em aberto)`.
 
 Termine com o disclaimer: "Isto não é aconselhamento financeiro licenciado."
 """
