@@ -561,28 +561,69 @@ def load_research_block(research_dir: pathlib.Path | None) -> str:
     por agentes search-specialist em paralelo) e devolve bloco markdown pronto
     pra anexar ao prompt do analyst.
 
-    Cada arquivo é um relatório de pesquisa de uma categoria. Espera-se que o
-    organizze.md tenha disparado os agentes e salvo os resultados aqui.
+    Cada arquivo é um relatório de pesquisa de uma categoria. Mostra mtime de
+    cada arquivo (ISO) pra o subagent saber se é fresh ou reaproveitado do
+    cache.
     """
     if not research_dir or not research_dir.exists():
         return ""
     files = sorted(research_dir.glob("*.md"))
     if not files:
         return ""
+    today = dt.date.today()
     out: list[str] = []
     out.append("# Pesquisa de mercado (PRÉ-COLETADA — NÃO REFAÇA WebSearch)")
     out.append("")
-    out.append("Cada categoria abaixo foi pesquisada em paralelo por um agente "
-               "`search-specialist` dedicado, ANTES desta análise. **Consuma "
-               "estes resultados** na seção 'Alternativas de mercado' do "
-               "relatório — não desperdice tokens repetindo a pesquisa.")
+    out.append("Cada categoria abaixo foi pesquisada por um agente "
+               "`search-specialist` dedicado, ANTES desta análise. Pesquisas "
+               "recentes são reaproveitadas do cache (TTL ~14 dias) — a data "
+               "de coleta está no header de cada bloco. **Consuma estes "
+               "resultados** na seção 'Alternativas de mercado' do relatório.")
     out.append("")
     for f in files:
-        out.append(f"## {f.stem}")
+        try:
+            mtime = dt.date.fromtimestamp(f.stat().st_mtime)
+            age = (today - mtime).days
+            age_str = f"hoje" if age == 0 else f"{age}d"
+            out.append(f"## {f.stem} _(coletado em {mtime.isoformat()} · há {age_str})_")
+        except OSError:
+            out.append(f"## {f.stem}")
         out.append("")
         out.append(f.read_text().strip())
         out.append("")
     return "\n".join(out)
+
+
+def find_cached_research(category: str, max_age_days: int = 14) -> pathlib.Path | None:
+    """Procura o arquivo `<category>.md` mais recente em todos os research dirs
+    históricos (`~/finance/organizze/research/*/`). Retorna path se mtime <=
+    max_age_days, senão None.
+
+    Comparação por nome literal — o organizze.md grava cada relatório com o
+    nome exato da categoria (`Alimentação.md`, `Transporte.md`), então um hit
+    aqui significa pesquisa fresca pra essa categoria específica.
+    """
+    base = pathlib.Path.home() / "finance" / "organizze" / "research"
+    if not base.exists():
+        return None
+    cutoff = dt.datetime.now().timestamp() - max_age_days * 86400
+    candidates: list[tuple[float, pathlib.Path]] = []
+    for snap_dir in base.iterdir():
+        if not snap_dir.is_dir():
+            continue
+        f = snap_dir / f"{category}.md"
+        if not f.exists():
+            continue
+        try:
+            mt = f.stat().st_mtime
+        except OSError:
+            continue
+        if mt >= cutoff:
+            candidates.append((mt, f))
+    if not candidates:
+        return None
+    candidates.sort(reverse=True)
+    return candidates[0][1]
 
 
 def render_cashflow_block(snapshot: dict) -> str:
@@ -741,7 +782,8 @@ Termine com o disclaimer: "Isto não é aconselhamento financeiro licenciado."
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--snapshot", required=True)
+    ap.add_argument("--snapshot", required=False,
+                    help="obrigatório exceto quando usando --research-cache-lookup")
     ap.add_argument("--framework", default=str(DEFAULT_FRAMEWORK))
     ap.add_argument("--out", default=None)
     ap.add_argument("--research-dir", default=None,
@@ -749,8 +791,24 @@ def main() -> int:
     ap.add_argument("--list-targets", action="store_true",
                     help="apenas imprime as 3 categorias-alvo (pipe-delimited) e sai — "
                          "consumido pelo organizze.md pra disparar agentes em paralelo")
+    ap.add_argument("--research-cache-lookup", metavar="CATEGORIA",
+                    help="procura relatório recente da categoria nos research dirs "
+                         "históricos; imprime path se hit, vazio se miss. Não precisa de --snapshot.")
+    ap.add_argument("--max-age-days", type=int, default=14,
+                    help="TTL do cache de pesquisa (default 14)")
     ap.add_argument("--dry-run", action="store_true", help="apenas imprime o prompt")
     args = ap.parse_args()
+
+    if args.research_cache_lookup:
+        hit = find_cached_research(args.research_cache_lookup, args.max_age_days)
+        if hit:
+            sys.stdout.write(str(hit) + "\n")
+        return 0
+
+    if not args.snapshot:
+        print("err|missing-arg|--snapshot é obrigatório (exceto --research-cache-lookup)",
+              file=sys.stderr)
+        return 2
 
     snap = json.loads(pathlib.Path(args.snapshot).read_text())
 

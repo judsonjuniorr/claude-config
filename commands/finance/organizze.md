@@ -209,9 +209,11 @@ Não invoque `analyze.py` ainda — primeiro precisamos disparar as pesquisas (P
 
 `analyze.py` lê o snapshot + seção 4.1 do framework `analista-financeiro-claude-code.md` + injeta `profile.md`, `memory.md`, `plans.md`, e o conteúdo de `$RESEARCH_DIR` (pesquisa pré-coletada) — devolve um prompt único pronto pra entregar ao subagent.
 
-## Passo 5.5 — Pesquisa de mercado em paralelo
+## Passo 5.5 — Pesquisa de mercado em paralelo (com cache)
 
-Em vez de o `financial-analyst` rodar 3 `WebSearch` sequencialmente dentro do próprio contexto (lento e consome tokens dele), **dispare 3 agentes `search-specialist` em paralelo agora** e salve os relatórios em `$RESEARCH_DIR/<categoria>.md` — o `analyze.py` injeta como bloco "Pesquisa de mercado (PRÉ-COLETADA)".
+Em vez de o `financial-analyst` rodar 3 `WebSearch` sequencialmente dentro do próprio contexto (lento e consome tokens dele), **dispare `search-specialist` em paralelo agora** e salve os relatórios em `$RESEARCH_DIR/<categoria>.md` — o `analyze.py` injeta como bloco "Pesquisa de mercado (PRÉ-COLETADA)".
+
+Antes de disparar agente novo, **consulta o cache** (TTL default 14 dias): se já existe relatório recente daquela categoria em qualquer `~/finance/organizze/research/<TS>/<categoria>.md`, reaproveita copiando pro `$RESEARCH_DIR` atual.
 
 1. Liste as categorias-alvo + cidade do perfil (saída pipe-delimited):
    ```bash
@@ -226,7 +228,25 @@ Em vez de o `financial-analyst` rodar 3 `WebSearch` sequencialmente dentro do pr
    - `CITY` = valor da linha `profile|cidade|...` (use `"a cidade do usuário"` literal se for `(sem dados)`).
    - Cada linha `target|...` vira uma entrada com `name`, `total_cents`, `top_txs`.
 
-3. **Dispare TODOS os agentes em UMA ÚNICA mensagem com múltiplos tool calls `Agent` paralelos** (1 por categoria — tipicamente 3). NÃO faça em série. Configuração de cada chamada:
+3. **Para cada target, consulta o cache primeiro** (TTL 14d configurável). Separe em dois grupos: `CACHED` e `MISSING`:
+   ```bash
+   for cat in <lista de nomes>; do
+     CACHED_PATH=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py \
+       --research-cache-lookup "$cat" --max-age-days 14)
+     if [ -n "$CACHED_PATH" ]; then
+       cp "$CACHED_PATH" "$RESEARCH_DIR/$cat.md"
+       echo "info|cache-hit|$cat|$CACHED_PATH" >&2
+     else
+       echo "info|cache-miss|$cat" >&2
+       # adiciona $cat à lista MISSING
+     fi
+   done
+   ```
+   Saída esperada: cada categoria vira `cache-hit` (relatório copiado, não dispara agent) ou `cache-miss` (precisa pesquisar).
+
+   Para forçar re-pesquisa de tudo (ignorar cache), use `--max-age-days 0`. Pra TTL mais longo (ex.: 30 dias), `--max-age-days 30`.
+
+4. Se TODAS forem cache-hit, pule pro Passo 6 (renderiza prompt e invoca analyst — sem agents). Caso contrário, **dispare TODOS os agentes pendentes em UMA ÚNICA mensagem com múltiplos tool calls `Agent` paralelos** (1 por categoria com cache-miss). NÃO faça em série. Configuração de cada chamada:
    - `subagent_type`: `search-specialist`
    - `description`: `Pesquisa de mercado: <categoria>`
    - `prompt` (em PT-BR — o agent default fala inglês, exija PT-BR explicitamente):
@@ -256,16 +276,17 @@ Em vez de o `financial-analyst` rodar 3 `WebSearch` sequencialmente dentro do pr
      Se não encontrar nada útil (categoria muito específica ou sem alternativa pública), responda apenas "(sem alternativa encontrada)" e justifique em 1 linha.
      ```
 
-4. Após cada agent retornar, salve o relatório (texto bruto retornado) em arquivo separado:
+5. Após cada agent retornar, salve o relatório (texto bruto retornado) em arquivo separado:
    ```bash
-   # Para cada categoria, escreva o relatório retornado pelo agent em:
+   # Para cada categoria com cache-miss, escreva o relatório retornado pelo agent em:
    # $RESEARCH_DIR/<nome_categoria>.md
-   # (mantenha o nome exato da categoria — analyze.py usa o stem do arquivo como header)
+   # (mantenha o nome exato da categoria — analyze.py usa o stem do arquivo como header
+   # e também pra futuro lookup de cache)
    ```
 
-5. Se TODOS os agents falharem (raro), `$RESEARCH_DIR` fica vazio — `analyze.py` simplesmente não injeta o bloco, e a regra 14 do analyst orienta a usar WebSearch como fallback.
+6. Se TODAS as categorias pendentes falharem (raro), os arquivos faltam em `$RESEARCH_DIR` — `analyze.py` injeta apenas os que existem, e a regra 14 do analyst orienta usar WebSearch como fallback pras restantes.
 
-6. Agora renderize o prompt **com** o `--research-dir`:
+7. Agora renderize o prompt **com** o `--research-dir`:
    ```bash
    python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py \
      --snapshot "$SNAP" --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"
