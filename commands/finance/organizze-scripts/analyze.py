@@ -253,6 +253,18 @@ def summarize(snapshot: dict) -> str:
         out.append(f"- {a.get('name')} ({kind}): {cents_to_brl(bal)}")
     out.append("")
 
+    # Mapa cartão → conta pagadora (config) para mostrar quem debita cada fatura
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        from config import card_to_account_map  # type: ignore
+        _card_map = card_to_account_map()
+    except Exception:
+        _card_map = {}
+    _acc_name_by_id = {a.get("id"): a.get("name") for a in accounts}
+
+    def _inv_amount(inv: dict) -> int:
+        return int(inv.get("amount_cents") or inv.get("total_cents") or 0)
+
     out.append("## Faturas a vencer (próximos 7 dias)")
     n = 0
     for inv in invoices:
@@ -261,8 +273,37 @@ def summarize(snapshot: dict) -> str:
             due = dt.date.fromisoformat(d)
         except ValueError:
             continue
+        amt = _inv_amount(inv)
+        if amt == 0:
+            continue
         if today <= due <= today + dt.timedelta(days=7):
-            out.append(f"- {inv.get('_credit_card_name')} · vence {d} · {cents_to_brl(inv.get('total_cents'))}")
+            out.append(f"- {inv.get('_credit_card_name')} · vence {d} · {cents_to_brl(amt)}")
+            n += 1
+    if n == 0:
+        out.append("- (nenhuma)")
+    out.append("")
+
+    # Faturas no restante do horizonte (8-90d) — entram no cashflow projetado,
+    # mas só aparecem como driver nominal quando o dia é crítico. Listar aqui
+    # força o analyst a dimensionar transferências contando com elas mesmo
+    # quando o saldo pós-fatura ainda fica positivo.
+    out.append("## Faturas a vencer no horizonte (8–90 dias)")
+    out.append("_Já embutidas no saldo projetado da conta pagadora. Não duplicar como débito extra ao recomendar transferências — mas considerar como o MAIOR débito do mês ao dimensionar caixa da conta pagadora._")
+    n = 0
+    for inv in sorted(invoices, key=lambda x: (x.get("date") or "")):
+        d = (inv.get("date") or "")[:10]
+        try:
+            due = dt.date.fromisoformat(d)
+        except ValueError:
+            continue
+        amt = _inv_amount(inv)
+        if amt == 0:
+            continue
+        if today + dt.timedelta(days=8) <= due <= today + dt.timedelta(days=90):
+            cid = inv.get("credit_card_id") or inv.get("_credit_card_id")
+            pay_acc_id = _card_map.get(cid) if cid is not None else None
+            pay_acc = _acc_name_by_id.get(pay_acc_id, "⚠️ sem conta pagadora mapeada") if pay_acc_id else "⚠️ sem conta pagadora mapeada"
+            out.append(f"- {inv.get('_credit_card_name')} · vence {d} · {cents_to_brl(amt)} · debita de **{pay_acc}**")
             n += 1
     if n == 0:
         out.append("- (nenhuma)")
