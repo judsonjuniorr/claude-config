@@ -347,7 +347,11 @@ def build_installments(snapshot: dict) -> list[dict]:
     out = []
     for (norm, total), txs in bag.items():
         txs_sorted = sorted(txs, key=lambda x: int(x.get("installment") or 0))
-        paid_count = sum(1 for x in txs_sorted if x.get("paid"))
+        # paid_count = max(installment) entre as pagas, não count(paid) na janela.
+        # Snapshot tem janela curta (180d past); contar só as visíveis subestima
+        # massivamente para financiamentos longos (ex.: casa 420 meses).
+        paid_installments = [int(x.get("installment") or 0) for x in txs_sorted if x.get("paid")]
+        paid_count = max(paid_installments) if paid_installments else 0
         max_installment = max((int(x.get("installment") or 0) for x in txs_sorted), default=0)
         # Se a parcela de número mais alto que vemos é a última E está paga, o parcelamento acabou.
         if max_installment == total and all(x.get("paid") for x in txs_sorted):
