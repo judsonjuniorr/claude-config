@@ -6,6 +6,8 @@ argument-hint: "[<texto livre> | --history-days N | --future-days N | --no-analy
 
 # /finance:organizze — Organizze → análise consolidada
 
+> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto. Vale para todos os passos abaixo.
+
 > **Subagent recomendado (quando instalado):** o Passo 6 delega a análise ao subagent `financial-analyst` via tool `Agent`. Se o arquivo `~/.claude/agents/financial-analyst.md` não existir, o passo cai automaticamente para `general-purpose` — o comando continua funcionando. Para instalar o subagent dedicado, rode `install.sh` neste repo e selecione `financial-analyst`.
 
 Quando o usuário invocar `/finance:organizze`, siga estes passos **exatamente**. Não pule nenhum. Não pré-inspecione (não rode `git status`, não liste diretórios, não cheque versões — vá direto aos scripts; eles são auto-contidos e fazem migração legacy sozinhos).
@@ -291,6 +293,43 @@ Antes de disparar agente novo, **consulta o cache** (TTL default 14 dias): se j�
    python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py \
      --snapshot "$SNAP" --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"
    ```
+
+## Passo 5.6 — Saldo e previsto por conta (base do plano de transferências)
+
+`balance_on.py` é a fonte factual das recomendações de transferência: para uma data, devolve por conta principal (e por cofrinho, em seção separada) o **saldo atual**, o **previsto (Organizze)** = saldo + não pagas futuras + faturas vencendo até a data na conta pagadora (bate com o "previsto" do app), e o **previsto c/ atrasadas** = também soma transações vencidas e não pagas. Gere o bloco em datas-chave e **anexe ao `$PROMPT_FILE`** antes de delegar.
+
+1. Defina as datas-alvo: fim do mês corrente, +30d, +60d e o fim do horizonte (use o mesmo `--future-days` do Passo 3 — assim nenhuma data passa do alcance do snapshot). Ex.:
+   ```bash
+   FUTURE_DAYS=<N ou 90>   # idêntico ao --future-days do Passo 3
+   DATES="$(FUTURE_DAYS="$FUTURE_DAYS" python3 - <<'PY'
+import datetime as dt, calendar, os
+t = dt.date.today()
+horizon = int(os.environ.get("FUTURE_DAYS", "90"))
+def eom(d):
+    return d.replace(day=calendar.monthrange(d.year, d.month)[1])
+cands = {eom(t), t + dt.timedelta(days=30), t + dt.timedelta(days=60),
+         t + dt.timedelta(days=horizon)}
+ds = sorted(d.isoformat() for d in cands if d <= t + dt.timedelta(days=horizon))
+print(" ".join(ds))
+PY
+)"
+   ```
+
+2. Anexe as tabelas (uma por data) ao prompt:
+   ```bash
+   {
+     echo
+     echo "# Saldo e previsto por conta (gerado por balance_on.py — NÃO inventar números)"
+     echo "Use como base do **Plano de transferências e poupança**: para cada data, compare a coluna **Previsto (Organizze)** entre as contas principais. Onde uma conta fica com previsto negativo (ou abaixo do CASHFLOW_THRESHOLD_CENTS), proponha mover a folga de outra conta PRINCIPAL com previsto positivo na mesma data — informando origem → destino, valor e data. Cofrinhos/reservas são o ÚLTIMO recurso: só sugira usá-los quando NENHUMA conta principal tiver folga suficiente para cobrir o estouro; ao fazê-lo, rotule explicitamente como 'uso emergencial da reserva' e quantifique quanto da reserva seria consumido. Use **Previsto c/ atrasadas** para ver o impacto real de transações vencidas. Se nem reservas cobrirem, sinalize estouro e sugira ajustes (adiar/cortar despesa não paga, antecipar receita)."
+     for D in $DATES; do
+       echo
+       python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/balance_on.py \
+         --snapshot "$SNAP" --date "$D"
+     done
+   } >> "$PROMPT_FILE"
+   ```
+
+3. Se aparecer o aviso `⚠️ Cartões SEM conta pagadora`, rode o Passo 2.7 (`config.py card-account ...`) e re-rode — sem o mapeamento as faturas não entram no previsto e o plano de transferências fica subestimado.
 
 ## Passo 6 — Delegar ao subagent `financial-analyst`
 

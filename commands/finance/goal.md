@@ -6,6 +6,8 @@ argument-hint: "[<texto livre> | list | done <ts> | pause <ts> | cancel <ts> | a
 
 # /finance:goal — Objetivos financeiros (provider-agnóstico)
 
+> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto.
+
 Wrapper conversacional sobre `commands/finance/scripts/plans.py`. Os dados ficam em `~/finance/plans.md` e são consumidos por `/finance:organizze` (e futuros providers) automaticamente.
 
 Path absoluto do script:
