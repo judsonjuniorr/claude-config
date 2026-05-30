@@ -6,6 +6,8 @@ argument-hint: "[<texto livre> | init | list | get <key> | set <key> <value> | s
 
 # /finance:profile — Perfil pessoal (provider-agnóstico)
 
+> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto.
+
 Wrapper conversacional sobre `commands/finance/scripts/profile.py`. Dados ficam em `~/finance/profile.md` (formato `key: value`, editável à mão) e são injetados em **toda análise** (`/finance:organizze` e futuros providers) como contexto pessoal — para calibrar recomendações por idade, renda, dependentes, moradia, cidade, tolerância a risco.
 
 Path absoluto do script:

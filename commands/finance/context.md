@@ -6,6 +6,8 @@ argument-hint: "[<texto livre> | list | prune]"
 
 # /finance:context — Restrições e contexto (provider-agnóstico)
 
+> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto.
+
 Wrapper conversacional sobre `commands/finance/scripts/memory.py`. Os dados ficam em `~/finance/memory.md` e são injetados em qualquer análise (Organizze e futuros providers) como diretivas que **a IA não pode contradizer**.
 
 Path absoluto do script:

@@ -6,6 +6,8 @@ argument-hint: "[<texto livre> | --history-days N | --future-days N | --no-analy
 
 # /finance:organizze — Organizze → análise consolidada
 
+> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto. Vale para todos os passos abaixo.
+
 > **Subagent recomendado (quando instalado):** o Passo 6 delega a análise ao subagent `financial-analyst` via tool `Agent`. Se o arquivo `~/.claude/agents/financial-analyst.md` não existir, o passo cai automaticamente para `general-purpose` — o comando continua funcionando. Para instalar o subagent dedicado, rode `install.sh` neste repo e selecione `financial-analyst`.
 
 Quando o usuário invocar `/finance:organizze`, siga estes passos **exatamente**. Não pule nenhum. Não pré-inspecione (não rode `git status`, não liste diretórios, não cheque versões — vá direto aos scripts; eles são auto-contidos e fazem migração legacy sozinhos).
