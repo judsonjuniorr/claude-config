@@ -2,17 +2,21 @@
 """Saldo e previsto por conta numa data-alvo.
 
 Para uma data-alvo, devolve por conta principal (checking/savings, não-arquivada,
-não-cofrinho) e no total:
-- saldo_cents:    saldo atual (_balance_cents, já reconciliado pelo pull.py —
-                  soma das transações PAGAS).
-- previsto_cents: saldo + todas as transações não pagas com data <= alvo:
-                  - transações diretas (sem credit_card_id) não pagas, em past
-                    (atrasadas) e future;
-                  - débitos de faturas de cartão vencendo em (hoje, alvo] na conta
-                    pagadora declarada em ~/finance/organizze/.config.
+não-cofrinho) e por cofrinho (institution_id=="cofrinho"), separadamente:
+- saldo_cents:           saldo atual (_balance_cents, já reconciliado pelo pull.py —
+                         soma das transações PAGAS).
+- previsto_cents:        saldo + não pagas FUTURAS (data em (hoje, alvo]) + faturas
+                         de cartão vencendo em (hoje, alvo] na conta pagadora. Esta
+                         é a coluna que bate com o "previsto" do app Organizze.
+- previsto_atrasadas_cents: previsto + transações atrasadas (não pagas com data <= hoje).
+                         Mais conservador — atrasada é obrigação real ainda não baixada.
+- atrasadas_cents:       só as atrasadas (previsto_atrasadas - previsto).
 
 Faturas com vencimento <= hoje são presumidas pagas (já refletidas no saldo via a
 transação de pagamento); o campo `paid` da invoice não é confiável na API.
+
+Cofrinhos entram numa lista separada e NÃO somam no total das contas principais
+(espelha o tratamento do Organizze para reservas).
 
 Usage standalone:
   balance_on.py --snapshot PATH [--date YYYY-MM-DD] [--json]
@@ -30,39 +34,55 @@ import pathlib
 import sys
 
 try:
-    from cashflow import is_principal, _parse_date, _brl
+    from cashflow import _parse_date, _brl
     from config import card_to_account_map
 except ImportError:
     sys.path.insert(0, str(pathlib.Path(__file__).parent))
-    from cashflow import is_principal, _parse_date, _brl
+    from cashflow import _parse_date, _brl
     from config import card_to_account_map
 
 
+def _kind(a: dict) -> str | None:
+    """principal | cofrinho | None (ignorada)."""
+    if a.get("archived"):
+        return None
+    if a.get("institution_id") == "cofrinho":
+        return "cofrinho"
+    if a.get("type") in ("checking", "savings"):
+        return "principal"
+    return None
+
+
 def balance_on(snapshot: dict, target: dt.date) -> dict:
-    """Saldo e previsto por conta na data-alvo.
+    """Saldo, previsto (Organizze) e previsto c/ atrasadas por conta na data-alvo.
 
     {
-      "date": "YYYY-MM-DD",
-      "accounts": [{
-        "id": int, "name": str,
-        "saldo_cents": int,        # saldo atual
-        "previsto_cents": int,     # saldo + não pagas até a data
-        "delta_cents": int,        # previsto - saldo
-      }],
-      "totals": {"saldo_cents": int, "previsto_cents": int, "delta_cents": int},
-      "unmapped_cards": [{"id","name"}],  # faturas NÃO entram no previsto
+      "date": "YYYY-MM-DD", "today": "YYYY-MM-DD",
+      "accounts": [{id,name,saldo_cents,previsto_cents,
+                    previsto_atrasadas_cents,atrasadas_cents,delta_cents}],
+      "cofrinhos": [ ...mesma estrutura... ],
+      "totals": {...},            # só contas principais
+      "cofrinhos_totals": {...},
+      "unmapped_cards": [{"id","name"}],
     }
     """
     today = dt.date.today()
     card_map = card_to_account_map()
 
-    principals = [a for a in (snapshot.get("accounts") or []) if is_principal(a)]
-    accounts_by_id = {a["id"]: a for a in principals if "id" in a}
+    by_id: dict[int, dict] = {}
+    kind_of: dict[int, str] = {}
+    for a in snapshot.get("accounts") or []:
+        k = _kind(a)
+        if k is None or "id" not in a:
+            continue
+        by_id[a["id"]] = a
+        kind_of[a["id"]] = k
 
-    # delta por conta: soma das não pagas até a data
-    delta: dict[int, int] = {aid: 0 for aid in accounts_by_id}
+    # delta futuro (hoje, alvo] e delta atrasadas (<= hoje), por conta
+    delta_fut: dict[int, int] = {aid: 0 for aid in by_id}
+    delta_late: dict[int, int] = {aid: 0 for aid in by_id}
 
-    # 1) transações diretas (sem cartão) não pagas, past + future, data <= alvo
+    # 1) transações diretas (sem cartão) não pagas, data <= alvo
     for key in ("transactions_past", "transactions_future"):
         for t in snapshot.get(key) or []:
             if t.get("paid"):
@@ -73,9 +93,13 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
             if d is None or d > target:
                 continue
             aid = t.get("account_id")
-            if aid not in accounts_by_id:
+            if aid not in by_id:
                 continue
-            delta[aid] += int(t.get("amount_cents") or 0)
+            amt = int(t.get("amount_cents") or 0)
+            if d > today:
+                delta_fut[aid] += amt
+            else:
+                delta_late[aid] += amt
 
     # 2) débitos de faturas vencendo em (hoje, alvo] na conta pagadora mapeada
     unmapped_cards: list[dict] = []
@@ -97,56 +121,83 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
         if d is None or d <= today or d > target:
             continue
         aid = card_map.get(cid)
-        if aid not in accounts_by_id:
+        if aid not in by_id:
             continue
         amt = int(inv.get("amount_cents") or inv.get("total_cents") or 0)
         if amt == 0:
             continue
-        delta[aid] += -abs(amt)  # fatura é sempre débito
+        delta_fut[aid] += -abs(amt)  # fatura é sempre débito
 
-    accounts: list[dict] = []
-    tot_saldo = tot_prev = 0
-    for aid, acc in accounts_by_id.items():
-        saldo = int(acc.get("_balance_cents") or 0)
-        previsto = saldo + delta[aid]
-        tot_saldo += saldo
-        tot_prev += previsto
-        accounts.append({
+    def row(aid: int) -> dict:
+        saldo = int(by_id[aid].get("_balance_cents") or 0)
+        previsto = saldo + delta_fut[aid]
+        previsto_late = previsto + delta_late[aid]
+        return {
             "id": aid,
-            "name": acc.get("name"),
+            "name": by_id[aid].get("name"),
             "saldo_cents": saldo,
             "previsto_cents": previsto,
-            "delta_cents": delta[aid],
-        })
-    accounts.sort(key=lambda a: a["previsto_cents"])
+            "previsto_atrasadas_cents": previsto_late,
+            "atrasadas_cents": delta_late[aid],
+            "delta_cents": delta_fut[aid],
+        }
+
+    accounts = sorted((row(a) for a in by_id if kind_of[a] == "principal"),
+                      key=lambda r: r["previsto_cents"])
+    cofrinhos = sorted((row(a) for a in by_id if kind_of[a] == "cofrinho"),
+                       key=lambda r: r["previsto_cents"])
+
+    def totals(rows: list[dict]) -> dict:
+        return {
+            "saldo_cents": sum(r["saldo_cents"] for r in rows),
+            "previsto_cents": sum(r["previsto_cents"] for r in rows),
+            "previsto_atrasadas_cents": sum(r["previsto_atrasadas_cents"] for r in rows),
+            "atrasadas_cents": sum(r["atrasadas_cents"] for r in rows),
+            "delta_cents": sum(r["delta_cents"] for r in rows),
+        }
 
     return {
         "date": target.isoformat(),
+        "today": today.isoformat(),
         "accounts": accounts,
-        "totals": {
-            "saldo_cents": tot_saldo,
-            "previsto_cents": tot_prev,
-            "delta_cents": tot_prev - tot_saldo,
-        },
+        "cofrinhos": cofrinhos,
+        "totals": totals(accounts),
+        "cofrinhos_totals": totals(cofrinhos),
         "unmapped_cards": unmapped_cards,
     }
 
 
+def _table(rows: list[dict], total: dict, total_label: str) -> list[str]:
+    out = ["| Conta | Saldo atual | Previsto (Organizze) | Previsto c/ atrasadas |",
+           "|---|--:|--:|--:|"]
+    for r in rows:
+        out.append(
+            f"| {r['name']} | {_brl(r['saldo_cents'])} | {_brl(r['previsto_cents'])} "
+            f"| {_brl(r['previsto_atrasadas_cents'])} |"
+        )
+    out.append(
+        f"| **{total_label}** | **{_brl(total['saldo_cents'])}** "
+        f"| **{_brl(total['previsto_cents'])}** "
+        f"| **{_brl(total['previsto_atrasadas_cents'])}** |"
+    )
+    return out
+
+
 def render_markdown(res: dict) -> str:
-    out: list[str] = []
-    out.append(f"## Saldo e previsto por conta até {res['date']}")
-    out.append("")
+    out: list[str] = [f"## Saldo e previsto por conta até {res['date']}", ""]
     if res.get("unmapped_cards"):
         out.append("⚠️ Cartões SEM conta pagadora (faturas NÃO entram no previsto):")
         for cc in res["unmapped_cards"]:
             out.append(f"- {cc['name']} (id={cc['id']}) — `config.py card-account {cc['id']} <account_id>`")
         out.append("")
-    out.append("| Conta | Saldo atual | Previsto | Δ (não pagas) |")
-    out.append("|---|--:|--:|--:|")
-    for a in res["accounts"]:
-        out.append(f"| {a['name']} | {_brl(a['saldo_cents'])} | {_brl(a['previsto_cents'])} | {_brl(a['delta_cents'])} |")
-    t = res["totals"]
-    out.append(f"| **Total** | **{_brl(t['saldo_cents'])}** | **{_brl(t['previsto_cents'])}** | **{_brl(t['delta_cents'])}** |")
+    out.append("_Previsto (Organizze) = saldo + não pagas futuras + faturas até a data._")
+    out.append("_Previsto c/ atrasadas soma também transações vencidas e não pagas._")
+    out.append("")
+    out += _table(res["accounts"], res["totals"], "Total (contas principais)")
+    if res.get("cofrinhos"):
+        out.append("")
+        out.append("### Cofrinhos / reservas (não somam no total das contas principais)")
+        out += _table(res["cofrinhos"], res["cofrinhos_totals"], "Total cofrinhos")
     out.append("")
     return "\n".join(out)
 
