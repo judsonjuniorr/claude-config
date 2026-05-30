@@ -318,7 +318,7 @@ PY
    {
      echo
      echo "# Saldo e previsto por conta (gerado por balance_on.py — NÃO inventar números)"
-     echo "Use como base do **Plano de transferências e poupança**: para cada data, compare a coluna **Previsto (Organizze)** entre as contas principais (cofrinhos são reserva — não os use para cobrir o dia a dia, a menos que o usuário peça). Onde uma conta fica com previsto negativo (ou abaixo do CASHFLOW_THRESHOLD_CENTS), proponha mover a folga de outra conta com previsto positivo na mesma data — informando origem → destino, valor e data. Use **Previsto c/ atrasadas** para ver o impacto real de transações vencidas. Se nenhuma conta tiver folga suficiente numa data, sinalize estouro e sugira ajustes (adiar/cortar despesa não paga, antecipar receita)."
+     echo "Use como base do **Plano de transferências e poupança**: para cada data, compare a coluna **Previsto (Organizze)** entre as contas principais. Onde uma conta fica com previsto negativo (ou abaixo do CASHFLOW_THRESHOLD_CENTS), proponha mover a folga de outra conta PRINCIPAL com previsto positivo na mesma data — informando origem → destino, valor e data. Cofrinhos/reservas são o ÚLTIMO recurso: só sugira usá-los quando NENHUMA conta principal tiver folga suficiente para cobrir o estouro; ao fazê-lo, rotule explicitamente como 'uso emergencial da reserva' e quantifique quanto da reserva seria consumido. Use **Previsto c/ atrasadas** para ver o impacto real de transações vencidas. Se nem reservas cobrirem, sinalize estouro e sugira ajustes (adiar/cortar despesa não paga, antecipar receita)."
      for D in $DATES; do
        echo
        python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/balance_on.py \
