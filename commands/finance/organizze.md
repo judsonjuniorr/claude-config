@@ -292,6 +292,43 @@ Antes de disparar agente novo, **consulta o cache** (TTL default 14 dias): se j�
      --snapshot "$SNAP" --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"
    ```
 
+## Passo 5.6 — Saldo e previsto por conta (base do plano de transferências)
+
+`balance_on.py` é a fonte factual das recomendações de transferência: para uma data, devolve por conta principal o **saldo atual** e o **previsto** (saldo + todas as transações não pagas até a data + débitos de faturas de cartão vencendo até lá, na conta pagadora). Gere o bloco em datas-chave e **anexe ao `$PROMPT_FILE`** antes de delegar.
+
+1. Defina as datas-alvo: fim do mês corrente, +30d, +60d e o fim do horizonte (use o mesmo `--future-days` do Passo 3 — assim nenhuma data passa do alcance do snapshot). Ex.:
+   ```bash
+   FUTURE_DAYS=<N ou 90>   # idêntico ao --future-days do Passo 3
+   DATES="$(FUTURE_DAYS="$FUTURE_DAYS" python3 - <<'PY'
+import datetime as dt, calendar, os
+t = dt.date.today()
+horizon = int(os.environ.get("FUTURE_DAYS", "90"))
+def eom(d):
+    return d.replace(day=calendar.monthrange(d.year, d.month)[1])
+cands = {eom(t), t + dt.timedelta(days=30), t + dt.timedelta(days=60),
+         t + dt.timedelta(days=horizon)}
+ds = sorted(d.isoformat() for d in cands if d <= t + dt.timedelta(days=horizon))
+print(" ".join(ds))
+PY
+)"
+   ```
+
+2. Anexe as tabelas (uma por data) ao prompt:
+   ```bash
+   {
+     echo
+     echo "# Saldo e previsto por conta (gerado por balance_on.py — NÃO inventar números)"
+     echo "Use como base do **Plano de transferências e poupança**: para cada data, compare a coluna **Previsto** entre as contas. Onde uma conta fica com previsto negativo (ou abaixo do CASHFLOW_THRESHOLD_CENTS), proponha mover a folga de outra conta com previsto positivo na mesma data — informando origem → destino, valor e data. Se nenhuma conta tiver folga suficiente numa data, sinalize estouro e sugira ajustes (adiar/cortar despesa não paga, antecipar receita)."
+     for D in $DATES; do
+       echo
+       python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/balance_on.py \
+         --snapshot "$SNAP" --date "$D"
+     done
+   } >> "$PROMPT_FILE"
+   ```
+
+3. Se aparecer o aviso `⚠️ Cartões SEM conta pagadora`, rode o Passo 2.7 (`config.py card-account ...`) e re-rode — sem o mapeamento as faturas não entram no previsto e o plano de transferências fica subestimado.
+
 ## Passo 6 — Delegar ao subagent `financial-analyst`
 
 Use a tool `Agent`:
