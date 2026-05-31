@@ -1,6 +1,6 @@
 ---
 description: Puxa dados do Organizze via API REST e gera análise financeira consolidada (saldo, projeção, recomendações).
-allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, mcp__playwright__browser_navigate, mcp__playwright__browser_close
+allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, mcp__playwright__browser_navigate, mcp__playwright__browser_close, mcp__playwright__browser_snapshot
 argument-hint: "[<texto livre> | --history-days N | --future-days N | --no-analyze]"
 ---
 
@@ -63,17 +63,18 @@ ls ~/finance/organizze/.auth 2>/dev/null
 2. Mostre ao usuário em chat:
    > Abri a página de API keys do Organizze. Crie um novo token (botão "Gerar nova chave"), copie, e me passe abaixo.
 
-3. Use `AskUserQuestion` com duas perguntas:
+3. Use `AskUserQuestion` com três perguntas:
    - "Qual o email da sua conta Organizze?" (header: "Email")
    - "Cole o token gerado:" (header: "Token")
+   - "Qual a senha de login web do Organizze? (usada para raspar valores reais; guardada no Keychain, nunca em disco)" (header: "Senha")
 
-4. Grave as credenciais executando o script:
+4. Grave as credenciais executando o script (email+token → `.auth`; senha → Keychain; instala Playwright):
    ```bash
-   printf '%s\n%s\n' "$EMAIL" "$TOKEN" | bash /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/setup_auth.sh
+   printf '%s\n%s\n%s\n' "$EMAIL" "$TOKEN" "$SENHA" | bash /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/setup_auth.sh
    ```
-   Substitua `$EMAIL` e `$TOKEN` pelos valores reais (não exponha o token no histórico se possível — passe via heredoc).
+   Substitua `$EMAIL`, `$TOKEN` e `$SENHA` pelos valores reais (não exponha token/senha no histórico — passe via heredoc).
 
-5. O script valida via `GET /accounts`. Se retornar `ok|auth-saved|...`, prossiga. Se `err|bad-credentials|...`, avise e refaça o Passo 2.
+5. O script valida via `GET /accounts`, grava a senha no Keychain e instala Playwright+Chromium. Se retornar `ok|auth-saved|...`, prossiga. Se `err|bad-credentials|...`, avise e refaça o Passo 2. Se `err|scrape-setup-failed|...`, o token foi salvo mas o setup de scraping falhou — o Passo 3.5a tenta de novo.
 
 6. Feche o browser:
    ```
@@ -188,10 +189,167 @@ python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-
 
 O script imprime linhas `info|...` no stderr (contagens por endpoint) e uma linha final `ok|snapshot|<path>` no stdout. Em caso de erro: `err|<code>|<detail>`.
 
+> **CRÍTICO — path do snapshot entre passos:** cada bloco bash roda num shell novo, então a variável `SNAP` **não persiste**. NUNCA re-derive `SNAP=...$(date +%F-%H%M).json` num passo posterior (o timestamp muda e o arquivo não existe → `FileNotFoundError`). Em **todos** os passos seguintes (3.5, 4, 5, 5.6, 7), resolva o snapshot mais recente no início do bloco:
+> ```bash
+> SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+> ```
+> Esse é o caminho canônico. Use-o sempre que precisar de `$SNAP` num bloco novo.
+
 Tratamento de erros:
 - `err|http-401|...` → token rejeitado. Apague `~/finance/organizze/.auth` e volte ao Passo 2.
 - `err|http-400|...` → User-Agent rejeitado. Verifique `~/finance/organizze/.auth` (campo `ORGANIZZE_USER_AGENT`).
 - `err|network|...` → falhe rápido, reporte ao usuário.
+
+## Passo 3.5 — Scraping web (valores reais via Playwright cru por subagent)
+
+> **Exceção autorizada à regra global**: este passo usa Playwright cru (Bash) em cada subagent, fora do MCP — porque 1 MCP = 1 browser/1 aba ativa global + stdio serializado → sem paralelo real. Browser por-agente dá paralelo real + isolamento. Se o scraping falhar por qualquer motivo, degrade silenciosamente para API-only (snapshot permanece; adicione WARN no início do relatório).
+
+### 3.5a — Garantir setup de scraping (Playwright + senha) e sessão web
+
+**IMPORTANTE**: o setup de scraping é independente do `.auth` da API. Usuários que já tinham `.auth` (criado antes desta feature) NÃO têm Playwright instalado nem a senha web no Keychain — este passo cobre esse caso. Não pule por achar que "já está configurado".
+
+```bash
+SCRIPTS=/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts
+bash "$SCRIPTS/setup_scrape.sh" </dev/null
+```
+
+Saída:
+- `ok|scrape-ready|...` → setup completo, vá para o login abaixo.
+- `err|no-web-password|...` → falta a senha web no Keychain. Use `AskUserQuestion` (header "Senha", uma pergunta) pedindo a senha de login web do Organizze. Depois grave + finalize o setup:
+  ```bash
+  printf '%s' "$SENHA" | bash "$SCRIPTS/setup_scrape.sh"
+  ```
+  Substitua `$SENHA` pelo valor real (passe via heredoc/printf, nunca exponha no histórico). Espere `ok|scrape-ready|...`.
+- `err|playwright-install-failed|...` / `err|chromium-install-failed|...` → **degrade para API-only** com WARN (ambiente sem pip/rede).
+- `err|no-auth|...` → não deveria acontecer (Passo 1 garante `.auth`). **Degrade para API-only**.
+
+Com `ok|scrape-ready|...`, faça login (cria/valida `.session`):
+
+```bash
+python3 "$SCRIPTS/organizze_login.py"
+```
+
+Saída esperada:
+- `ok|session-valid|...` ou `ok|session-saved|...` → prossiga para 3.5b.
+- `err|credentials-missing|...` → senha sumiu do Keychain entre os passos (raro). Repita o `setup_scrape.sh` com a senha.
+- `err|2fa-detected|...` → 2FA ativo. **Degrade para API-only** com WARN: "scraping indisponível — 2FA detectado; rode com headed manualmente para criar .session".
+- `err|bad-credentials|...` → senha incorreta no Keychain. Use `AskUserQuestion` pedindo a senha de novo e regrave via `setup_scrape.sh`; se persistir, **degrade para API-only**.
+- `err|playwright-not-installed|...` → setup não concluiu. **Degrade para API-only** com WARN.
+- Qualquer outro `err|...` → **degrade para API-only** com WARN.
+
+Se degradar, **pule todo o Passo 3.5** e continue no Passo 4.
+
+### 3.5b — Enumerar fatias a raspar
+
+A partir do snapshot gerado no Passo 3, extraia as fatias (resolva `SNAP` no próprio bloco — ver nota crítica no Passo 3):
+
+```bash
+SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+SNAP_JSON=$(python3 - "$SNAP" <<'PY'
+import json, sys, calendar, datetime as dt
+
+snap = json.load(open(sys.argv[1]))
+
+slices = ["dashboard"]
+
+# months with transactions (history + future months present in snapshot)
+months = set()
+for tx in snap.get("transactions_past", []) + snap.get("transactions_future", []):
+    d = (tx.get("date") or "")[:7]
+    if d:
+        months.add(d)
+for m in sorted(months):
+    slices.append(f"tx {m}")
+
+# invoices: one per (card_id, month) pair
+for inv in snap.get("invoices", []):
+    cid = inv.get("_credit_card_id") or inv.get("credit_card_id")
+    month = (inv.get("date") or "")[:7]
+    if cid and month:
+        slices.append(f"invoice {cid} {month}")
+
+print("\n".join(slices))
+PY
+)
+```
+
+### 3.5c — Fan-out de subagents Haiku (paralelo, limitado por SCRAPE_MAX_AGENTS)
+
+`SCRAPE_MAX_AGENTS` controla quantos browsers rodam ao mesmo tempo (default 4). Leia de `~/finance/organizze/.config` se existir; senão use 4.
+
+```bash
+SCRAPE_MAX_AGENTS=$(python3 -c "
+import pathlib, re
+cfg = pathlib.Path.home() / 'finance/organizze/.config'
+if cfg.exists():
+    for line in cfg.read_text().splitlines():
+        m = re.match(r'^SCRAPE_MAX_AGENTS=(.+)$', line.strip())
+        if m:
+            print(m.group(1).strip('\"').strip(\"'\")); exit()
+print('4')
+")
+```
+
+Dispare **todos** os subagents de uma só vez numa única mensagem com múltiplos `Agent` tool calls em paralelo (até `SCRAPE_MAX_AGENTS` simultâneos; se houver mais fatias, dispare em lotes de `SCRAPE_MAX_AGENTS`).
+
+Para cada fatia, chame `Agent` com:
+- `subagent_type`: `claude` (modelo Haiku — mais barato)
+- `model`: `haiku`
+- `description`: `Scrape Organizze: <fatia>`
+- `prompt`:
+  ```
+  Raspe a fatia "<FATIA>" do Organizze usando Playwright cru.
+  
+  Execute:
+  ```bash
+  python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/scrape_slice.py <ARGS DA FATIA>
+  ```
+  
+  Onde <ARGS DA FATIA> é:
+  - Para "dashboard": `dashboard`
+  - Para "tx YYYY-MM": `tx YYYY-MM`
+  - Para "invoice <id> YYYY-MM": `invoice <id> YYYY-MM`
+  
+  Se o comando retornar `ok|scraped|...`, responda apenas com a linha de saída.
+  
+  Se retornar `err|selector-not-found|...` seguido de um excerto do DOM:
+  1. Leia o excerto do DOM com atenção.
+  2. Identifique os seletores CSS corretos para os elementos (nome de conta, saldo, linha de transação, etc.) com base no HTML real.
+  3. Atualize o arquivo `scrape_slice.py` com os seletores corrigidos (edite apenas o dicionário `SELECTORS` no topo do arquivo — sem alterar a lógica).
+  4. Re-rode o comando. Máx 2 tentativas de correção de seletor.
+  5. Se ainda falhar, responda `err|gave-up|<fatia>|<detalhe>`.
+  
+  Se o `.session` expirou (redirect para /login), responda `err|session-expired|<fatia>`.
+  Qualquer outro erro: responda com a linha de erro exata.
+  ```
+
+### 3.5d — Consolidar scrapes no snapshot
+
+Após **todos** os subagents retornarem, verifique os resultados:
+
+- Subagents com `err|session-expired|...` → relogue 1x: `python3 "$SCRIPTS/organizze_login.py"`. Re-dispare os subagents com sessão expirada.
+- Se relogin falhar ou fatias críticas (`dashboard`) não retornarem `ok|...` → **degrade para API-only** com WARN.
+
+Se pelo menos `dashboard` retornou `ok|scraped|...`, consolide (resolva `SNAP` no próprio bloco):
+
+```bash
+SCRIPTS=/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts
+SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+python3 "$SCRIPTS/apply_scrape.py" --snapshot "$SNAP"
+```
+
+Saída:
+- `ok|applied|...` → snapshot atualizado com valores web. Continue.
+- `warn|unreconciled|...` → aplicado parcialmente. Continue mas anote no relatório: "Alguns itens não reconciliados — veja `_scrape_unreconciled` no snapshot."
+- `err|...` → **degrade para API-only** com WARN.
+
+**WARN de degradação** (qualquer falha neste passo 3.5): adicione esta linha ao início do relatório final (Passo 8):
+
+```
+⚠️ SCRAPING WEB: [motivo] — análise baseada em valores estimados da API.
+```
+
+---
 
 ## Passo 4 — Se `--no-analyze`, pare aqui
 

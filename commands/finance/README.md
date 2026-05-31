@@ -23,15 +23,20 @@ commands/finance/
 │   ├── memory.py                # add/list/render/prune financial memory
 │   └── plans.py                 # add/list/render/done/status/prune objectives
 └── organizze-scripts/           # Organizze provider
-    ├── _common.sh               # load_auth, curl_organizze, die
+    ├── _common.sh               # load_auth, curl_organizze, die, read_keychain_password
     ├── _paths.py                # HOME/AUTH/CONFIG/... + re-exports migrate_legacy
-    ├── setup_auth.sh            # onboarding (stdin: email\ntoken)
+    ├── setup_auth.sh            # onboarding (stdin: email\ntoken\nsenha)
     ├── pull.py                  # API client + snapshot consolidation
     ├── reconcile.py             # one-shot balance offset calibration
     ├── config.py                # ~/finance/organizze/.config helper
     ├── cashflow.py              # per-account daily balance projection
     ├── suggest_budgets.py       # budget suggestions for current + next month
-    └── analyze.py               # snapshot + memory + plans + framework → subagent prompt
+    ├── analyze.py               # snapshot + memory + plans + framework → subagent prompt
+    ├── organizze_login.py       # Playwright headless login → .session (storageState)
+    ├── scrape_slice.py          # scraper de 1 fatia (dashboard|tx YYYY-MM|invoice id YYYY-MM)
+    ├── apply_scrape.py          # consolida scrape/*.json no snapshot (override cirúrgico)
+    └── tests/
+        └── test_apply_scrape.py # 13 testes de merge/match/idempotência
 ```
 
 ```
@@ -39,12 +44,14 @@ commands/finance/
 ├── memory.md                    # global: restrições / contexto
 ├── plans.md                     # global: objetivos
 └── organizze/                   # provider-specific
-    ├── .auth                    # API credentials (chmod 600)
-    ├── .config                  # CARD_PAYMENT_ACCOUNT_*, CASHFLOW_THRESHOLD_CENTS, ...
+    ├── .auth                    # API credentials (chmod 600) — sem senha web
+    ├── .config                  # CARD_PAYMENT_ACCOUNT_*, CASHFLOW_THRESHOLD_CENTS, SCRAPE_MAX_AGENTS, ...
+    ├── .session                 # Playwright storageState (chmod 600) — nunca no git
     ├── balances.json            # initial-balance offsets per account
     ├── snapshots/YYYY-MM-DD-HHMM.json
     ├── reports/YYYY-MM-DD-HHMM.md
     ├── budget-suggestions/YYYY-MM-DD-HHMM.json
+    ├── scrape/                  # JSONs de scraping por fatia (dashboard, tx_*, invoice_*)
     └── cache/categories.json
 ```
 
@@ -53,9 +60,37 @@ commands/finance/
 ## Conventions
 
 - Local-only storage under `~/finance/` (chmod 600 on credentials, never committed).
-- Python scripts use stdlib only — no `pip install`.
+- Python scripts use stdlib only, **exceto** `playwright` (dependência nova, autorizada; instalada automaticamente por `setup_auth.sh`).
 - Bash scripts follow the repo-wide pipe-delimited output (`ok|...`, `info|...`, `err|...`).
 - Memory and plans are **provider-agnostic** — any future provider (Nubank scraper, manual CSV, etc.) consumes the same `~/finance/{memory,plans}.md`.
+
+## Design notes
+
+### Scraping web (Playwright cru, exceção à regra MCP)
+
+O Passo 3.5 do `/finance:organizze` usa **Playwright cru (Python lib + chromium)** chamado via Bash em cada subagent — **fora do MCP `mcp__playwright-headless__*`**. Esta é uma **exceção explícita e autorizada** à regra global "always use `mcp__playwright__*` for all web browsing". O escopo da exceção é restrito a este fluxo de scraping logado do Organizze.
+
+**Motivo**: 1 servidor MCP Playwright = 1 browser + 1 aba ativa global + stdio serializado. Subagents que compartilham o mesmo MCP brigam pela aba ativa e não rodam em paralelo real. Browser por-agente dá paralelo real + isolamento de sessão + auto-cura de seletor (o subagent Haiku vê o DOM e corrige o seletor).
+
+### SCRAPE_MAX_AGENTS
+
+Controla o número máximo de browsers Chromium simultâneos (cada um consome ~150-200 MB). Default: 4. Configure em `~/finance/organizze/.config`:
+
+```
+SCRAPE_MAX_AGENTS=4
+```
+
+Reduza para 2 em máquinas com pouca RAM; aumente para 6-8 em máquinas com 16+ GB.
+
+### Credenciais
+
+- **API token** → `~/finance/organizze/.auth` (texto simples, chmod 600, fora do git).
+- **Senha web** → macOS Keychain (`security add-generic-password -s organizze-login`). **Nunca em disco em texto plano.**
+- **Sessão Playwright** → `~/finance/organizze/.session` (storageState JSON, chmod 600). Reutilizada em todos os runs; relogin automático ao detectar expiração.
+
+### Degradação API-only
+
+Qualquer falha no Passo 3.5 (login, 2FA, scraping, consolidação) degrada silenciosamente para o snapshot da API + WARN no relatório. A análise **nunca trava**.
 
 ---
 
@@ -75,9 +110,11 @@ Pulls personal financial data from **Organizze** via its official REST API, buil
 ### Prerequisites
 
 - An Organizze account.
-- Python 3 (stdlib only — no `pip install`).
+- Python 3.9+ with `pip3` in PATH.
 - `curl` in PATH.
-- `mcp__playwright__*` available (only used during the one-time token onboarding).
+- macOS Keychain (`security` CLI) — nativo no macOS.
+- `mcp__playwright__*` available (used only during the one-time token onboarding).
+- `playwright` Python library + Chromium — **instalados automaticamente por `setup_auth.sh`** (`pip3 install playwright` + `python3 -m playwright install chromium`).
 - `financial-analyst` subagent installed — see [`agents/financial-analyst/README.md`](../../agents/financial-analyst/README.md).
 
 ### First run
@@ -86,11 +123,12 @@ Run `/finance:organizze`. The command will:
 
 1. Detect missing credentials.
 2. Open `https://app.organizze.com.br/configuracoes/api-keys` in Playwright (existing MCP session is reused).
-3. Ask for your email and the generated token via `AskUserQuestion`.
-4. Validate via `GET /accounts` and store them in `~/finance/organizze/.auth` with `chmod 600`.
-5. After the first pull, ask for the real balance of each principal account to seed the offset in `~/finance/organizze/balances.json` (Organizze's API doesn't return current balance — see [Balance reconciliation](#balance-reconciliation)).
+3. Ask for your email, the generated API token, **and your web login password** via `AskUserQuestion`.
+4. Validate API token via `GET /accounts`; store in `~/finance/organizze/.auth` (chmod 600). Store password in macOS Keychain — **never on disk in plain text**.
+5. Install `playwright` + Chromium if not already present.
+6. After the first pull, ask for the real balance of each principal account to seed the offset in `~/finance/organizze/balances.json` (Organizze's API doesn't return current balance — see [Balance reconciliation](#balance-reconciliation)).
 
-From then on, plain `/finance:organizze` works — no browser, no re-login.
+From then on, plain `/finance:organizze` works — no interaction needed. The web session (`.session`) is reused and auto-renewed.
 
 ### Arguments
 
