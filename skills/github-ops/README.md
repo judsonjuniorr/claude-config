@@ -172,6 +172,12 @@ $ bash github-ops/scripts/pr.sh create --draft --title "WIP: oauth flow"
 pr|143|https://github.com/org/repo/pull/143
 ```
 
+**Edit a PR** (`--title`, `--body`/`--body-file`, `--add-label`, `--remove-label` — same params as `gh pr edit`; `--body` also works on `create`)
+```bash
+$ bash github-ops/scripts/pr.sh edit 142 --body-file pr-body.md --add-label review
+pr|142|edited
+```
+
 **List open PRs**
 ```bash
 $ bash github-ops/scripts/pr.sh list
