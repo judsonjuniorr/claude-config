@@ -103,6 +103,31 @@ Generates a user-friendly changelog from the commits since the last tag (or the 
 - Inside a git repository.
 - `jq` available (Python fallback if not).
 
+### [`/validate-ui`](./validate-ui/)
+
+Audits UI/UX against a **consolidated** ruleset — Vercel's Web Interface Guidelines as the base, plus three `davila7/claude-code-templates` skills (`frontend-design`, `ui-ux-pro-max`, `ui-design-system`) and Context7 docs for the detected lib/framework. **Read-only — never edits files.**
+
+**What it does**
+
+1. Fetches all four guideline sources fresh via `WebFetch` (raw URLs, never cache): Vercel `web-interface-guidelines` (mandatory base — stops if it fails) + `frontend-design`, `ui-ux-pro-max`, `ui-design-system` (warns and continues if a secondary one fails).
+2. Consolidates them into one ruleset: Vercel as the a11y/focus/forms base; Pro Max for concrete thresholds (contrast 4.5:1, touch 44×44px, transitions 150–300ms, breakpoints 375/768/1024) and pre-delivery checklist; Design System for token consistency (8pt grid); Frontend Design for anti-generic aesthetics.
+3. Resolves the files to audit from `$ARGUMENTS` (path/glob/URL) or, when empty, `Glob`s common UI files and lists them first.
+4. Detects the stack (`package.json`/imports) and fetches the lib/framework's official best practices via **Context7** (`resolve-library-id` → `query-docs`), folding them into the ruleset. Skips gracefully if undetectable.
+5. Static audit across every dimension: accessibility/ARIA, semantic HTML, visible focus, keyboard nav, forms, heading hierarchy, touch & interaction, reduced-motion, light/dark contrast, responsive layout, performance, token consistency, anti-generic aesthetics, and UX.
+6. Opportunistic live validation: when given a URL or a detectable dev server, starts/uses it and drives `playwright-headless` to check focus rings, contrast, touch targets, and reduced-motion on screen — then shuts the server down.
+7. Reports `file:line — [SEVERITY] rule: problem → fix`, grouped by file, with a SUMMARY (counts per severity) and the top-5 priorities. Never edits files.
+
+**Allowed tools**: `WebFetch`, `Read`, `Glob`, `Grep`, `Bash`, `mcp__playwright-headless`, `mcp__context7`. No `Write`/`Edit` — read-only by construction.
+
+**Language**: English.
+
+**When to use**: before opening a UI PR; to audit a specific component/page against the Vercel standard; to check focus, contrast, and touch targets on screen, not just in code.
+
+**Prerequisites**:
+- Network access for the four guideline sources (Vercel base is mandatory).
+- `playwright-headless` MCP server for live validation (optional — falls back to static-only).
+- `context7` MCP server for lib/framework best practices (optional — skips if absent).
+
 ## Adding a new command
 
 1. Create a subdirectory `commands/<name>/`.

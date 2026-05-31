@@ -16,7 +16,8 @@ claude-config/
 │   ├── generate-tests/          → see commands/generate-tests/README.md
 │   ├── graphify-install/        → see commands/graphify-install/README.md
 │   ├── refactor-code/           → see commands/refactor-code/README.md
-│   └── release-notes/           → see commands/release-notes/README.md
+│   ├── release-notes/           → see commands/release-notes/README.md
+│   └── validate-ui/             → see commands/validate-ui/README.md
 ├── skills/                      # skills
 │   └── github-ops/              → see skills/github-ops/README.md
 └── agents/                      # subagents
@@ -46,6 +47,7 @@ claude-config/
 | Command | [`/graphify-install`](./commands/graphify-install/README.md) | Bootstrap [graphify](https://github.com/safishamsi/graphify) inside any git repo end-to-end. |
 | Command | [`/refactor-code`](./commands/refactor-code/README.md)       | Safely refactor a file or function with tests-first, incremental changes, and static analysis verification. |
 | Command | [`/release-notes`](./commands/release-notes/README.md)       | Generate a user-friendly changelog (pt-br/en) from commits since the last tag, inline in the chat. |
+| Command | [`/validate-ui`](./commands/validate-ui/README.md)           | Audit UI/UX against a consolidated ruleset (Vercel Web Interface Guidelines + 3 design skills + Context7 lib docs), static plus opportunistic live validation. Read-only. |
 | Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab`. Conventional Commits, pre-commit checks, split detection, PR/issue/CI management. |
 | Agent   | [`backend-architect`](./agents/backend-architect.md)         | Produces architecture documents: OpenAPI specs, database schemas, event schemas, diagrams, and trade-off analyses. Design only — not implementation. |
 | Agent   | [`code-reviewer`](./agents/code-reviewer.md)                 | Senior code reviewer focused on security, correctness, and performance. Detects the project's package manager automatically. |
