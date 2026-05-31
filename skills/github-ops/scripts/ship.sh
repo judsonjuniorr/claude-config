@@ -52,14 +52,15 @@ echo "staged|$STAGED"
 # --message "...". --amend keeps the prior message and skips this gate.
 if [ -z "$MSG" ] && [ "$AMEND" = "0" ]; then
   echo "need-message|1"
-  FILES_CSV="$(git diff --cached --name-only | paste -sd, -)"
-  echo "diff-files|$FILES_CSV"
-  git diff --cached --stat | sed 's/^/diff-stat|/'
-  TOTAL="$(git diff --cached | wc -l | tr -d ' ')"
-  git diff --cached | head -200 | sed 's/^/diff|/'
-  if [ "$TOTAL" -gt 200 ]; then
-    echo "diff|...(truncated, $TOTAL total lines)"
+  # Group paths by dir once the list grows; flat CSV stays readable for few files.
+  if [ "$STAGED" -gt 8 ]; then
+    git diff --cached --name-only | group_by_dir | sed 's/^/diff-files|/'
+  else
+    echo "diff-files|$(git diff --cached --name-only | paste -sd, -)"
   fi
+  git diff --cached --stat | sed 's/^/diff-stat|/'
+  git diff --cached | strip_ansi \
+    | emit_compact 200 diff "$(tee_file "ship-diff-${BRANCH//\//-}.txt")"
   die "need-message" "re-run with --message \"<conventional-commit subject>\""
 fi
 
@@ -78,14 +79,17 @@ echo "commit|$SHA|$SUBJ"
 
 [ "$DO_PUSH" = "1" ] || exit 0
 
-# Push (with -u if branch doesn't exist on remote).
+# Push (with -u if branch doesn't exist on remote). Progress noise
+# (Enumerating/Compressing/Writing objects) is discarded — only the
+# compact result line is emitted.
 if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+  AHEAD="$(git rev-list --count @{u}..HEAD 2>/dev/null || echo 0)"
   if [ "$AMEND" = "1" ]; then
     git push --force-with-lease >/dev/null 2>&1 || die "push-failed" "$BRANCH"
   else
     git push >/dev/null 2>&1 || die "push-failed" "$BRANCH"
   fi
-  echo "push|origin/$BRANCH|existing"
+  echo "push|origin/$BRANCH|existing|+$AHEAD"
 else
   git push -u origin "$BRANCH" >/dev/null 2>&1 || die "push-failed" "$BRANCH"
   echo "push|origin/$BRANCH|new"

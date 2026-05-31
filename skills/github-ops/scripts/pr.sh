@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PR/MR operations via gh/glab with pipe-delimited output.
-# Subcommands: create | list | view | merge | checks | diff
+# Subcommands: create | edit | list | view | merge | checks | diff
 set -eu
 DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
@@ -9,7 +9,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 require_repo
 CLI="$(pick_cli)"
 SUB="${1:-}"
-[ -n "$SUB" ] || die "usage" "pr.sh create|list|view|merge|checks|diff"
+[ -n "$SUB" ] || die "usage" "pr.sh create|edit|list|view|merge|checks|diff"
 shift || true
 
 cmd_create() {
@@ -18,6 +18,7 @@ cmd_create() {
     case "$1" in
       --draft) draft=1; shift ;;
       --title) title="$2"; shift 2 ;;
+      --body) body="$2"; shift 2 ;;
       --body-file) body_file="$2"; shift 2 ;;
       *) die "bad-arg" "$1" ;;
     esac
@@ -26,7 +27,12 @@ cmd_create() {
   local head; head="$(current_branch)"
   [ "$head" != "$base" ] || die "same-branch" "on $base; switch first"
 
-  # Build body if not provided.
+  # --body takes precedence over the generated template; --body-file over both.
+  if [ -z "$body_file" ] && [ -n "$body" ]; then
+    body_file="$(mktemp)"
+    printf '%s\n' "$body" > "$body_file"
+  fi
+  # Build body if still not provided.
   if [ -z "$body_file" ]; then
     body_file="$(mktemp)"
     {
@@ -57,6 +63,42 @@ cmd_create() {
     local num; num="$(echo "$url" | grep -oE '[0-9]+$')"
     echo "pr|$num|$url"
   fi
+}
+
+cmd_edit() {
+  local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh edit <num> [--title T] [--body B|--body-file F] [--add-label L] [--remove-label L]"
+  shift
+  local title="" body="" body_file="" add_label="" rm_label=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) title="$2"; shift 2 ;;
+      --body) body="$2"; shift 2 ;;
+      --body-file) body_file="$2"; shift 2 ;;
+      --add-label) add_label="$2"; shift 2 ;;
+      --remove-label) rm_label="$2"; shift 2 ;;
+      *) die "bad-arg" "$1" ;;
+    esac
+  done
+  [ -n "$title$body$body_file$add_label$rm_label" ] || die "usage" "pr.sh edit <num> needs at least one field to change"
+
+  if [ "$CLI" = "gh" ]; then
+    local args=("$num")
+    [ -n "$title" ] && args+=(--title "$title")
+    if [ -n "$body_file" ]; then args+=(--body-file "$body_file")
+    elif [ -n "$body" ]; then args+=(--body "$body"); fi
+    [ -n "$add_label" ] && args+=(--add-label "$add_label")
+    [ -n "$rm_label" ] && args+=(--remove-label "$rm_label")
+    gh pr edit "${args[@]}" >/dev/null 2>&1 || die "edit-failed" "$num"
+  else
+    local args=("$num")
+    [ -n "$title" ] && args+=(--title "$title")
+    if [ -n "$body_file" ]; then args+=(--description "$(cat "$body_file")")
+    elif [ -n "$body" ]; then args+=(--description "$body"); fi
+    [ -n "$add_label" ] && args+=(--label "$add_label")
+    [ -n "$rm_label" ] && args+=(--unlabel "$rm_label")
+    glab mr update "${args[@]}" >/dev/null 2>&1 || die "edit-failed" "$num"
+  fi
+  echo "pr|$num|edited"
 }
 
 cmd_list() {
@@ -102,7 +144,8 @@ for m in data:
 cmd_view() {
   local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh view <num>"
   if [ "$CLI" = "gh" ]; then
-    gh pr view "$num" --json number,state,title,headRefName,baseRefName,author,body,statusCheckRollup \
+    # Header (compact) and body (separately, so it can go through emit_compact).
+    gh pr view "$num" --json number,state,title,headRefName,baseRefName,author,statusCheckRollup \
       --jq '
         "pr|" + (.number|tostring) + "|" + (.state|ascii_downcase) + "|" + .title,
         "branch|" + .headRefName + "→" + .baseRefName,
@@ -113,14 +156,10 @@ cmd_view() {
             ((.statusCheckRollup|map(select(.conclusion=="SUCCESS"))|length)|tostring) + "/" +
             ((.statusCheckRollup|length)|tostring) + "|" +
             ( [ .statusCheckRollup[] | (.name // .context // "?") + ":" + ((.conclusion // .status // "?")|ascii_downcase) ] | join("|") )
-          end ),
-        "body|" + (.body // "" | gsub("\r";""))
-      ' | awk 'BEGIN{n=0} /^body\|/{n=1; print; next} n==1 {print; next} {print}' \
-        | awk 'BEGIN{inbody=0; count=0}
-               /^body\|/{inbody=1; print; next}
-               inbody && count<40 {print; count++; next}
-               inbody && count==40 {print "..."; inbody=0; next}
-               !inbody {print}'
+          end )
+      '
+    gh pr view "$num" --json body --jq '.body // "" | gsub("\r";"")' \
+      | emit_compact 40 body "$(tee_file "pr-${num}-body.txt")"
   else
     glab mr view "$num" 2>/dev/null \
       | awk -v n="$num" '
@@ -162,8 +201,18 @@ cmd_merge() {
 cmd_checks() {
   local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh checks <num>"
   if [ "$CLI" = "gh" ]; then
+    # Failure-focus: emit a pass/total summary, then ONLY the non-success
+    # checks inline. The full check list is written to the tee file.
+    local tf; tf="$(tee_file "pr-${num}-checks.txt")"
     gh pr view "$num" --json statusCheckRollup --jq \
-      '.statusCheckRollup[]? | [(.name // .context // "?"), ((.conclusion // .status // "?")|ascii_downcase), (.detailsUrl // .targetUrl // "-")] | join("|")'
+      '.statusCheckRollup[]? | [(.name // .context // "?"), ((.conclusion // .status // "?")|ascii_downcase), (.detailsUrl // .targetUrl // "-")] | join("|")' \
+      > "$tf"
+    local total ok
+    total="$(wc -l < "$tf" | tr -d ' ')"
+    ok="$(awk -F'|' '$2=="success"' "$tf" | wc -l | tr -d ' ')"
+    echo "checks|$ok/$total"
+    awk -F'|' '$2!="success" && $2!="" {print "check|" $0}' "$tf"
+    if [ "$ok" -lt "$total" ]; then echo "full|$tf"; fi
   else
     glab ci status --branch "$(glab mr view "$num" 2>/dev/null | awk '/^source:/{print $2}')" 2>/dev/null || true
   fi
@@ -172,14 +221,17 @@ cmd_checks() {
 cmd_diff() {
   local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh diff <num>"
   if [ "$CLI" = "gh" ]; then
-    gh pr diff "$num"
+    gh pr diff "$num" | strip_ansi \
+      | emit_compact 100 diff "$(tee_file "pr-${num}-diff.txt")"
   else
-    glab mr diff "$num"
+    glab mr diff "$num" | strip_ansi \
+      | emit_compact 100 diff "$(tee_file "pr-${num}-diff.txt")"
   fi
 }
 
 case "$SUB" in
   create) cmd_create "$@" ;;
+  edit)   cmd_edit "$@" ;;
   list)   cmd_list "$@" ;;
   view)   cmd_view "$@" ;;
   merge)  cmd_merge "$@" ;;

@@ -75,20 +75,18 @@ cmd_list() {
 cmd_view() {
   local num="${1:-}"; [ -n "$num" ] || die "usage" "issue.sh view <num>"
   if [ "$CLI" = "gh" ]; then
-    gh issue view "$num" --json number,state,title,author,labels,body --jq '
+    gh issue view "$num" --json number,state,title,author,labels --jq '
       "issue|" + (.number|tostring) + "|" + (.state|ascii_downcase) + "|" + .title,
       "author|" + (.author.login // "?"),
-      "labels|" + ((.labels|map(.name))|join(",") // "-"),
-      "body|" + (.body // "" | gsub("\r";""))
-    ' | awk 'BEGIN{inbody=0; count=0}
-            /^body\|/{inbody=1; print; next}
-            inbody && count<40 {print; count++; next}
-            inbody && count==40 {print "..."; inbody=0; next}
-            !inbody {print}'
-    # last 3 comments
-    gh issue view "$num" --comments --json comments --jq '
-      .comments[-3:][]? | "comment|" + (.author.login // "?") + "|" + (.body|gsub("\r";"")|gsub("\n";" ")|.[0:160])
+      "labels|" + ((.labels|map(.name))|join(",") // "-")
     '
+    gh issue view "$num" --json body --jq '.body // "" | gsub("\r";"")' \
+      | emit_compact 40 body "$(tee_file "issue-${num}-body.txt")"
+    # Full comment thread, chronological. Nothing truncated — the complete
+    # thread is in the tee file; inline shows the first 40 lines.
+    gh issue view "$num" --comments --json comments --jq '
+      .comments[]? | "@" + (.author.login // "?") + ":", (.body|gsub("\r";"")), ""
+    ' | emit_compact 40 comment "$(tee_file "issue-${num}-comments.txt")"
   else
     glab issue view "$num" 2>/dev/null \
       | awk -v n="$num" '

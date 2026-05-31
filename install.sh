@@ -203,7 +203,9 @@ select_assets_menu() {
 # ── Install/uninstall helpers ─────────────────────────────────────────────────
 dest_for() {
   local type="$1" name="$2"
-  if [ "$type" = "skills" ] || [ "$type" = "commands-ns" ]; then
+  if [ "$type" = "skills" ]; then
+    echo "$CLAUDE_DIR/skills/$name"
+  elif [ "$type" = "commands-ns" ]; then
     echo "$CLAUDE_DIR/commands/$name"
   elif [ "$type" = "commands" ]; then
     echo "$CLAUDE_DIR/commands/$name.md"
@@ -391,9 +393,11 @@ uninstall_mode() {
 
   echo
   echo "Removing:"
+  local removed_names=()
   for i in "${selected_indices[@]}"; do
     local dest="${inst_dests[$i]}"
     rm -rf "$dest"
+    removed_names+=("${inst_names[$i]}")
     echo "  ✓ ${inst_types[$i]}/${inst_names[$i]}"
     # Also remove dependency dirs
     local src_dir
@@ -410,8 +414,81 @@ uninstall_mode() {
       fi
     done
   done
+  if contains_github_ops "${removed_names[@]}"; then
+    remove_github_ops_hooks
+  fi
   echo
   echo "Done."
+}
+
+# ── github-ops hooks (settings.json) ───────────────────────────────────────────
+# The github-ops skill ships PreToolUse/PostToolUse hooks (git-guard, auto-stage).
+# These are registered in ~/.claude/settings.json rather than symlinked, so they
+# need an explicit merge/remove pass tagged by the "github-ops/hooks/" marker.
+GHO_HOOKS_SRC="$REPO_DIR/skills/github-ops/hooks/hooks.json"
+
+merge_github_ops_hooks() {
+  local settings="$CLAUDE_DIR/settings.json"
+  local hooks_dir="$CLAUDE_DIR/skills/github-ops/hooks"
+  [ -f "$GHO_HOOKS_SRC" ] || return 0
+
+  chmod +x "$REPO_DIR"/skills/github-ops/hooks/*.sh 2>/dev/null || true
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  ↳ hooks: jq not found — add these to $settings manually:"
+    sed "s#{{HOOKS_DIR}}#$hooks_dir#g" "$GHO_HOOKS_SRC" | sed 's/^/      /'
+    return 0
+  fi
+
+  [ -f "$settings" ] || echo '{}' > "$settings"
+  cp "$settings" "$settings.bak"
+
+  local tmp_hooks
+  tmp_hooks="$(mktemp)"
+  sed "s#{{HOOKS_DIR}}#$hooks_dir#g" "$GHO_HOOKS_SRC" > "$tmp_hooks"
+
+  if jq --slurpfile add "$tmp_hooks" '
+        .hooks //= {}
+        | .hooks |= (to_entries
+            | map(.value |= [ .[] | select(([..|strings] | any(test("github-ops/hooks/"))) | not) ])
+            | from_entries)
+        | reduce ($add[0]|to_entries[]) as $e (.;
+            .hooks[$e.key] = ((.hooks[$e.key] // []) + $e.value))
+      ' "$settings" > "$settings.tmp"; then
+    mv "$settings.tmp" "$settings"
+    echo "  ↳ hooks registered in settings.json (git-guard, auto-stage)"
+  else
+    rm -f "$settings.tmp"
+    echo "  ↳ hooks: merge failed — settings.json left unchanged (backup at settings.json.bak)"
+  fi
+  rm -f "$tmp_hooks"
+}
+
+remove_github_ops_hooks() {
+  local settings="$CLAUDE_DIR/settings.json"
+  [ -f "$settings" ] || return 0
+  command -v jq >/dev/null 2>&1 || { echo "  ↳ hooks: jq not found — remove github-ops entries from $settings manually."; return 0; }
+  cp "$settings" "$settings.bak"
+  if jq '
+        if .hooks then
+          .hooks |= (to_entries
+            | map(.value |= [ .[] | select(([..|strings] | any(test("github-ops/hooks/"))) | not) ]
+                  | select(.value | length > 0))
+            | from_entries)
+        else . end
+      ' "$settings" > "$settings.tmp"; then
+    mv "$settings.tmp" "$settings"
+    echo "  ↳ hooks removed from settings.json"
+  else
+    rm -f "$settings.tmp"
+  fi
+}
+
+# Returns 0 if "github-ops" is among the given asset name args.
+contains_github_ops() {
+  local n
+  for n in "$@"; do [ "$n" = "github-ops" ] && return 0; done
+  return 1
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -457,12 +534,18 @@ fi
 echo
 echo "Installing:"
 installed=()
+installed_names=()
 for i in "${selected_indices[@]}"; do
   install_asset "${ASSET_TYPES[$i]}" "${ASSET_NAMES[$i]}" "${ASSET_SRCS[$i]}"
   display_t="${ASSET_TYPES[$i]}"
   [ "$display_t" = "commands-ns" ] && display_t="commands"
   installed+=("$display_t/${ASSET_NAMES[$i]}")
+  installed_names+=("${ASSET_NAMES[$i]}")
 done
+
+if contains_github_ops "${installed_names[@]}"; then
+  merge_github_ops_hooks
+fi
 
 # Summary
 echo
