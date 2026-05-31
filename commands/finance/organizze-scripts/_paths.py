@@ -30,6 +30,31 @@ REPORTS = HOME / "reports"
 BUDGET_SUGGESTIONS = HOME / "budget-suggestions"
 CACHE = HOME / "cache"
 
+def chromium_executable_path() -> str | None:
+    """Locate a Chromium already installed by the Claude Code MCP playwright.
+
+    Lets us reuse the browser in ~/Library/Caches/ms-playwright/ instead of
+    downloading our own. Override with ORGANIZZE_CHROMIUM_PATH. Returns None
+    when nothing is found, so callers fall back to Playwright's own resolution.
+    """
+    override = os.environ.get("ORGANIZZE_CHROMIUM_PATH")
+    if override:
+        return override
+    cache = pathlib.Path.home() / "Library/Caches/ms-playwright"
+    if not cache.is_dir():
+        return None
+    candidates = []
+    for d in cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"):
+        try:
+            rev = int(d.parts[-6].split("-")[-1])  # chromium-<rev>
+        except (ValueError, IndexError):
+            rev = 0
+        candidates.append((rev, str(d)))
+    if not candidates:
+        return None
+    return max(candidates)[1]
+
+
 __all__ = [
     "FINANCE_BASE",
     "HOME",
@@ -40,5 +65,6 @@ __all__ = [
     "REPORTS",
     "BUDGET_SUGGESTIONS",
     "CACHE",
+    "chromium_executable_path",
     "migrate_legacy",
 ]

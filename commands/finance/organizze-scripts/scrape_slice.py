@@ -7,7 +7,7 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _paths import HOME
+from _paths import HOME, chromium_executable_path
 
 SESSION = HOME / ".session"
 SCRAPE_DIR = HOME / "scrape"
@@ -15,9 +15,9 @@ SCRAPE_DIR = HOME / "scrape"
 ORGANIZZE_URL = "https://app.organizze.com.br"
 
 SELECTORS: dict[str, str] = {
-    "dashboard_account_row": ".account-list-item",
-    "dashboard_account_name": ".account-name",
-    "dashboard_account_balance": ".account-balance",
+    "dashboard_account_row": 'a[href*="accountUUID="]',
+    "dashboard_account_name": ".naming strong",
+    "dashboard_account_balance": "big.ng-binding:not(.hidden-placeholder)",
     "tx_row": ".transaction-row",
     "tx_date": ".transaction-date",
     "tx_description": ".transaction-description",
@@ -52,8 +52,14 @@ def dump_dom_excerpt(page) -> str:  # type: ignore[no-untyped-def]
 
 
 def scrape_dashboard(page) -> dict:  # type: ignore[no-untyped-def]
-    page.goto(f"{ORGANIZZE_URL}/home")
+    # Base URL redirects to /<workspace_id>/a/inicio (the dashboard). The
+    # workspace id is account-specific, so let the app resolve it.
+    page.goto(f"{ORGANIZZE_URL}/")
     page.wait_for_load_state("networkidle")
+    try:
+        page.wait_for_selector(SELECTORS["dashboard_account_row"], timeout=10000)
+    except Exception:
+        pass
 
     rows = page.query_selector_all(SELECTORS["dashboard_account_row"])
     if not rows:
@@ -224,7 +230,8 @@ def main() -> None:
         sys.exit(1)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        exe = chromium_executable_path()
+        browser = p.chromium.launch(headless=True, **({"executable_path": exe} if exe else {}))
         ctx = browser.new_context(storage_state=str(SESSION))
         page = ctx.new_page()
         page.set_default_navigation_timeout(15000)

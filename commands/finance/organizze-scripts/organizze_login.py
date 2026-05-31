@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _paths import HOME, AUTH
+from _paths import HOME, AUTH, chromium_executable_path
 
 SESSION = HOME / ".session"
 
@@ -54,7 +54,8 @@ def main() -> None:
     password = load_password(email)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        exe = chromium_executable_path()
+        browser = p.chromium.launch(headless=True, **({"executable_path": exe} if exe else {}))
         context_kwargs: dict = {}
         if SESSION.exists():
             context_kwargs["storage_state"] = str(SESSION)
@@ -71,11 +72,16 @@ def main() -> None:
             print(f"ok|session-valid|{SESSION}")
             return
 
-        # Fill login form
-        page.fill('input[type="email"], input[name="email"], #user_email', email)
-        page.fill('input[type="password"], input[name="password"], #user_password', password)
-        page.click('input[type="submit"], button[type="submit"]')
-        page.wait_for_load_state("networkidle")
+        # Fill login form (auth.organizze.com.br). The form has several submit
+        # buttons (Google, Facebook, Entrar, …) — target "Entrar" by exact text,
+        # otherwise the first submit (Google OAuth) is clicked instead.
+        page.fill('input[type="email"], #form_email, input[name="form[email]"]', email)
+        page.fill('input[type="password"], #form_password, input[name="form[password]"]', password)
+        page.get_by_role("button", name="Entrar", exact=True).click()
+        try:
+            page.wait_for_url("**app.organizze.com.br/**", timeout=15000)
+        except Exception:
+            pass
 
         current_url = page.url
 
