@@ -45,6 +45,7 @@ User says: commit, push, create PR/MR, list PRs, merge, checks, CI status, open 
 | Repo info | `bash github-ops/scripts/repo.sh info` |
 | Releases | `bash github-ops/scripts/repo.sh releases [--limit N]` |
 | CI runs | `bash github-ops/scripts/repo.sh runs [--limit N] [--workflow W]` |
+| Failed steps of a run | `bash github-ops/scripts/repo.sh runs --log <id>` |
 | Dispatch workflow | `bash github-ops/scripts/repo.sh workflow-run <name> [--ref branch]` |
 
 ## Output format
@@ -53,7 +54,27 @@ All scripts emit pipe-delimited records, 1 per line.
 
 - Data lines: `<type>|<field>|<field>|...` (e.g., `pr|42|open|fix bug|feature/x|2/3`).
 - Errors (stderr, exit non-zero): `err|<code>|<detail>` (e.g., `err|missing-cli|gh`).
-- Body content from `pr.sh view` and `issue.sh view` is truncated to 40 lines, with `...` appended if cut.
+
+### Tee pattern — long output is compacted, never lost
+
+Long output (`ship.sh` diff, `pr.sh view` body, `pr.sh diff`, `issue.sh view` comment thread, `repo.sh runs --log`) is shown inline up to a cap, but the **complete** content is always written to a file. When truncated, the script appends:
+
+```
+<label>|... +N more lines
+full|/tmp/github-ops-tee/<context>.txt
+saved|<orig>→<inline> tokens (~P%)
+```
+
+- `full|<path>` — the entire untruncated output. **Read this file only if the inline preview isn't enough** (e.g., you need a hunk past the cap, or a full PR body). Files use deterministic names, so a re-run overwrites rather than piling up.
+- `saved|...` — rough token savings of inline vs. full (RTK `(chars+3)/4` estimate).
+
+So nothing is discarded — the inline view stays cheap, and detail is one `Read` away.
+
+### Failure-focus on CI
+
+- `pr.sh checks <num>` emits `checks|<ok>/<total>` and then **only** the non-passing checks as `check|<name>|<result>|<url>`; the full check list goes to `full|`.
+- `repo.sh runs` lists failures first.
+- `repo.sh runs --log <id>` dumps **only the failed steps** of a run (`gh run view --log-failed` / `glab ci trace`), compacted via the tee pattern.
 
 Example `pr.sh list`:
 ```
@@ -62,7 +83,7 @@ Example `pr.sh list`:
 40|draft|wip: oauth|feature/oauth|-
 ```
 
-Example `ship.sh` without `--message` (first call — stages, emits diff, bails):
+Example `ship.sh` without `--message` (first call — stages, emits diff, bails). `diff-files` is a flat CSV for few files, grouped by directory once it exceeds ~8:
 ```
 branch|feature/x
 staged|3
@@ -74,11 +95,13 @@ diff-stat| src/api/index.ts  |  1 +
 diff|diff --git a/src/api/retry.ts b/src/api/retry.ts
 diff|@@ -0,0 +1,42 @@
 diff|+export async function retry(fn, opts = { max: 3 }) {
-diff|+  ...
+diff|... +312 more lines
+full|/tmp/github-ops-tee/ship-diff-feature-x.txt
+saved|1840→210 tokens (~88%)
 err|need-message|re-run with --message "<conventional-commit subject>"
 ```
 
-Example `ship.sh --message "feat(api): add retry"` on a new branch:
+Example `ship.sh --message "feat(api): add retry"` on a new branch. On an existing branch the push line carries the pushed-commit count: `push|origin/x|existing|+2`:
 ```
 branch|feature/x
 staged|3

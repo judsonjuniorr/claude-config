@@ -54,7 +54,19 @@ github-ops/
 |---|---|---|
 | Data | `<type>\|<f1>\|<f2>...` | `pr\|42\|open\|fix: cache\|feature/x\|2/3` |
 | Error (stderr) | `err\|<code>\|<detail>` | `err\|missing-cli\|gh` |
-| Truncated body | up to 40 lines, `...` at the end | `body\|Lorem ipsum...` |
+| Truncated marker | `<label>\|... +N more lines` | `diff\|... +312 more lines` |
+| Full-output pointer | `full\|<path>` | `full\|/tmp/github-ops-tee/pr-3-diff.txt` |
+| Token savings | `saved\|<orig>→<inline> tokens (~P%)` | `saved\|1840→210 tokens (~88%)` |
+
+### Tee pattern — nothing is discarded
+
+Long output (`ship.sh` diff, `pr.sh view` body, `pr.sh diff`, `issue.sh view` comments, `repo.sh runs --log`) is shown inline up to a cap. The **complete** content is always written to the `full|` file under `${TMPDIR:-/tmp}/github-ops-tee/` with a deterministic name (re-runs overwrite). Read that file only when the inline preview isn't enough. This mirrors RTK's compress-inline / preserve-on-disk approach, so token cost stays low without losing data.
+
+### Failure-focus on CI
+
+- `pr.sh checks <num>` → `checks|<ok>/<total>` summary, then only the non-passing checks; full list in `full|`.
+- `repo.sh runs` → failures listed first.
+- `repo.sh runs --log <id>` → only the failed steps of a run, compacted via the tee pattern.
 
 ---
 
@@ -180,12 +192,12 @@ body|- [x] unit tests
 body|- [x] reproduced manually
 ```
 
-**Check CI status**
+**Check CI status** (failure-focus — only non-passing checks inline)
 ```bash
 $ bash github-ops/scripts/pr.sh checks 42
-test|success|https://github.com/org/repo/actions/runs/123
-lint|success|https://github.com/org/repo/actions/runs/124
-e2e|failure|https://github.com/org/repo/actions/runs/125
+checks|2/3
+check|e2e|failure|https://github.com/org/repo/actions/runs/125
+full|/tmp/github-ops-tee/pr-42-checks.txt
 ```
 
 **Raw PR diff**
@@ -287,11 +299,11 @@ v2.2.0|—|2026-04-15T12:00:00Z|stable
 
 Fields: `<tag>|<name>|<published-at>|<draft|prerelease|stable>`.
 
-**Recent CI runs**
+**Recent CI runs** (failures listed first)
 ```bash
 $ bash github-ops/scripts/repo.sh runs --limit 5
-9921|completed|success|main|test
 9920|completed|failure|feature/x|test
+9921|completed|success|main|test
 9919|in_progress|-|feature/y|test
 9918|completed|success|main|deploy
 9917|completed|success|main|test
@@ -302,6 +314,16 @@ Fields: `<run-id>|<status>|<conclusion>|<branch>|<workflow>`.
 **Filter by workflow**
 ```bash
 $ bash github-ops/scripts/repo.sh runs --workflow deploy --limit 3
+```
+
+**Failed steps of a run** (failure-focus — only the failing steps, full log to `full|`)
+```bash
+$ bash github-ops/scripts/repo.sh runs --log 9920
+log|FAIL src/api/retry.test.ts > retries on 502
+log|  AssertionError: expected 3 attempts, got 1
+log|... +120 more lines
+full|/tmp/github-ops-tee/run-9920-failed.txt
+saved|640→90 tokens (~86%)
 ```
 
 **Dispatch a workflow**

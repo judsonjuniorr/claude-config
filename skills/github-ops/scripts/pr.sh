@@ -102,7 +102,8 @@ for m in data:
 cmd_view() {
   local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh view <num>"
   if [ "$CLI" = "gh" ]; then
-    gh pr view "$num" --json number,state,title,headRefName,baseRefName,author,body,statusCheckRollup \
+    # Header (compact) and body (separately, so it can go through emit_compact).
+    gh pr view "$num" --json number,state,title,headRefName,baseRefName,author,statusCheckRollup \
       --jq '
         "pr|" + (.number|tostring) + "|" + (.state|ascii_downcase) + "|" + .title,
         "branch|" + .headRefName + "→" + .baseRefName,
@@ -113,14 +114,10 @@ cmd_view() {
             ((.statusCheckRollup|map(select(.conclusion=="SUCCESS"))|length)|tostring) + "/" +
             ((.statusCheckRollup|length)|tostring) + "|" +
             ( [ .statusCheckRollup[] | (.name // .context // "?") + ":" + ((.conclusion // .status // "?")|ascii_downcase) ] | join("|") )
-          end ),
-        "body|" + (.body // "" | gsub("\r";""))
-      ' | awk 'BEGIN{n=0} /^body\|/{n=1; print; next} n==1 {print; next} {print}' \
-        | awk 'BEGIN{inbody=0; count=0}
-               /^body\|/{inbody=1; print; next}
-               inbody && count<40 {print; count++; next}
-               inbody && count==40 {print "..."; inbody=0; next}
-               !inbody {print}'
+          end )
+      '
+    gh pr view "$num" --json body --jq '.body // "" | gsub("\r";"")' \
+      | emit_compact 40 body "$(tee_file "pr-${num}-body.txt")"
   else
     glab mr view "$num" 2>/dev/null \
       | awk -v n="$num" '
@@ -162,8 +159,18 @@ cmd_merge() {
 cmd_checks() {
   local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh checks <num>"
   if [ "$CLI" = "gh" ]; then
+    # Failure-focus: emit a pass/total summary, then ONLY the non-success
+    # checks inline. The full check list is written to the tee file.
+    local tf; tf="$(tee_file "pr-${num}-checks.txt")"
     gh pr view "$num" --json statusCheckRollup --jq \
-      '.statusCheckRollup[]? | [(.name // .context // "?"), ((.conclusion // .status // "?")|ascii_downcase), (.detailsUrl // .targetUrl // "-")] | join("|")'
+      '.statusCheckRollup[]? | [(.name // .context // "?"), ((.conclusion // .status // "?")|ascii_downcase), (.detailsUrl // .targetUrl // "-")] | join("|")' \
+      > "$tf"
+    local total ok
+    total="$(wc -l < "$tf" | tr -d ' ')"
+    ok="$(awk -F'|' '$2=="success"' "$tf" | wc -l | tr -d ' ')"
+    echo "checks|$ok/$total"
+    awk -F'|' '$2!="success" && $2!="" {print "check|" $0}' "$tf"
+    if [ "$ok" -lt "$total" ]; then echo "full|$tf"; fi
   else
     glab ci status --branch "$(glab mr view "$num" 2>/dev/null | awk '/^source:/{print $2}')" 2>/dev/null || true
   fi
@@ -172,9 +179,11 @@ cmd_checks() {
 cmd_diff() {
   local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh diff <num>"
   if [ "$CLI" = "gh" ]; then
-    gh pr diff "$num"
+    gh pr diff "$num" | strip_ansi \
+      | emit_compact 100 diff "$(tee_file "pr-${num}-diff.txt")"
   else
-    glab mr diff "$num"
+    glab mr diff "$num" | strip_ansi \
+      | emit_compact 100 diff "$(tee_file "pr-${num}-diff.txt")"
   fi
 }
 

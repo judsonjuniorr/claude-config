@@ -59,17 +59,32 @@ cmd_releases() {
 }
 
 cmd_runs() {
-  local limit=10 workflow=""
+  local limit=10 workflow="" logid=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --limit) limit="$2"; shift 2 ;;
       --workflow) workflow="$2"; shift 2 ;;
+      --log) logid="$2"; shift 2 ;;
       *) die "bad-arg" "$1" ;;
     esac
   done
+
+  # Failure-focus: dump only the failed steps of one run, full log to tee.
+  if [ -n "$logid" ]; then
+    if [ "$CLI" = "gh" ]; then
+      gh run view "$logid" --log-failed 2>/dev/null | strip_ansi \
+        | emit_compact 80 log "$(tee_file "run-${logid}-failed.txt")"
+    else
+      glab ci trace "$logid" 2>/dev/null | strip_ansi \
+        | emit_compact 80 log "$(tee_file "run-${logid}-failed.txt")"
+    fi
+    return
+  fi
+
   if [ "$CLI" = "gh" ]; then
     local extra=()
     [ -n "$workflow" ] && extra+=(--workflow "$workflow")
+    # Failures first, then everything else (each group in original order).
     gh run list --limit "$limit" "${extra[@]}" \
       --json databaseId,status,conclusion,headBranch,workflowName \
       --jq '.[] | [
@@ -78,7 +93,8 @@ cmd_runs() {
         ((.conclusion // "-")|ascii_downcase),
         .headBranch,
         .workflowName
-      ] | join("|")'
+      ] | join("|")' \
+      | awk -F'|' '$3=="failure"{print;next}{rest[n++]=$0} END{for(i=0;i<n;i++)print rest[i]}'
   else
     glab ci list 2>/dev/null \
       | awk 'NR>1 && NF { print $1 "|" tolower($2) "|-|" $3 "|-" }' \
