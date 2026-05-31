@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# First-run onboarding: opens Organizze API tokens page via Playwright MCP (caller),
-# then reads email + token from stdin (one per line) and persists to ~/finance/organizze/.auth
+# First-run onboarding: reads email + API token (+ web password) and persists
+# credentials. API token → ~/finance/organizze/.auth; web password → macOS Keychain.
 # Usage:
-#   echo -e "$EMAIL\n$TOKEN" | bash setup_auth.sh
+#   echo -e "$EMAIL\n$TOKEN\n$SENHA" | bash setup_auth.sh
 # Or interactively if you have a TTY.
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -16,13 +16,18 @@ if [ -t 0 ]; then
   read -r EMAIL
   printf "Organizze API token (https://app.organizze.com.br/configuracoes/api-keys): " >&2
   read -r TOKEN
+  printf "Organizze web password (para scraping; guardada no Keychain, não em disco): " >&2
+  read -rs SENHA
+  echo >&2
 else
   read -r EMAIL
   read -r TOKEN
+  read -r SENHA
 fi
 
 [ -n "${EMAIL:-}" ] || die "missing-email" "email required"
 [ -n "${TOKEN:-}" ] || die "missing-token" "token required"
+[ -n "${SENHA:-}" ] || die "missing-password" "web password required for scraping"
 
 UA="claude-code-financeiro/1.0 ($EMAIL)"
 
@@ -43,8 +48,15 @@ RESP="$(curl -sS -o /dev/null -w '%{http_code}' \
   "$ORGANIZZE_API/accounts")"
 
 case "$RESP" in
-  200) echo "ok|auth-saved|$ORGANIZZE_AUTH" ;;
+  200) ;;
   401) rm -f "$ORGANIZZE_AUTH"; die "bad-credentials" "401 from /accounts — token rejected" ;;
   400) rm -f "$ORGANIZZE_AUTH"; die "bad-user-agent" "400 from /accounts — User-Agent rejected" ;;
   *)   die "unexpected-status" "$RESP from /accounts" ;;
 esac
+
+# Store web password in Keychain + install playwright/chromium (idempotent)
+printf '%s' "$SENHA" | bash "$HERE/setup_scrape.sh" >&2 \
+  || die "scrape-setup-failed" "setup_scrape.sh failed"
+unset SENHA
+
+echo "ok|auth-saved|$ORGANIZZE_AUTH"

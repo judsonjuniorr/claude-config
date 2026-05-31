@@ -53,6 +53,16 @@ load_auth() {
   : "${ORGANIZZE_USER_AGENT:?missing}"
 }
 
+has_web_password() {
+  local email="$1"
+  security find-generic-password -a "$email" -s "organizze-login" -w >/dev/null 2>&1
+}
+
+read_keychain_password() {
+  local email="$1"
+  security find-generic-password -a "$email" -s "organizze-login" -w 2>/dev/null
+}
+
 curl_organizze() {
   # Usage: curl_organizze <path-with-leading-slash> [extra curl args...]
   local path="$1"; shift || true
