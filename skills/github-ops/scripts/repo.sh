@@ -117,10 +117,8 @@ cmd_workflow_run() {
     [ -n "$ref" ] && args+=(--ref "$ref")
     gh workflow run "${args[@]}" >/dev/null 2>&1 || die "dispatch-failed" "$name"
     sleep 2
-    local id url
-    id="$(gh run list --workflow "$name" --limit 1 --json databaseId --jq '.[0].databaseId')"
-    url="$(gh run list --workflow "$name" --limit 1 --json url --jq '.[0].url')"
-    echo "run|$id|$url"
+    gh run list --workflow "$name" --limit 1 --json databaseId,url \
+      --jq '.[0] | "run|" + (.databaseId|tostring) + "|" + .url'
   else
     glab ci run --workflow "$name" ${ref:+--branch "$ref"} >/dev/null 2>&1 || die "dispatch-failed" "$name"
     echo "run|-|-"

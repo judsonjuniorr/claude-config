@@ -38,15 +38,26 @@ glab auth login         # for GitLab
 ```
 github-ops/
 ├── SKILL.md
-└── scripts/
-    ├── _common.sh        # shared helpers (sourced)
-    ├── inspect.sh        # status + diff + log in one compact call
-    ├── ship.sh           # commit + push
-    ├── commit-msg.sh     # suggest message only
-    ├── pr.sh             # create | list | view | merge | checks | diff
-    ├── issue.sh          # create | list | view | close | comment
-    └── repo.sh           # info | releases | runs | workflow-run
+├── scripts/
+│   ├── _common.sh        # shared helpers (sourced)
+│   ├── inspect.sh        # status + diff + log in one compact call
+│   ├── ship.sh           # commit + push
+│   ├── commit-msg.sh     # suggest message only
+│   ├── pr.sh             # create | list | view | merge | checks | diff
+│   ├── issue.sh          # create | list | view | close | comment
+│   └── repo.sh           # info | releases | runs | workflow-run
+└── hooks/
+    ├── git-guard.sh      # PreToolUse/Bash — nudge raw mutations → scripts
+    ├── auto-stage.sh     # PostToolUse/Edit|Write — git add edited file
+    └── hooks.json        # entries install.sh merges into settings.json
 ```
+
+### Hooks (registered by `install.sh`)
+
+Installing the skill also merges two hooks into `~/.claude/settings.json` (idempotent; uninstall removes them, tagged by the `github-ops/hooks/` marker). jq is required for the merge; without it `install.sh` prints the snippet to add manually. Both are optional.
+
+- **`git-guard`** (`PreToolUse`/`Bash`, severity `ask`) — intercepts raw **mutation/PR** commands (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`) and prompts with the matching script. Read-only `git status`/`diff`/`log` are left to RTK's proxy (no overlap); calls that already run `github-ops/scripts/` pass through silently.
+- **`auto-stage`** (`PostToolUse`/`Edit|Write`) — `git add`s the edited file (skips `.env`/`*.key`/`*.pem`/`*_rsa`/`*credentials*.json`) so `ship.sh`/`inspect.sh` see a warm index.
 
 ## Output format
 
