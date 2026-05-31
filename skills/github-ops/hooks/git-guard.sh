@@ -29,6 +29,6 @@ esac
 
 [ -n "$suggest" ] || exit 0
 
-reason="github-ops: prefira \`bash github-ops/scripts/${suggest}\` em vez de rodar \`${CMD}\` cru (output pipe-delimited, menos tokens)."
+reason="github-ops: prefer \`bash github-ops/scripts/${suggest}\` over running raw \`${CMD}\` (pipe-delimited output, fewer tokens)."
 python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'ask','permissionDecisionReason':sys.argv[1]}}))" "$reason"
 exit 0
