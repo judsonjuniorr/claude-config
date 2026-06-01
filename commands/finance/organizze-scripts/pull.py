@@ -110,7 +110,7 @@ def cache_set(name: str, data: object) -> None:
 # --- domain ----------------------------------------------------------------
 
 def fetch_transactions(start: dt.date, end: dt.date, email: str, token: str, ua: str) -> list[dict]:
-    """API agrupa por mês cheio; iteramos mês a mês e deduplicamos por id."""
+    """API groups by full month; we iterate month by month and deduplicate by id."""
     seen: dict[int, dict] = {}
     for (a, b) in month_ranges(start, end):
         rows = http_get("/transactions", {"start_date": iso(a), "end_date": iso(b)}, email, token, ua)
@@ -127,13 +127,13 @@ def compute_account_balances(
     email: str, token: str, ua: str,
     lookback_years: int = 5,
 ) -> dict[int, int]:
-    """Saldo por conta = soma(transactions pagas, account_id da conta, NÃO de cartão), em cents.
+    """Balance per account = sum(paid transactions, account_id, NOT card), in cents.
 
-    A API /accounts não devolve saldo. Reconstruímos somando o histórico longo,
-    excluindo gastos de fatura de cartão (credit_card_id != null) e contas que
-    são na verdade cartões (account_id ∈ credit_card_ids).
-    Suporta offset manual em ~/finance/organizze/balances.json:
-        {"<account_id>": <offset_cents>}  # somado ao calculado
+    The /accounts API does not return balance. We reconstruct it by summing the
+    long history, excluding card invoice spending (credit_card_id != null) and
+    accounts that are actually cards (account_id ∈ credit_card_ids).
+    Supports manual offset in ~/finance/organizze/balances.json:
+        {"<account_id>": <offset_cents>}  # added to the calculated value
     """
     today = dt.date.today()
     start = today.replace(year=today.year - lookback_years)
@@ -169,7 +169,7 @@ def compute_account_balances(
 
 
 def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[int]:
-    """Marca tx como recorrente: mesmo payee normalizado, ≥3 ocorrências em janela, variação <15%."""
+    """Marks a tx as recurring: same normalized payee, ≥3 occurrences in window, variation <15%."""
     today = dt.date.today()
     cutoff = today - dt.timedelta(days=months_window * 31)
     buckets: dict[str, list[dict]] = {}
@@ -186,7 +186,7 @@ def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[in
         payee = (t.get("description") or "").strip().lower()
         if not payee:
             continue
-        # normaliza dígitos e espaços múltiplos
+        # normalize digits and multiple spaces
         key = " ".join(c for c in payee if not c.isdigit()).strip()
         buckets.setdefault(key, []).append(t)
     recurring: set[int] = set()
@@ -208,7 +208,7 @@ def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[in
 
 
 def is_principal_account(a: dict) -> bool:
-    """Todas as contas ativas (checking, savings, other) — inclui cofrinhos para bater com o total do Organizze."""
+    """All active accounts (checking, savings, other) — includes savings pots to match the Organizze total."""
     if a.get("archived"):
         return False
     return a.get("type") in ("checking", "savings", "other")
@@ -245,7 +245,7 @@ def compute_totals(snapshot: dict) -> dict:
         total = 0
         for t in snapshot.get("transactions_future") or []:
             if t.get("credit_card_id") is not None:
-                continue  # gasto de cartão entra via fatura, não como débito bancário direto
+                continue  # card spending enters via invoice, not as direct bank debit
             d = t.get("date", "")[:10]
             try:
                 td = dt.date.fromisoformat(d)
@@ -270,14 +270,14 @@ def compute_totals(snapshot: dict) -> dict:
                     continue
                 amt = int(inv.get("amount_cents") or 0)
                 if amt != 0:
-                    total += amt  # amount_cents já é negativo para faturas a pagar
+                    total += amt  # amount_cents is already negative for invoices to pay
         return total
 
     proj_7 = saldo + sum_future(7) + sum_invoices(7)
     proj_30 = saldo + sum_future(30) + sum_invoices(30)
     proj_90 = saldo + sum_future(90) + sum_invoices(90)
 
-    # faturas a vencer em 7 dias
+    # invoices due in 7 days
     invoices_due_7 = []
     for inv in snapshot.get("invoices") or []:
         d = (inv.get("date") or "")[:10]
@@ -288,7 +288,7 @@ def compute_totals(snapshot: dict) -> dict:
         if today <= due <= today + dt.timedelta(days=7):
             invoices_due_7.append(inv)
 
-    # Transações passadas NÃO pagas (atrasadas) — separadas por receita/despesa
+    # Past transactions NOT paid (overdue) — separated by income/expense
     overdue_exp = 0
     overdue_inc = 0
     n_over_exp = n_over_inc = 0
@@ -296,7 +296,7 @@ def compute_totals(snapshot: dict) -> dict:
         if t.get("paid"):
             continue
         if t.get("credit_card_id") is not None:
-            continue  # gasto no cartão entra via fatura, não como atrasado
+            continue  # card spending enters via invoice, not as overdue
         amt = int(t.get("amount_cents") or 0)
         if amt < 0:
             overdue_exp += -amt
@@ -323,10 +323,10 @@ def compute_totals(snapshot: dict) -> dict:
 
 
 def build_installments(snapshot: dict) -> list[dict]:
-    """Agrupa parcelamentos em curso (total_installments > 1) de past + future.
+    """Groups active installments (total_installments > 1) from past + future.
 
-    Chave: (descrição normalizada, total_installments). Mostra progresso, valor médio
-    da parcela, quanto falta e data prevista de término.
+    Key: (normalized description, total_installments). Shows progress, average
+    installment amount, how much is left, and expected end date.
     """
     today = dt.date.today()
     bag: dict[tuple[str, int], list[dict]] = {}
@@ -335,25 +335,25 @@ def build_installments(snapshot: dict) -> list[dict]:
         if total <= 1:
             continue
         desc = (t.get("description") or "").strip()
-        # tira "(x/y)" típico do final
+        # remove "(x/y)" typically at the end
         norm = desc
         for tail in (f"({t.get('installment')}/{total})", f" {t.get('installment')}/{total}"):
             if tail in norm:
                 norm = norm.replace(tail, "").strip()
-        # remove sufixos numéricos finais para agrupar
+        # remove trailing numeric suffixes for grouping
         norm = norm.rstrip("0123456789/() -").strip().lower()
         bag.setdefault((norm, total), []).append(t)
 
     out = []
     for (norm, total), txs in bag.items():
         txs_sorted = sorted(txs, key=lambda x: int(x.get("installment") or 0))
-        # paid_count = max(installment) entre as pagas, não count(paid) na janela.
-        # Snapshot tem janela curta (180d past); contar só as visíveis subestima
-        # massivamente para financiamentos longos (ex.: casa 420 meses).
+        # paid_count = max(installment) among paid ones, not count(paid) in window.
+        # Snapshot has a short window (180d past); counting only visible ones massively
+        # underestimates for long financing (e.g.: home loan 420 months).
         paid_installments = [int(x.get("installment") or 0) for x in txs_sorted if x.get("paid")]
         paid_count = max(paid_installments) if paid_installments else 0
         max_installment = max((int(x.get("installment") or 0) for x in txs_sorted), default=0)
-        # Se a parcela de número mais alto que vemos é a última E está paga, o parcelamento acabou.
+        # If the highest-numbered installment we see is the last AND it is paid, the installment is done.
         if max_installment == total and all(x.get("paid") for x in txs_sorted):
             continue
         last_paid = next((x for x in reversed(txs_sorted) if x.get("paid")), None)
@@ -363,7 +363,7 @@ def build_installments(snapshot: dict) -> list[dict]:
         remaining = total - paid_count
         if remaining <= 0:
             continue
-        # Fim previsto = data da próxima não-paga + (remaining - 1) meses; fallback: última conhecida + meses faltantes
+        # Expected end = date of next unpaid + (remaining - 1) months; fallback: last known + remaining months
         end_date = None
         anchor = next_unpaid or last_paid or (txs_sorted[0] if txs_sorted else None)
         if anchor and anchor.get("date"):
@@ -414,9 +414,9 @@ def main() -> int:
     print(f"info|pulling|history={args.history_days}d future={args.future_days}d", file=sys.stderr)
 
     accounts_all = http_get("/accounts", None, email, token, ua) or []
-    # ativas = não-arquivadas E com type definido (type=null indica conta zumbi/órfã)
+    # active = not archived AND type defined (type=null indicates zombie/orphan account)
     accounts = [a for a in accounts_all if not a.get("archived") and a.get("type")]
-    print(f"info|accounts|{len(accounts)} ativas (ignoradas {len(accounts_all) - len(accounts)} arquivadas/órfãs)", file=sys.stderr)
+    print(f"info|accounts|{len(accounts)} active (ignored {len(accounts_all) - len(accounts)} archived/orphan)", file=sys.stderr)
 
     categories = cache_get("categories.json", max_age_days=7)
     if categories is None:
@@ -427,9 +427,9 @@ def main() -> int:
     credit_cards_all = http_get("/credit_cards", None, email, token, ua) or []
     credit_cards = [cc for cc in credit_cards_all if not cc.get("archived")]
     credit_card_ids = {cc["id"] for cc in credit_cards if "id" in cc}
-    print(f"info|credit_cards|{len(credit_cards)} ativos (ignorados {len(credit_cards_all) - len(credit_cards)} arquivados)", file=sys.stderr)
+    print(f"info|credit_cards|{len(credit_cards)} active (ignored {len(credit_cards_all) - len(credit_cards)} archived)", file=sys.stderr)
 
-    # Saldos por conta — calculados via histórico longo (API não devolve saldo)
+    # Balances per account — calculated via long history (API does not return balance)
     balances = compute_account_balances(accounts, credit_card_ids, email, token, ua)
     for a in accounts:
         a["_balance_cents"] = balances.get(a.get("id"), 0)
@@ -461,7 +461,7 @@ def main() -> int:
     for t in tx_past:
         t["is_recurring"] = t.get("id") in recurring_ids
 
-    # Orçamentos: mês corrente + próximos 2
+    # Budgets: current month + next 2
     budgets: list[dict] = []
     for offset in range(3):
         y = today.year
@@ -495,7 +495,7 @@ def main() -> int:
         "budgets": budgets,
     }
     snapshot["installments"] = build_installments(snapshot)
-    print(f"info|installments|{len(snapshot['installments'])} parcelamentos ativos", file=sys.stderr)
+    print(f"info|installments|{len(snapshot['installments'])} active installments", file=sys.stderr)
     snapshot["meta"]["totais"] = compute_totals(snapshot)
 
     out = pathlib.Path(args.out)

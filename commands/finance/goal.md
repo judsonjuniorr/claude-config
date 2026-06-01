@@ -1,76 +1,76 @@
 ---
-description: Gerencia objetivos financeiros (metas de poupança/economia) consumidos por qualquer provider de análise.
+description: Manages financial goals (savings/economy targets) consumed by any analysis provider.
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "[<texto livre> | list | done <ts> | pause <ts> | cancel <ts> | activate <ts> | prune]"
+argument-hint: "[<free text> | list | done <ts> | pause <ts> | cancel <ts> | activate <ts> | prune]"
 ---
 
-# /finance:goal — Objetivos financeiros (provider-agnóstico)
+# /finance:goal — Financial goals (provider-agnostic)
 
-> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto.
+> **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Wrapper conversacional sobre `commands/finance/scripts/plans.py`. Os dados ficam em `~/finance/plans.md` e são consumidos por `/finance:organizze` (e futuros providers) automaticamente.
+Conversational wrapper over `commands/finance/scripts/plans.py`. Data lives in `~/finance/plans.md` and is consumed by `/finance:organizze` (and future providers) automatically.
 
-Path absoluto do script:
+Absolute path of the script:
 `/Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py`
 
-Quando o usuário invocar `/finance:goal`, **classifique `$ARGUMENTS`** e siga o fluxo correspondente. Não pré-inspecione filesystem.
+When the user invokes `/finance:goal`, **classify `$ARGUMENTS`** and follow the corresponding flow. Do not pre-inspect the filesystem.
 
 ---
 
-## Modo 1 — Sem args (gerenciar)
+## Mode 1 — No args (manage)
 
-1. Liste objetivos ativos:
+1. List active goals:
    ```bash
    python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py list --status active
    ```
-2. Mostre a saída ao usuário (curta, 1 linha por objetivo) e pergunte via `AskUserQuestion` o que fazer:
-   - **A) Adicionar novo objetivo** — vá ao Modo 2 pedindo o texto.
-   - **B) Marcar um como concluído** — pergunte o `ts` (header completo) e rode `plans.py done "<ts>"`.
-   - **C) Pausar / cancelar / reativar** — pergunte `ts` e novo status, rode `plans.py status "<ts>" paused|cancelled|active`.
-   - **D) Ver histórico completo (incluindo done/cancelled)** — rode `plans.py list` sem filtro.
-   - **E) Podar concluídos antigos** — rode `plans.py prune --older-than-done 365`.
-   - **F) Sair**.
+2. Show the output to the user (brief, 1 line per goal) and ask via `AskUserQuestion` what to do:
+   - **A) Add new goal** — go to Mode 2 asking for the text.
+   - **B) Mark one as done** — ask for the `ts` (full header) and run `plans.py done "<ts>"`.
+   - **C) Pause / cancel / reactivate** — ask for `ts` and new status, run `plans.py status "<ts>" paused|cancelled|active`.
+   - **D) View full history (including done/cancelled)** — run `plans.py list` without filter.
+   - **E) Prune old completed goals** — run `plans.py prune --older-than-done 365`.
+   - **F) Exit**.
 
-## Modo 2 — Texto livre (registrar)
+## Mode 2 — Free text (register)
 
-`$ARGUMENTS` traz a descrição de um novo objetivo (ex.: "guardar R$ 5000 para viagem em dezembro").
+`$ARGUMENTS` contains the description of a new goal (e.g.: "save R$ 5000 for a trip in December").
 
-1. **Pré-preencha o que dá pra inferir do texto** (valor, prazo, conta). Pergunte só o que faltar via `AskUserQuestion` (cada uma com "Pular" quando opcional):
-   - **Valor-alvo (R$)** — obrigatório. Faixa ("9~12k") → proponha a média. Converta para centavos.
-   - **Prazo (YYYY-MM-DD)** — opcional. "dezembro" → último dia do mês informado. "junho/julho desse ano" → último mês mencionado.
-   - **Conta-destino** — opcional. Texto livre.
-   - **Prioridade** — `negociavel` (default — pausa em dia crítico) ou `inegociavel` (mantém cortando outras categorias).
+1. **Pre-fill what can be inferred from the text** (amount, deadline, account). Ask only what's missing via `AskUserQuestion` (each with "Skip" when optional):
+   - **Target amount (R$)** — required. Range ("9~12k") → propose the average. Convert to cents.
+   - **Deadline (YYYY-MM-DD)** — optional. "December" → last day of the mentioned month. "June/July this year" → last mentioned month.
+   - **Destination account** — optional. Free text.
+   - **Priority** — `negociavel` (default — pauses on a critical day) or `inegociavel` (holds by cutting other categories).
 
-2. Grave:
+2. Save:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py add "<texto>" \
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py add "<text>" \
      --target-cents <N> \
      [--deadline <YYYY-MM-DD>] \
-     [--account "<texto>"] \
+     [--account "<text>"] \
      [--priority negociavel|inegociavel]
    ```
 
-3. Confirme em 1-2 linhas: o que foi registrado e onde (`~/finance/plans.md`). Diga: "Próximo `/finance:organizze` já considera."
+3. Confirm in 1-2 lines: what was registered and where (`~/finance/plans.md`). Say: "Next `/finance:organizze` will take this into account."
 
-## Modo 3 — Sub-comandos diretos
+## Mode 3 — Direct sub-commands
 
-Se `$ARGUMENTS` começa com uma das palavras abaixo, repasse direto para o script:
+If `$ARGUMENTS` starts with one of the words below, pass directly to the script:
 
-| Argumento                | Comando                                                            |
+| Argument                 | Command                                                            |
 |--------------------------|--------------------------------------------------------------------|
-| `list`                   | `plans.py list` (aceita `--status` / `--recent` extras)            |
+| `list`                   | `plans.py list` (accepts `--status` / `--recent` extras)          |
 | `done <ts>`              | `plans.py done "<ts>"`                                             |
 | `pause <ts>`             | `plans.py status "<ts>" paused`                                    |
 | `cancel <ts>`            | `plans.py status "<ts>" cancelled`                                 |
 | `activate <ts>`          | `plans.py status "<ts>" active`                                    |
-| `prune`                  | `plans.py prune --older-than-done 365` (ou usa `--older-than-done` informado) |
+| `prune`                  | `plans.py prune --older-than-done 365` (or uses provided `--older-than-done`) |
 
-Mostre a saída do script ao usuário.
+Show the script output to the user.
 
 ---
 
-## Regras
+## Rules
 
-- **Não chame `/finance:organizze`** automaticamente. Este comando é CRUD; análise é separada.
-- O script roda migração legacy automaticamente (`~/finance-organizze/` → `~/finance/`) na primeira execução. Não precisa fazer nada manualmente.
-- Storage é editável à mão (`~/finance/plans.md`).
+- **Do not call `/finance:organizze`** automatically. This command is CRUD; analysis is separate.
+- The script runs legacy migration automatically (`~/finance-organizze/` → `~/finance/`) on the first run. No manual action needed.
+- Storage is hand-editable (`~/finance/plans.md`).

@@ -1,109 +1,109 @@
 ---
-description: Gerencia o perfil pessoal (idade, profissão, renda, família, moradia, cidade, risco) que análises usam para personalizar recomendações.
+description: Manages the personal profile (age, profession, income, family, housing, city, risk) that analyses use to personalize recommendations.
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "[<texto livre> | init | list | get <key> | set <key> <value> | skip]"
+argument-hint: "[<free text> | init | list | get <key> | set <key> <value> | skip]"
 ---
 
-# /finance:profile — Perfil pessoal (provider-agnóstico)
+# /finance:profile — Personal profile (provider-agnostic)
 
-> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto.
+> **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Wrapper conversacional sobre `commands/finance/scripts/profile.py`. Dados ficam em `~/finance/profile.md` (formato `key: value`, editável à mão) e são injetados em **toda análise** (`/finance:organizze` e futuros providers) como contexto pessoal — para calibrar recomendações por idade, renda, dependentes, moradia, cidade, tolerância a risco.
+Conversational wrapper over `commands/finance/scripts/profile.py`. Data lives in `~/finance/profile.md` (format `key: value`, hand-editable) and is injected into **every analysis** (`/finance:organizze` and future providers) as personal context — to calibrate recommendations by age, income, dependents, housing, city, risk tolerance.
 
-Path absoluto do script:
+Absolute path of the script:
 `/Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py`
 
-Quando o usuário invocar `/finance:profile`, classifique `$ARGUMENTS` e siga o fluxo. Não pré-inspecione filesystem.
+When the user invokes `/finance:profile`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
 
 ---
 
-## Campos do perfil
+## Profile fields
 
-| Chave                            | Tipo                                                                                  | Obrig. |
-|----------------------------------|---------------------------------------------------------------------------------------|:------:|
-| `idade`                          | inteiro                                                                               |   ✓    |
-| `profissao`                      | texto livre                                                                           |   ✓    |
-| `renda_liquida_mensal_cents`     | inteiro em centavos (R$ 12.000,00 = `1200000`)                                        |   ✓    |
-| `estado_civil`                   | `solteiro` \| `relacionamento` \| `casado` \| `divorciado` \| `viuvo`                 |   ✓    |
-| `dependentes`                    | texto livre (ex.: "nenhum", "2 filhos (5 e 8 anos)", "esposa + cachorro")             |   ✓    |
-| `moradia_tipo`                   | `propria_quitada` \| `propria_financiada` \| `alugada` \| `cedida` \| `outra`         |   ✓    |
-| `moradia_custo_cents`            | inteiro em centavos (parcela financiamento ou aluguel; `0` se cedida/quitada)         |   ✓    |
-| `cidade`                         | texto livre (ex.: "São Paulo, SP") — usado em pesquisa de mercado                     |   ✓    |
-| `tolerancia_risco`               | `conservador` \| `moderado` \| `agressivo`                                            |   ✓    |
-| `habitos`                        | texto livre, 1 linha (ex.: "treina 4x/sem, home office")                              |        |
-| `objetivo_principal`             | texto livre, 1 linha (foco financeiro do momento)                                     |        |
+| Key                              | Type                                                                                  | Required |
+|----------------------------------|---------------------------------------------------------------------------------------|:--------:|
+| `idade`                          | integer                                                                               |   ✓      |
+| `profissao`                      | free text                                                                             |   ✓      |
+| `renda_liquida_mensal_cents`     | integer in cents (R$ 12,000.00 = `1200000`)                                           |   ✓      |
+| `estado_civil`                   | `solteiro` \| `relacionamento` \| `casado` \| `divorciado` \| `viuvo`                 |   ✓      |
+| `dependentes`                    | free text (e.g.: "none", "2 children (5 and 8 years old)", "spouse + dog")            |   ✓      |
+| `moradia_tipo`                   | `propria_quitada` \| `propria_financiada` \| `alugada` \| `cedida` \| `outra`         |   ✓      |
+| `moradia_custo_cents`            | integer in cents (mortgage installment or rent; `0` if gifted/paid off)               |   ✓      |
+| `cidade`                         | free text (e.g.: "São Paulo, SP") — used in market research                           |   ✓      |
+| `tolerancia_risco`               | `conservador` \| `moderado` \| `agressivo`                                            |   ✓      |
+| `habitos`                        | free text, 1 line (e.g.: "works out 4x/week, home office")                           |          |
+| `objetivo_principal`             | free text, 1 line (current financial focus)                                           |          |
 
 ---
 
-## Modo 1 — Sem args (gerenciar)
+## Mode 1 — No args (manage)
 
-1. Mostre o perfil atual:
+1. Show the current profile:
    ```bash
    python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py get
    ```
 
-2. Liste campos faltantes:
+2. List missing fields:
    ```bash
    python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py missing
    ```
 
-3. Pergunte via `AskUserQuestion` o que fazer:
-   - **A) Preencher faltantes agora** — vá ao Modo 4 (entrevista).
-   - **B) Atualizar um campo específico** — pergunte qual + novo valor, rode `profile.py set <key> <value>`.
-   - **C) Iniciar entrevista completa do zero** — vá ao Modo 4.
-   - **D) Silenciar perguntas por 7 dias** — rode `profile.py mark-skip`.
-   - **E) Sair**.
+3. Ask via `AskUserQuestion` what to do:
+   - **A) Fill in missing fields now** — go to Mode 4 (interview).
+   - **B) Update a specific field** — ask which one + new value, run `profile.py set <key> <value>`.
+   - **C) Start a full interview from scratch** — go to Mode 4.
+   - **D) Silence questions for 7 days** — run `profile.py mark-skip`.
+   - **E) Exit**.
 
-## Modo 2 — Texto livre (registrar)
+## Mode 2 — Free text (register)
 
-`$ARGUMENTS` traz uma frase tipo "tenho 32 anos, sou dev, ganho 12k". Extraia o que conseguir e grave campo a campo com `profile.py set`. Para o que não der pra inferir com certeza, **não chute** — peça via `AskUserQuestion` ou deixe pra próxima.
+`$ARGUMENTS` contains a phrase like "I'm 32, a developer, earn 12k". Extract what you can and save field by field with `profile.py set`. For anything that can't be inferred with certainty, **don't guess** — ask via `AskUserQuestion` or leave it for next time.
 
-Para valores monetários em frases ("12k", "R$ 12.000", "12 mil") converta para centavos antes de gravar.
+For monetary values in phrases ("12k", "R$ 12,000", "12 thousand") convert to cents before saving.
 
-## Modo 3 — Sub-comandos diretos
+## Mode 3 — Direct sub-commands
 
-| Argumento                       | Comando                                                |
+| Argument                        | Command                                                |
 |---------------------------------|--------------------------------------------------------|
-| `list` ou `get`                 | `profile.py get` (lista tudo)                          |
+| `list` or `get`                 | `profile.py get` (lists everything)                    |
 | `get <key>`                     | `profile.py get <key>`                                 |
 | `set <key> <value>`             | `profile.py set <key> <value>`                         |
 | `missing`                       | `profile.py missing`                                   |
-| `skip`                          | `profile.py mark-skip` (silencia por 7d)               |
-| `init`                          | vai pro Modo 4                                         |
+| `skip`                          | `profile.py mark-skip` (silences for 7d)               |
+| `init`                          | go to Mode 4                                           |
 
-## Modo 4 — Entrevista (init ou faltantes)
+## Mode 4 — Interview (init or missing fields)
 
-Para cada chave a perguntar (todas no `init`; apenas as de `missing` quando convocado pelo `/finance:organizze`), use `AskUserQuestion` com formato adequado e **sempre incluindo opção "Pular"**.
+For each key to ask (all in `init`; only the ones from `missing` when called by `/finance:organizze`), use `AskUserQuestion` with the appropriate format and **always include a "Skip" option**.
 
-**Sugestões de formato por campo:**
+**Format suggestions by field:**
 
-- `idade`: pergunta aberta ("Qual sua idade?"), aceite resposta numérica.
-- `profissao`: pergunta aberta ("Qual sua profissão / como você ganha dinheiro?").
-- `renda_liquida_mensal_cents`: pergunta aberta ("Qual sua renda líquida média mensal em R$?"). Converta para centavos.
-- `estado_civil`: opções `solteiro / relacionamento / casado / divorciado / viuvo` + Pular.
-- `dependentes`: pergunta aberta ("Tem dependentes? Quantos e idades, ou 'nenhum'").
-- `moradia_tipo`: opções `própria quitada / própria financiada / alugada / cedida / outra` + Pular. (Mapear texto da opção pro enum: "própria quitada" → `propria_quitada`, etc.)
-- `moradia_custo_cents`: pergunta aberta ("Quanto paga de moradia por mês (parcela ou aluguel) em R$? Use 0 se zero"). Converta para centavos.
-- `cidade`: pergunta aberta ("Em que cidade/estado mora? Ex.: 'São Paulo, SP'").
-- `tolerancia_risco`: opções `conservador / moderado / agressivo` + Pular. Acrescente descrição curta de cada uma.
-- `habitos` (opcional): pergunta aberta ("Algum hábito/contexto relevante? Ex.: 'treino 4x/sem, home office, viajo bastante'").
-- `objetivo_principal` (opcional): pergunta aberta ("Qual seu foco financeiro principal agora? Ex.: 'quitar cartão', 'guardar reserva', 'comprar carro'").
+- `idade`: open question ("How old are you?"), accept numeric answer.
+- `profissao`: open question ("What is your profession / how do you earn money?").
+- `renda_liquida_mensal_cents`: open question ("What is your average net monthly income in R$?"). Convert to cents.
+- `estado_civil`: options `solteiro / relacionamento / casado / divorciado / viuvo` + Skip.
+- `dependentes`: open question ("Do you have dependents? How many and their ages, or 'none'").
+- `moradia_tipo`: options `owned (paid off) / owned (mortgaged) / rented / provided / other` + Skip. (Map option text to enum: "owned (paid off)" → `propria_quitada`, "owned (mortgaged)" → `propria_financiada`, "rented" → `alugada`, "provided" → `cedida`, "other" → `outra`.)
+- `moradia_custo_cents`: open question ("How much do you pay for housing per month (installment or rent) in R$? Use 0 if zero"). Convert to cents.
+- `cidade`: open question ("What city/state do you live in? E.g.: 'São Paulo, SP'").
+- `tolerancia_risco`: options `conservador / moderado / agressivo` + Skip. Include a short description of each.
+- `habitos` (optional): open question ("Any relevant habits/context? E.g.: 'work out 4x/week, home office, travel a lot'").
+- `objetivo_principal` (optional): open question ("What is your main financial focus right now? E.g.: 'pay off credit card', 'build emergency fund', 'buy a car'").
 
-Para cada resposta válida, grave imediatamente:
+For each valid answer, save immediately:
 ```bash
 python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py set <key> "<value>"
 ```
 
-Se o usuário pular **todos** os campos, rode `profile.py mark-skip` (silencia por 7 dias).
+If the user skips **all** fields, run `profile.py mark-skip` (silences for 7 days).
 
-Ao final, mostre o estado atualizado com `profile.py get` e diga: "Próximo `/finance:organizze` já considera."
+At the end, show the updated state with `profile.py get` and say: "Next `/finance:organizze` will take this into account."
 
 ---
 
-## Regras
+## Rules
 
-- **Não chame `/finance:organizze`** automaticamente. Este comando é CRUD; análise é separada.
-- O script roda migração legacy automaticamente na primeira execução.
-- Storage é editável à mão (`~/finance/profile.md`).
-- **Limite por sessão**: se chamado pelo `/finance:organizze` no fluxo de entrevista, pergunte no máximo **6 campos** por turno pra não cansar. Os demais entram na próxima execução.
-- **Conversão monetária**: usuário diz "12k" → grave `1200000`. Usuário diz "R$ 1.200,50" → grave `120050`. Confirme em 1 linha antes de gravar quando o valor for ambíguo.
+- **Do not call `/finance:organizze`** automatically. This command is CRUD; analysis is separate.
+- The script runs legacy migration automatically on the first run.
+- Storage is hand-editable (`~/finance/profile.md`).
+- **Per-session limit**: if called by `/finance:organizze` during the interview flow, ask at most **6 fields** per turn to avoid fatigue. The rest will be asked on the next run.
+- **Monetary conversion**: user says "12k" → save `1200000`. User says "R$ 1,200.50" → save `120050`. Confirm in 1 line before saving when the value is ambiguous.

@@ -7,8 +7,8 @@ Personal finance slash commands. Nested under `commands/finance/`, so each is in
 | Command | One-liner |
 |---|---|
 | [`/finance:organizze`](#financeorganizze) | Pull Organizze data via REST API, build a snapshot, delegate to the [`financial-analyst`](../../agents/financial-analyst/README.md) subagent for a prioritized action plan. |
-| [`/finance:goal`](#financegoal) | CRUD de objetivos financeiros (`~/finance/plans.md`). Provider-agnóstico. |
-| [`/finance:context`](#financecontext) | CRUD de restrições/contexto (`~/finance/memory.md`). Provider-agnóstico. |
+| [`/finance:goal`](#financegoal) | CRUD of financial goals (`~/finance/plans.md`). Provider-agnostic. |
+| [`/finance:context`](#financecontext) | CRUD of restrictions/context (`~/finance/memory.md`). Provider-agnostic. |
 
 ## Layout
 
@@ -25,7 +25,7 @@ commands/finance/
 └── organizze-scripts/           # Organizze provider
     ├── _common.sh               # load_auth, curl_organizze, die, read_keychain_password
     ├── _paths.py                # HOME/AUTH/CONFIG/... + re-exports migrate_legacy
-    ├── setup_auth.sh            # onboarding (stdin: email\ntoken\nsenha)
+    ├── setup_auth.sh            # onboarding (stdin: email\ntoken\npassword)
     ├── pull.py                  # API client + snapshot consolidation
     ├── reconcile.py             # one-shot balance offset calibration
     ├── config.py                # ~/finance/organizze/.config helper
@@ -33,25 +33,25 @@ commands/finance/
     ├── suggest_budgets.py       # budget suggestions for current + next month
     ├── analyze.py               # snapshot + memory + plans + framework → subagent prompt
     ├── organizze_login.py       # Playwright headless login → .session (storageState)
-    ├── scrape_slice.py          # scraper de 1 fatia (dashboard|tx YYYY-MM|invoice id YYYY-MM)
-    ├── apply_scrape.py          # consolida scrape/*.json no snapshot (override cirúrgico)
+    ├── scrape_slice.py          # scraper for 1 slice (dashboard|tx YYYY-MM|invoice id YYYY-MM)
+    ├── apply_scrape.py          # consolidates scrape/*.json into the snapshot (surgical override)
     └── tests/
-        └── test_apply_scrape.py # 13 testes de merge/match/idempotência
+        └── test_apply_scrape.py # 13 merge/match/idempotency tests
 ```
 
 ```
 ~/finance/                       # storage (chmod 700, never in git)
-├── memory.md                    # global: restrições / contexto
-├── plans.md                     # global: objetivos
+├── memory.md                    # global: restrictions / context
+├── plans.md                     # global: goals
 └── organizze/                   # provider-specific
-    ├── .auth                    # API credentials (chmod 600) — sem senha web
+    ├── .auth                    # API credentials (chmod 600) — no web password
     ├── .config                  # CARD_PAYMENT_ACCOUNT_*, CASHFLOW_THRESHOLD_CENTS, SCRAPE_MAX_AGENTS, ...
-    ├── .session                 # Playwright storageState (chmod 600) — nunca no git
+    ├── .session                 # Playwright storageState (chmod 600) — never in git
     ├── balances.json            # initial-balance offsets per account
     ├── snapshots/YYYY-MM-DD-HHMM.json
     ├── reports/YYYY-MM-DD-HHMM.md
     ├── budget-suggestions/YYYY-MM-DD-HHMM.json
-    ├── scrape/                  # JSONs de scraping por fatia (dashboard, tx_*, invoice_*)
+    ├── scrape/                  # scraping JSONs per slice (dashboard, tx_*, invoice_*)
     └── cache/categories.json
 ```
 
@@ -60,37 +60,37 @@ commands/finance/
 ## Conventions
 
 - Local-only storage under `~/finance/` (chmod 600 on credentials, never committed).
-- Python scripts use stdlib only, **exceto** `playwright` (dependência nova, autorizada; instalada automaticamente por `setup_auth.sh`).
+- Python scripts use stdlib only, **except** `playwright` (new dependency, authorized; installed automatically by `setup_auth.sh`).
 - Bash scripts follow the repo-wide pipe-delimited output (`ok|...`, `info|...`, `err|...`).
 - Memory and plans are **provider-agnostic** — any future provider (Nubank scraper, manual CSV, etc.) consumes the same `~/finance/{memory,plans}.md`.
 
 ## Design notes
 
-### Scraping web (Playwright cru, exceção à regra MCP)
+### Web scraping (raw Playwright, exception to the MCP rule)
 
-O Passo 3.5 do `/finance:organizze` usa **Playwright cru (Python lib + chromium)** chamado via Bash em cada subagent — **fora do MCP `mcp__playwright-headless__*`**. Esta é uma **exceção explícita e autorizada** à regra global "always use `mcp__playwright__*` for all web browsing". O escopo da exceção é restrito a este fluxo de scraping logado do Organizze.
+Step 3.5 of `/finance:organizze` uses **raw Playwright (Python lib + Chromium)** called via Bash in each subagent — **outside the MCP `mcp__playwright-headless__*`**. This is an **explicit and authorized exception** to the global rule "always use `mcp__playwright__*` for all web browsing". The scope of the exception is limited to this authenticated Organizze scraping flow.
 
-**Motivo**: 1 servidor MCP Playwright = 1 browser + 1 aba ativa global + stdio serializado. Subagents que compartilham o mesmo MCP brigam pela aba ativa e não rodam em paralelo real. Browser por-agente dá paralelo real + isolamento de sessão + auto-cura de seletor (o subagent Haiku vê o DOM e corrige o seletor).
+**Reason**: 1 MCP Playwright server = 1 browser + 1 active tab globally + serialized stdio. Subagents sharing the same MCP fight over the active tab and cannot run in true parallel. Per-agent browser gives true parallelism + session isolation + self-healing selectors (the Haiku subagent sees the DOM and fixes the selector).
 
 ### SCRAPE_MAX_AGENTS
 
-Controla o número máximo de browsers Chromium simultâneos (cada um consome ~150-200 MB). Default: 4. Configure em `~/finance/organizze/.config`:
+Controls the maximum number of simultaneous Chromium browsers (each consumes ~150-200 MB). Default: 4. Configure in `~/finance/organizze/.config`:
 
 ```
 SCRAPE_MAX_AGENTS=4
 ```
 
-Reduza para 2 em máquinas com pouca RAM; aumente para 6-8 em máquinas com 16+ GB.
+Reduce to 2 on low-RAM machines; increase to 6-8 on machines with 16+ GB.
 
-### Credenciais
+### Credentials
 
-- **API token** → `~/finance/organizze/.auth` (texto simples, chmod 600, fora do git).
-- **Senha web** → macOS Keychain (`security add-generic-password -s organizze-login`). **Nunca em disco em texto plano.**
-- **Sessão Playwright** → `~/finance/organizze/.session` (storageState JSON, chmod 600). Reutilizada em todos os runs; relogin automático ao detectar expiração.
+- **API token** → `~/finance/organizze/.auth` (plain text, chmod 600, outside git).
+- **Web password** → macOS Keychain (`security add-generic-password -s organizze-login`). **Never on disk in plain text.**
+- **Playwright session** → `~/finance/organizze/.session` (storageState JSON, chmod 600). Reused across runs; automatic re-login on expiration detection.
 
-### Degradação API-only
+### API-only degradation
 
-Qualquer falha no Passo 3.5 (login, 2FA, scraping, consolidação) degrada silenciosamente para o snapshot da API + WARN no relatório. A análise **nunca trava**.
+Any failure in Step 3.5 (login, 2FA, scraping, consolidation) degrades silently to the API snapshot + WARN in the report. The analysis **never blocks**.
 
 ---
 
@@ -102,7 +102,7 @@ Pulls personal financial data from **Organizze** via its official REST API, buil
 
 1. Calls `https://api.organizze.com.br/rest/v2` to fetch accounts (with computed balances), categories, credit cards, invoices, past transactions (default 180d), future transactions (default 90d) and budgets (current + next 2 months).
 2. Enriches locally: balance projections 7/30/90d, recurring detection (≥3 occurrences in 6m, <15% variation), top categories, MoM variation, overdue past transactions, parcelamento progress.
-3. Renders a prompt that injects the snapshot + user memory + user plans + the system prompt extracted from `analista-financeiro-claude-code.md` (section 4.1).
+3. Renders a prompt that injects the snapshot + user memory + user plans + the system prompt from `agents/financial-analyst/financial-analyst.md`.
 4. Delegates to the `financial-analyst` subagent; falls back to `general-purpose` if not installed.
 5. Suggests budget updates (median 3m × p75 6m, ≥ current realized) for current + next month.
 6. Offers to register new memory/plan entries (or redirect to `/finance:context` / `/finance:goal`).
@@ -112,9 +112,9 @@ Pulls personal financial data from **Organizze** via its official REST API, buil
 - An Organizze account.
 - Python 3.9+ with `pip3` in PATH.
 - `curl` in PATH.
-- macOS Keychain (`security` CLI) — nativo no macOS.
+- macOS Keychain (`security` CLI) — native on macOS.
 - `mcp__playwright__*` available (used only during the one-time token onboarding).
-- `playwright` Python library + Chromium — **instalados automaticamente por `setup_auth.sh`** (`pip3 install playwright` + `python3 -m playwright install chromium`).
+- `playwright` Python library + Chromium — **installed automatically by `setup_auth.sh`** (`pip3 install playwright` + `python3 -m playwright install chromium`).
 - `financial-analyst` subagent installed — see [`agents/financial-analyst/README.md`](../../agents/financial-analyst/README.md).
 
 ### First run
@@ -133,10 +133,10 @@ From then on, plain `/finance:organizze` works — no interaction needed. The we
 ### Arguments
 
 ```
-/finance:organizze [<texto livre> | --history-days N | --future-days N | --no-analyze]
+/finance:organizze [<free text> | --history-days N | --future-days N | --no-analyze]
 ```
 
-Texto livre é classificado e roteado: objetivos → `/finance:goal`, restrições → `/finance:context`, perguntas analíticas → fluxo normal.
+Free text is classified and routed: goals → `/finance:goal`, restrictions → `/finance:context`, analytical questions → normal flow.
 
 | Flag | Default | Purpose |
 |---|---|---|
@@ -164,17 +164,17 @@ The **consolidated balance** uses only `checking`/`savings` accounts that are **
 
 ## /finance:goal
 
-Wrapper conversacional sobre `scripts/plans.py`. Gerencia objetivos financeiros que qualquer provider consome.
+Conversational wrapper over `scripts/plans.py`. Manages financial goals consumed by any provider.
 
 ```bash
-# Inline via slash command — sem argumentos abre menu interativo:
+# Inline via slash command — no arguments opens interactive menu:
 /finance:goal
-/finance:goal "guardar R$ 5000 para viagem em dezembro"
+/finance:goal "save R$ 5000 for a trip in December"
 /finance:goal list
 /finance:goal done "2026-05-24 13:56"
 /finance:goal pause "2026-05-24 13:55"
 
-# Ou direto no script:
+# Or directly in the script:
 python3 scripts/plans.py add "..." --target-cents 500000 --deadline 2026-12-31 --priority negociavel
 python3 scripts/plans.py list --status active
 python3 scripts/plans.py done "<ts>"
@@ -182,43 +182,43 @@ python3 scripts/plans.py status "<ts>" paused
 python3 scripts/plans.py prune --older-than-done 365
 ```
 
-Storage: `~/finance/plans.md` (editável à mão). Header inline: `## <ts> [target=… · deadline=… · account=… · priority=… · status=…]`.
+Storage: `~/finance/plans.md` (hand-editable). Inline header: `## <ts> [target=… · deadline=… · account=… · priority=… · status=…]`.
 
-`analyze.py` injeta a versão renderizada (`plans.py render`) em toda análise.
+`analyze.py` injects the rendered version (`plans.py render`) into every analysis.
 
 ---
 
 ## /finance:context
 
-Wrapper conversacional sobre `scripts/memory.py`. Restrições e contexto que análises devem respeitar.
+Conversational wrapper over `scripts/memory.py`. Restrictions and context that analyses must respect.
 
 ```bash
 /finance:context
-/finance:context "remédio X é prescrição médica — não cortar"
+/finance:context "medication X is a prescription — do not cut"
 /finance:context list
 
-# Ou direto:
-python3 scripts/memory.py add "..." [--tag <opcional>]
+# Or directly:
+python3 scripts/memory.py add "..." [--tag <optional>]
 python3 scripts/memory.py list --recent 10
 python3 scripts/memory.py prune --older-than 365
 ```
 
-Storage: `~/finance/memory.md` (editável à mão).
+Storage: `~/finance/memory.md` (hand-editable).
 
-`analyze.py` injeta a versão renderizada (`memory.py render`) e instrui o subagent a não contradizer nenhum item.
+`analyze.py` injects the rendered version (`memory.py render`) and instructs the subagent not to contradict any item.
 
 ---
 
 ## Privacy
 
-- Tudo local (`~/finance/`). Nada vai para git, nada vai para a nuvem.
-- Organizze API é HTTPS-only.
-- Credenciais em `.auth` e `balances.json` com `chmod 600`.
-- Os comandos nunca logam o token; se for mostrado em mensagem, é mascarado.
+- Everything local (`~/finance/`). Nothing goes to git, nothing goes to the cloud.
+- Organizze API is HTTPS-only.
+- Credentials in `.auth` and `balances.json` with `chmod 600`.
+- Commands never log the token; if shown in a message, it is masked.
 
 ## Design notes
 
-- **API ao invés de scraping**: sem CAPTCHA, sem cookie expirado, sem seletor frágil. Playwright só roda no onboarding do token.
-- O framework de análise (`analista-financeiro-claude-code.md` na raiz do repo) é **lido** por `analyze.py` — seção 4.1 vira system prompt do subagent. Atualizar o framework atualiza a análise sem mexer em código.
-- Budgets não são escrevíveis via API REST do Organizze (só `GET`). `suggest_budgets.py` produz tabela + JSON; usuário aplica na UI.
-- **Provider-agnóstico**: `scripts/{memory,plans}.py` não dependem do Organizze. Para adicionar Nubank/Banco do Brasil/CSV manual no futuro, crie `<provider>.md` + `<provider>-scripts/` consumindo os mesmos `~/finance/{memory,plans}.md`.
+- **API instead of scraping**: no CAPTCHA, no expired cookie, no fragile selector. Playwright only runs during token onboarding.
+- The system prompt is read from `agents/financial-analyst/financial-analyst.md` by `analyze.py` (YAML frontmatter is stripped). Updating `financial-analyst.md` updates the analysis without touching code.
+- Budgets are not writable via Organizze REST API (GET only). `suggest_budgets.py` produces a table + JSON; the user applies it in the UI.
+- **Provider-agnostic**: `scripts/{memory,plans}.py` do not depend on Organizze. To add Nubank/Banco do Brasil/manual CSV in the future, create `<provider>.md` + `<provider>-scripts/` consuming the same `~/finance/{memory,plans}.md`.

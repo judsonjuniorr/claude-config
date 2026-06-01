@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Perfil pessoal do usuário (provider-agnóstico).
+"""User personal profile (provider-agnostic).
 
-Armazena dados estruturados sobre quem é o usuário para que análises financeiras
-sejam personalizadas: idade, profissão, renda, família, moradia, cidade,
-tolerância a risco, hábitos. A cada execução de `/finance:organizze` os campos
-ainda vazios são perguntados via AskUserQuestion no chat principal.
+Stores structured data about the user so that financial analyses are
+personalized: age, occupation, income, family, housing, city,
+risk tolerance, habits. Each time `/finance:organizze` runs, still-empty
+required fields are asked via AskUserQuestion in the main chat.
 
-Arquivo: ~/finance/profile.md (markdown legível, formato `key: value` por linha).
+File: ~/finance/profile.md (readable markdown, `key: value` format per line).
 
 Usage:
-  profile.py get [<key>]              # lê tudo ou um campo
-  profile.py set <key> <value>        # grava/atualiza um campo
-  profile.py missing                  # lista chaves obrigatórias ainda vazias
-  profile.py render                   # bloco markdown pronto pra injetar no prompt
-  profile.py mark-skip                # grava timestamp em last_skip (silencia 7d)
-  profile.py should-ask               # exit 0 se deve perguntar agora; 1 se silenciar
+  profile.py get [<key>]              # read all or a single field
+  profile.py set <key> <value>        # write/update a field
+  profile.py missing                  # list required keys that are still empty
+  profile.py render                   # markdown block ready to inject into prompt
+  profile.py mark-skip                # write timestamp to last_skip (silences for 7d)
+  profile.py should-ask               # exit 0 if should ask now; 1 if silenced
 """
 from __future__ import annotations
 
@@ -72,11 +72,11 @@ def _load() -> dict[str, str]:
 def _save(data: dict[str, str]) -> None:
     PROFILE.parent.mkdir(parents=True, exist_ok=True)
     out: list[str] = [
-        "# Perfil do usuário",
-        "# Editável à mão. Um campo por linha, formato `chave: valor`. "
-        "Não use múltiplas linhas.",
-        "# Campos vazios são re-perguntados em /finance:organizze. Para silenciar "
-        "por 7 dias, rode `profile.py mark-skip`.",
+        "# User profile",
+        "# Manually editable. One field per line, format `key: value`. "
+        "Do not use multiple lines.",
+        "# Empty fields will be re-asked in /finance:organizze. To silence "
+        "for 7 days, run `profile.py mark-skip`.",
         "",
     ]
     data["updated"] = dt.date.today().isoformat()
@@ -90,22 +90,22 @@ def _save(data: dict[str, str]) -> None:
 
 def _brl(c: int | None) -> str:
     if c is None:
-        return "(sem dados)"
+        return "(no data)"
     v = abs(int(c)) / 100.0
     s = f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {s}"
 
 
 def _validate(key: str, value: str) -> str | None:
-    """Retorna erro como string ou None se OK."""
+    """Returns error as string or None if OK."""
     if key in INT_KEYS:
         try:
             int(value)
         except ValueError:
-            return f"campo `{key}` exige inteiro (centavos para valores monetários)"
+            return f"field `{key}` requires an integer (cents for monetary values)"
     if key in ENUM_VALUES:
         if value not in ENUM_VALUES[key]:
-            return f"campo `{key}` aceita: {sorted(ENUM_VALUES[key])}"
+            return f"field `{key}` accepts: {sorted(ENUM_VALUES[key])}"
     return None
 
 
@@ -118,7 +118,7 @@ def cmd_get(args) -> int:
         print(data[args.key])
         return 0
     if not data:
-        print("(perfil vazio)", file=sys.stderr)
+        print("(profile is empty)", file=sys.stderr)
         return 0
     for k in REQUIRED_KEYS + OPTIONAL_KEYS:
         if k in data:
@@ -130,7 +130,7 @@ def cmd_set(args) -> int:
     key = args.key.strip()
     value = args.value.strip()
     if key not in ALL_KEYS:
-        print(f"err|bad-key|{key} — aceitas: {ALL_KEYS}", file=sys.stderr)
+        print(f"err|bad-key|{key} — accepted: {ALL_KEYS}", file=sys.stderr)
         return 1
     err = _validate(key, value)
     if err:
@@ -141,7 +141,7 @@ def cmd_set(args) -> int:
         data.pop(key, None)
     else:
         data[key] = value
-    # mudança em qualquer campo limpa o silêncio anterior (engajamento renovado)
+    # any field change clears the previous silence (renewed engagement)
     if key not in META_KEYS and "last_skip" in data:
         data.pop("last_skip", None)
     _save(data)
@@ -166,56 +166,56 @@ def cmd_mark_skip(args) -> int:
 
 
 def cmd_should_ask(args) -> int:
-    """Exit 0 = perguntar; 1 = silenciar.
-    Silencia se TODOS os obrigatórios preenchidos OU se last_skip <7d e ainda há campos faltantes."""
+    """Exit 0 = ask; 1 = silence.
+    Silences if ALL required fields are filled OR if last_skip <7d and there are still missing fields."""
     data = _load()
     missing = [k for k in REQUIRED_KEYS if not data.get(k)]
     if not missing:
-        return 1  # perfil completo, nada a perguntar
+        return 1  # profile complete, nothing to ask
     last_skip = data.get("last_skip")
     if last_skip:
         try:
             d = dt.date.fromisoformat(last_skip)
             if (dt.date.today() - d).days < 7:
-                return 1  # silenciado
+                return 1  # silenced
         except ValueError:
             pass
-    return 0  # perguntar
+    return 0  # ask
 
 
 def cmd_render(args) -> int:
     data = _load()
-    print("# Perfil do usuário (CONTEXTO PESSOAL — calibrar recomendações)")
+    print("# User profile (PERSONAL CONTEXT — calibrate recommendations)")
     print()
-    print("Use estes dados para personalizar análises (faixa etária, renda, "
-          "dependentes, custo de moradia, cidade, tolerância a risco). "
-          "**Toda recomendação deve referenciar ao menos um campo aqui.** "
-          "Campos marcados `(sem dados)` significam que o usuário ainda não "
-          "informou — se algum for crítico para sua recomendação, emita uma "
-          "`[PERGUNTA]` no bloco final do relatório.")
+    print("Use this data to personalize analyses (age range, income, "
+          "dependents, housing cost, city, risk tolerance). "
+          "**Every recommendation must reference at least one field here.** "
+          "Fields marked `(no data)` mean the user has not yet provided them — "
+          "if any is critical for your recommendation, emit a "
+          "`[QUESTION]` in the final block of the report.")
     print()
 
-    idade = data.get("idade") or "(sem dados)"
-    print(f"- **Idade**: {idade}{' anos' if idade != '(sem dados)' else ''}")
-    print(f"- **Profissão**: {data.get('profissao') or '(sem dados)'}")
+    idade = data.get("idade") or "(no data)"
+    print(f"- **Age**: {idade}{' years' if idade != '(no data)' else ''}")
+    print(f"- **Occupation**: {data.get('profissao') or '(no data)'}")
     renda = data.get("renda_liquida_mensal_cents")
-    print(f"- **Renda líquida mensal**: {_brl(int(renda)) if renda else '(sem dados)'}")
-    print(f"- **Estado civil**: {data.get('estado_civil') or '(sem dados)'}")
-    print(f"- **Dependentes**: {data.get('dependentes') or '(sem dados)'}")
-    moradia = data.get("moradia_tipo") or "(sem dados)"
+    print(f"- **Monthly net income**: {_brl(int(renda)) if renda else '(no data)'}")
+    print(f"- **Marital status**: {data.get('estado_civil') or '(no data)'}")
+    print(f"- **Dependents**: {data.get('dependentes') or '(no data)'}")
+    moradia = data.get("moradia_tipo") or "(no data)"
     custo = data.get("moradia_custo_cents")
-    custo_str = _brl(int(custo)) if custo else "(sem dados)"
-    print(f"- **Moradia**: {moradia} — custo {custo_str}/mês")
-    print(f"- **Cidade**: {data.get('cidade') or '(sem dados)'} "
-          f"(use ao buscar preços/alternativas de mercado)")
-    print(f"- **Tolerância a risco**: {data.get('tolerancia_risco') or '(sem dados)'} "
-          f"(usa para escolher avalanche vs snowball na quitação)")
+    custo_str = _brl(int(custo)) if custo else "(no data)"
+    print(f"- **Housing**: {moradia} — cost {custo_str}/month")
+    print(f"- **City**: {data.get('cidade') or '(no data)'} "
+          f"(use when looking up local prices/market alternatives)")
+    print(f"- **Risk tolerance**: {data.get('tolerancia_risco') or '(no data)'} "
+          f"(use to choose avalanche vs snowball for debt payoff)")
     if data.get("habitos"):
-        print(f"- **Hábitos**: {data['habitos']}")
+        print(f"- **Habits**: {data['habitos']}")
     if data.get("objetivo_principal"):
-        print(f"- **Objetivo principal de curto prazo**: {data['objetivo_principal']}")
+        print(f"- **Main short-term goal**: {data['objetivo_principal']}")
     if data.get("updated"):
-        print(f"\n_(Última atualização: {data['updated']})_")
+        print(f"\n_(Last updated: {data['updated']})_")
     return 0
 
 

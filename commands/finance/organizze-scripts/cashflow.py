@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Projeção de saldo diário por conta principal.
+"""Daily balance projection per main account.
 
-Para cada conta principal (checking/savings, não-arquivada, não-cofrinho):
-- saldo inicial = _balance_cents (já reconciliado pelo pull.py)
-- aplica transactions_future com account_id correspondente, em ordem cronológica
-- aplica débitos de faturas de cartão na data de vencimento, na conta pagadora
-  declarada em ~/finance/organizze/.config (CARD_PAYMENT_ACCOUNT_<card_id>)
-- emite dias críticos: saldo projetado < threshold (default 0, configurável)
-- para cada dia crítico, lista contas com folga (saldo projetado no mesmo dia
-  > shortfall) como candidatas a transferência
+For each main account (checking/savings, not archived, not savings pot):
+- initial balance = _balance_cents (already reconciled by pull.py)
+- applies transactions_future with corresponding account_id, in chronological order
+- applies credit card invoice debits on the due date, on the paying account
+  declared in ~/finance/organizze/.config (CARD_PAYMENT_ACCOUNT_<card_id>)
+- emits critical days: projected balance < threshold (default 0, configurable)
+- for each critical day, lists accounts with slack (projected balance on the same day
+  > shortfall) as transfer candidates
 
-Usage standalone:
+Standalone usage:
   cashflow.py --snapshot PATH [--horizon-days 90] [--threshold-cents 0]
 
-Como módulo:
+As a module:
   from cashflow import per_account_projection
   result = per_account_projection(snapshot, threshold_cents=0, horizon_days=90)
 """
@@ -60,7 +60,7 @@ def per_account_projection(
     threshold_cents: int = 0,
     horizon_days: int = 90,
 ) -> dict:
-    """Retorna estrutura serializável com projeção e dias críticos por conta.
+    """Returns a serializable structure with projection and critical days per account.
 
     {
       "threshold_cents": int,
@@ -70,13 +70,13 @@ def per_account_projection(
         "critical_days": [{
           "date": "YYYY-MM-DD",
           "projected_cents": int,
-          "shortfall_cents": int,   # quanto falta pra atingir threshold
+          "shortfall_cents": int,   # how much is needed to reach threshold
           "drivers": [{"date","description","amount_cents","kind"}],
           "cover_candidates": [{"account_id","account_name","available_cents"}]
         }]
       }],
       "card_payment_map": {card_id: account_id},
-      "unmapped_cards": [{"id","name"}],   # cartões sem CARD_PAYMENT_ACCOUNT_*
+      "unmapped_cards": [{"id","name"}],   # cards without CARD_PAYMENT_ACCOUNT_*
     }
     """
     today = dt.date.today()
@@ -86,16 +86,16 @@ def per_account_projection(
     principals = [a for a in (snapshot.get("accounts") or []) if is_principal(a)]
     accounts_by_id = {a["id"]: a for a in principals if "id" in a}
 
-    # eventos por conta: [(date, amount_cents, description, kind)]
+    # events per account: [(date, amount_cents, description, kind)]
     events: dict[int, list[tuple[dt.date, int, str, str]]] = {aid: [] for aid in accounts_by_id}
 
-    # 1) transactions_future filtradas por account_id principal
+    # 1) transactions_future filtered by main account_id
     for t in snapshot.get("transactions_future") or []:
         d = _parse_date(t.get("date"))
         if d is None or d <= today or d > horizon:
             continue
         if t.get("credit_card_id") is not None:
-            # gastos de fatura entram via débito de fatura abaixo, não como tx
+            # invoice spending enters via invoice debit below, not as tx
             continue
         aid = t.get("account_id")
         if aid not in accounts_by_id:
@@ -103,7 +103,7 @@ def per_account_projection(
         amt = int(t.get("amount_cents") or 0)
         events[aid].append((d, amt, t.get("description") or "?", "tx"))
 
-    # 2) débitos de faturas de cartão na conta pagadora (apenas se mapeada)
+    # 2) credit card invoice debits on the paying account (only if mapped)
     unmapped_cards: list[dict] = []
     mapped_card_ids: set[int] = set()
     for cc in snapshot.get("credit_cards") or []:
@@ -128,18 +128,18 @@ def per_account_projection(
         amt = int(inv.get("amount_cents") or inv.get("total_cents") or 0)
         if amt == 0:
             continue
-        amt = -abs(amt)  # fatura é sempre débito
-        name = inv.get("_credit_card_name") or "cartão"
-        events[aid].append((d, amt, f"Fatura {name}", "invoice"))
+        amt = -abs(amt)  # invoice is always a debit
+        name = inv.get("_credit_card_name") or "card"
+        events[aid].append((d, amt, f"Invoice {name}", "invoice"))
 
-    # 3) projeção diária por conta
+    # 3) daily projection per account
     accounts_proj: dict[int, list[tuple[dt.date, int]]] = {}
     accounts_summary: list[dict] = []
     for aid, acc in accounts_by_id.items():
         evs = sorted(events.get(aid, []), key=lambda x: x[0])
         bal = int(acc.get("_balance_cents") or 0)
         daily: list[tuple[dt.date, int]] = []
-        # agregamos por dia: saldo de fechamento
+        # aggregate by day: closing balance
         by_day: dict[dt.date, int] = {}
         for d, amt, _desc, _k in evs:
             by_day[d] = by_day.get(d, 0) + amt
@@ -158,7 +158,7 @@ def per_account_projection(
             "events": evs,
         })
 
-    # 4) detecta dias críticos por conta e candidatos a cobertura
+    # 4) detect critical days per account and coverage candidates
     result_accounts: list[dict] = []
     for s in accounts_summary:
         aid = s["id"]
@@ -173,12 +173,12 @@ def per_account_projection(
                 {"date": dd.isoformat(), "description": desc, "amount_cents": amt, "kind": k}
                 for (dd, amt, desc, k) in evs if dd == d and amt < 0
             ]
-            # candidatas: outras contas principais com saldo projetado nesse dia >= shortfall
+            # candidates: other main accounts with projected balance on that day >= shortfall
             covers: list[dict] = []
             for other in accounts_summary:
                 if other["id"] == aid:
                     continue
-                # acha saldo de other nesse dia
+                # find balance of other account on that day
                 other_daily = accounts_proj[other["id"]]
                 other_bal = next((b for (dx, b) in other_daily if dx == d), None)
                 if other_bal is None or other_bal < shortfall:
@@ -209,48 +209,48 @@ def per_account_projection(
 
 
 def render_markdown(proj: dict) -> str:
-    """Bloco markdown pronto pra injetar em analyze.py."""
+    """Markdown block ready to inject in analyze.py."""
     out: list[str] = []
-    out.append("## Fluxo por conta — dias críticos (próximos 90 dias)")
+    out.append("## Cash flow per account — critical days (next 90 days)")
     thr = proj.get("threshold_cents", 0)
-    out.append(f"_Threshold de alerta: {_brl(thr)} · horizonte: {proj.get('horizon_end')}_")
+    out.append(f"_Alert threshold: {_brl(thr)} · horizon: {proj.get('horizon_end')}_")
     out.append("")
 
     if proj.get("unmapped_cards"):
-        out.append("⚠️ Cartões SEM conta pagadora configurada (faturas NÃO entram na projeção):")
+        out.append("⚠️ Cards WITHOUT a configured paying account (invoices NOT included in projection):")
         for cc in proj["unmapped_cards"]:
-            out.append(f"- {cc['name']} (id={cc['id']}) — rode `config.py card-account {cc['id']} <account_id>`")
+            out.append(f"- {cc['name']} (id={cc['id']}) — run `config.py card-account {cc['id']} <account_id>`")
         out.append("")
 
     any_critical = False
     for acc in proj.get("accounts", []):
         out.append(f"### {acc['name']}")
-        out.append(f"- Saldo inicial: {_brl(acc['initial_cents'])} · final projetado: {_brl(acc['final_cents'])}")
+        out.append(f"- Initial balance: {_brl(acc['initial_cents'])} · projected final: {_brl(acc['final_cents'])}")
         critical = acc.get("critical_days") or []
         if not critical:
-            out.append("- ✅ Sem dias críticos no horizonte.")
+            out.append("- ✅ No critical days on the horizon.")
             out.append("")
             continue
         any_critical = True
-        out.append(f"- ⚠️ {len(critical)} dia(s) crítico(s):")
+        out.append(f"- ⚠️ {len(critical)} critical day(s):")
         for cd in critical[:10]:
-            out.append(f"  - **{cd['date']}**: saldo projetado {_brl(cd['projected_cents'])} (falta {_brl(cd['shortfall_cents'])})")
+            out.append(f"  - **{cd['date']}**: projected balance {_brl(cd['projected_cents'])} (shortfall {_brl(cd['shortfall_cents'])})")
             for drv in cd["drivers"][:5]:
-                out.append(f"    - débito: {drv['description']} · {_brl(drv['amount_cents'])}")
+                out.append(f"    - debit: {drv['description']} · {_brl(drv['amount_cents'])}")
             if cd["cover_candidates"]:
                 covers_str = ", ".join(
                     f"{c['account_name']} ({_brl(c['available_cents'])})"
                     for c in cd["cover_candidates"]
                 )
-                out.append(f"    - contas com folga nesse dia: {covers_str}")
+                out.append(f"    - accounts with slack on that day: {covers_str}")
             else:
-                out.append("    - ❌ nenhuma conta principal com folga suficiente nesse dia.")
+                out.append("    - ❌ no main account with sufficient slack on that day.")
         if len(critical) > 10:
-            out.append(f"  - … (+{len(critical) - 10} dias)")
+            out.append(f"  - … (+{len(critical) - 10} days)")
         out.append("")
 
     if not any_critical:
-        out.append("✅ Nenhuma conta principal tem dia crítico no horizonte.")
+        out.append("✅ No main account has a critical day on the horizon.")
         out.append("")
 
     return "\n".join(out)
@@ -261,7 +261,7 @@ def main() -> int:
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--horizon-days", type=int, default=90)
     ap.add_argument("--threshold-cents", type=int, default=None,
-                    help="default: lê de ~/finance/organizze/.config CASHFLOW_THRESHOLD_CENTS")
+                    help="default: reads from ~/finance/organizze/.config CASHFLOW_THRESHOLD_CENTS")
     ap.add_argument("--json", action="store_true", help="emite JSON cru em vez de markdown")
     args = ap.parse_args()
 

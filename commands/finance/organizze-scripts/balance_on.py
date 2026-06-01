@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
-"""Saldo e previsto por conta numa data-alvo.
+"""Balance and forecast per account on a target date.
 
-Para uma data-alvo, devolve por conta principal (checking/savings, não-arquivada,
-não-cofrinho) e por cofrinho (institution_id=="cofrinho"), separadamente:
-- saldo_cents:           saldo atual (_balance_cents, já reconciliado pelo pull.py —
-                         soma das transações PAGAS).
-- previsto_cents:        saldo + não pagas FUTURAS (data em (hoje, alvo]) + faturas
-                         de cartão vencendo em (hoje, alvo] na conta pagadora. Esta
-                         é a coluna que bate com o "previsto" do app Organizze.
-- previsto_atrasadas_cents: previsto + transações atrasadas (não pagas com data <= hoje).
-                         Mais conservador — atrasada é obrigação real ainda não baixada.
-- atrasadas_cents:       só as atrasadas (previsto_atrasadas - previsto).
+For a target date, returns per main account (checking/savings, not archived,
+not savings pot) and per savings pot (institution_id=="cofrinho"), separately:
+- saldo_cents:               current balance (_balance_cents, already reconciled by pull.py —
+                             sum of PAID transactions).
+- previsto_cents:            balance + FUTURE unpaid (date in (today, target]) + credit card
+                             invoices due in (today, target] on the paying account. This
+                             is the column that matches the Organizze app "forecast".
+- previsto_atrasadas_cents:  forecast + overdue transactions (unpaid with date <= today).
+                             More conservative — overdue is a real obligation not yet settled.
+- atrasadas_cents:           overdue only (previsto_atrasadas - previsto).
 
-Faturas com vencimento <= hoje são presumidas pagas (já refletidas no saldo via a
-transação de pagamento); o campo `paid` da invoice não é confiável na API.
+Invoices with due date <= today are assumed paid (already reflected in balance via the
+payment transaction); the `paid` field on invoices is unreliable in the API.
 
-Cofrinhos entram numa lista separada e NÃO somam no total das contas principais
-(espelha o tratamento do Organizze para reservas).
+Savings pots are in a separate list and do NOT sum into the main accounts total
+(mirrors Organizze's treatment of reserves).
 
-Usage standalone:
+Standalone usage:
   balance_on.py --snapshot PATH [--date YYYY-MM-DD] [--json]
 
-Como módulo:
+As a module:
   from balance_on import balance_on
   result = balance_on(snapshot, target)   # target: datetime.date
 """
@@ -43,7 +43,7 @@ except ImportError:
 
 
 def _kind(a: dict) -> str | None:
-    """principal | cofrinho | None (ignorada)."""
+    """principal | cofrinho | None (ignored)."""
     if a.get("archived"):
         return None
     if a.get("institution_id") == "cofrinho":
@@ -54,14 +54,14 @@ def _kind(a: dict) -> str | None:
 
 
 def balance_on(snapshot: dict, target: dt.date) -> dict:
-    """Saldo, previsto (Organizze) e previsto c/ atrasadas por conta na data-alvo.
+    """Balance, forecast (Organizze) and forecast with overdue per account on target date.
 
     {
       "date": "YYYY-MM-DD", "today": "YYYY-MM-DD",
       "accounts": [{id,name,saldo_cents,previsto_cents,
                     previsto_atrasadas_cents,atrasadas_cents,delta_cents}],
-      "cofrinhos": [ ...mesma estrutura... ],
-      "totals": {...},            # só contas principais
+      "cofrinhos": [ ...same structure... ],
+      "totals": {...},            # main accounts only
       "cofrinhos_totals": {...},
       "unmapped_cards": [{"id","name"}],
     }
@@ -78,11 +78,11 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
         by_id[a["id"]] = a
         kind_of[a["id"]] = k
 
-    # delta futuro (hoje, alvo] e delta atrasadas (<= hoje), por conta
+    # future delta (today, target] and overdue delta (<= today), per account
     delta_fut: dict[int, int] = {aid: 0 for aid in by_id}
     delta_late: dict[int, int] = {aid: 0 for aid in by_id}
 
-    # 1) transações diretas (sem cartão) não pagas, data <= alvo
+    # 1) direct transactions (no card) unpaid, date <= target
     for key in ("transactions_past", "transactions_future"):
         for t in snapshot.get(key) or []:
             if t.get("paid"):
@@ -101,7 +101,7 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
             else:
                 delta_late[aid] += amt
 
-    # 2) débitos de faturas vencendo em (hoje, alvo] na conta pagadora mapeada
+    # 2) invoice debits due in (today, target] on the mapped paying account
     unmapped_cards: list[dict] = []
     mapped_card_ids: set[int] = set()
     for cc in snapshot.get("credit_cards") or []:
@@ -126,7 +126,7 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
         amt = int(inv.get("amount_cents") or inv.get("total_cents") or 0)
         if amt == 0:
             continue
-        delta_fut[aid] += -abs(amt)  # fatura é sempre débito
+        delta_fut[aid] += -abs(amt)  # invoice is always a debit
 
     def row(aid: int) -> dict:
         saldo = int(by_id[aid].get("_balance_cents") or 0)
@@ -168,7 +168,7 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
 
 
 def _table(rows: list[dict], total: dict, total_label: str) -> list[str]:
-    out = ["| Conta | Saldo atual | Previsto (Organizze) | Previsto c/ atrasadas |",
+    out = ["| Account | Current balance | Forecast (Organizze) | Forecast w/ overdue |",
            "|---|--:|--:|--:|"]
     for r in rows:
         out.append(
@@ -184,20 +184,20 @@ def _table(rows: list[dict], total: dict, total_label: str) -> list[str]:
 
 
 def render_markdown(res: dict) -> str:
-    out: list[str] = [f"## Saldo e previsto por conta até {res['date']}", ""]
+    out: list[str] = [f"## Balance and forecast per account up to {res['date']}", ""]
     if res.get("unmapped_cards"):
-        out.append("⚠️ Cartões SEM conta pagadora (faturas NÃO entram no previsto):")
+        out.append("⚠️ Cards WITHOUT a paying account (invoices NOT included in forecast):")
         for cc in res["unmapped_cards"]:
             out.append(f"- {cc['name']} (id={cc['id']}) — `config.py card-account {cc['id']} <account_id>`")
         out.append("")
-    out.append("_Previsto (Organizze) = saldo + não pagas futuras + faturas até a data._")
-    out.append("_Previsto c/ atrasadas soma também transações vencidas e não pagas._")
+    out.append("_Forecast (Organizze) = balance + future unpaid + invoices up to the date._")
+    out.append("_Forecast w/ overdue also adds overdue (past due and unpaid) transactions._")
     out.append("")
-    out += _table(res["accounts"], res["totals"], "Total (contas principais)")
+    out += _table(res["accounts"], res["totals"], "Total (main accounts)")
     if res.get("cofrinhos"):
         out.append("")
-        out.append("### Cofrinhos / reservas (não somam no total das contas principais)")
-        out += _table(res["cofrinhos"], res["cofrinhos_totals"], "Total cofrinhos")
+        out.append("### Savings pots / reserves (not included in main accounts total)")
+        out += _table(res["cofrinhos"], res["cofrinhos_totals"], "Total savings pots")
     out.append("")
     return "\n".join(out)
 
@@ -205,8 +205,8 @@ def render_markdown(res: dict) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", required=True)
-    ap.add_argument("--date", default=None, help="YYYY-MM-DD (default: hoje)")
-    ap.add_argument("--json", action="store_true", help="emite JSON cru em vez de markdown")
+    ap.add_argument("--date", default=None, help="YYYY-MM-DD (default: today)")
+    ap.add_argument("--json", action="store_true", help="emit raw JSON instead of markdown")
     args = ap.parse_args()
 
     target = dt.date.fromisoformat(args.date) if args.date else dt.date.today()

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Sugere limites de gastos por categoria para o mês corrente e o próximo.
+"""Suggests spending limits per category for the current and next month.
 
-Estratégia default:
-  - base = max(mediana dos últimos 3 meses, p75 dos últimos 6 meses)
-  - mínimo = max(base, realizado_mes_atual)         # nunca sugerir abaixo do já gasto
-  - arredonda para cima a múltiplo de R$ 10
-  - se categoria não tem histórico suficiente (<2 meses com gasto), mantém atual
-  - próximo mês = mesma sugestão (ajuste sazonal futuro)
+Default strategy:
+  - base = max(median of last 3 months, p75 of last 6 months)
+  - minimum = max(base, current_month_actual)       # never suggest below already spent
+  - rounds up to a multiple of R$ 10
+  - if a category has insufficient history (<2 months with spending), keeps current
+  - next month = same suggestion (seasonal adjustment in the future)
 
-A API REST do Organizze não expõe PUT/POST de /budgets — este script apenas
-gera sugestões. Use --open para abrir a página de metas no Playwright e
-aplicar manualmente (rápido); o JSON em ~/finance/organizze/budget-suggestions/
-documenta o que aplicar.
+The Organizze REST API does not expose PUT/POST for /budgets — this script only
+generates suggestions. Use --open to open the budget page in Playwright and
+apply manually (fast); the JSON in ~/finance/organizze/budget-suggestions/
+documents what to apply.
 
 Usage:
   suggest_budgets.py --snapshot PATH [--out PATH] [--top N]
@@ -73,8 +73,8 @@ def next_month(d: dt.date) -> tuple[int, int]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", required=True)
-    ap.add_argument("--out", default=None, help="path do JSON com sugestões (default: ~/finance/organizze/budget-suggestions/YYYY-MM-DD-HHMM.json)")
-    ap.add_argument("--top", type=int, default=30, help="máximo de categorias na tabela")
+    ap.add_argument("--out", default=None, help="path to JSON with suggestions (default: ~/finance/organizze/budget-suggestions/YYYY-MM-DD-HHMM.json)")
+    ap.add_argument("--top", type=int, default=30, help="maximum number of categories in the table")
     args = ap.parse_args()
 
     snap = json.loads(pathlib.Path(args.snapshot).read_text())
@@ -85,13 +85,13 @@ def main() -> int:
 
     cats = {c.get("id"): c.get("name") for c in (snap.get("categories") or [])}
 
-    # gastos por (mes, categoria) — só despesas pagas
+    # spending by (month, category) — paid expenses only
     by_mc: dict[tuple[str, int], int] = defaultdict(int)
     for t in snap.get("transactions_past") or []:
         if not t.get("paid"):
             continue
         amt = int(t.get("amount_cents") or 0)
-        if amt >= 0:  # só despesas
+        if amt >= 0:  # expenses only
             continue
         d = (t.get("date") or "")[:10]
         try:
@@ -103,7 +103,7 @@ def main() -> int:
             continue
         by_mc[(month_key(td), cid)] += -amt  # positivo
 
-    # últimos 3 e 6 meses (excluindo mês corrente para não enviesar com mês incompleto)
+    # last 3 and 6 months (excluding current month to avoid bias from incomplete month)
     def months_back(n: int) -> list[str]:
         out = []
         for i in range(1, n + 1):
@@ -116,7 +116,7 @@ def main() -> int:
     last_3 = months_back(3)
     last_6 = months_back(6)
 
-    # orçamento atual do mês corrente (do snapshot — pull pega mês atual + 2)
+    # current month's budget (from snapshot — pull fetches current month + 2)
     current_budget: dict[int, int] = {}
     for b in (snap.get("budgets") or []):
         if b.get("_year") == cur_y and b.get("_month") == cur_m:
@@ -124,7 +124,7 @@ def main() -> int:
             if cid is not None:
                 current_budget[cid] = int(b.get("amount_in_cents") or 0)
 
-    # realizado mês corrente
+    # current month actuals
     realized_cur: dict[int, int] = defaultdict(int)
     for (mk, cid), v in by_mc.items():
         if mk == cur_key:
@@ -139,12 +139,12 @@ def main() -> int:
         nonzero_6 = [v for v in h6 if v > 0]
         if len(nonzero_6) < 2:
             base = current_budget.get(cid, 0)
-            confidence = "baixa"
+            confidence = "low"
         else:
             med3 = int(statistics.median(nonzero_3)) if nonzero_3 else 0
             p75_6 = p75(nonzero_6)
             base = max(med3, p75_6)
-            confidence = "alta" if len(nonzero_6) >= 4 else "média"
+            confidence = "high" if len(nonzero_6) >= 4 else "medium"
         suggested = round_up_cents(max(base, realized_cur.get(cid, 0)), step_brl=10)
         rows.append({
             "category_id": cid,
@@ -159,16 +159,16 @@ def main() -> int:
             "months_with_spend": len(nonzero_6),
         })
 
-    # ordena por delta absoluto (maiores mudanças primeiro)
+    # sort by absolute delta (largest changes first)
     rows.sort(key=lambda r: -abs(r["delta_cents"]))
 
-    # === output: tabela markdown + JSON ===
+    # === output: markdown table + JSON ===
     md: list[str] = []
-    md.append(f"# Sugestão de orçamento — {cur_y}-{cur_m:02d} e {nxt_y}-{nxt_m:02d}")
+    md.append(f"# Budget suggestion — {cur_y}-{cur_m:02d} and {nxt_y}-{nxt_m:02d}")
     md.append("")
-    md.append(f"Estratégia: max(mediana 3m, p75 6m), nunca abaixo do realizado do mês atual, arredondado pra cima em R$ 10.")
+    md.append(f"Strategy: max(3m median, p75 6m), never below current month actuals, rounded up to R$ 10.")
     md.append("")
-    md.append("| Categoria | Atual | Realizado (mês) | Mediana 3m | p75 6m | **Sugerido** | Δ | Confiança |")
+    md.append("| Category | Current | Actual (month) | Median 3m | p75 6m | **Suggested** | Δ | Confidence |")
     md.append("|---|---:|---:|---:|---:|---:|---:|:---:|")
     for r in rows[: args.top]:
         delta = r["delta_cents"]
@@ -184,8 +184,8 @@ def main() -> int:
             f"| {r['confidence']} |"
         )
     md.append("")
-    md.append("> A API REST do Organizze não permite atualizar orçamentos via HTTP. ")
-    md.append("> Aplique manualmente no app: https://app.organizze.com.br/orcamento")
+    md.append("> The Organizze REST API does not allow updating budgets via HTTP. ")
+    md.append("> Apply manually in the app: https://app.organizze.com.br/orcamento")
 
     payload = {
         "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
