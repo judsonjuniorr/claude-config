@@ -196,10 +196,9 @@ Do not split automatically. Always ask.
 
 ## Installed hooks
 
-Installing this skill via `install.sh` also registers two hooks in `~/.claude/settings.json` (idempotent; the uninstall flow removes them). Both are optional — the scripts work without them.
+Installing this skill via `install.sh` also registers one hook in `~/.claude/settings.json` (idempotent; the uninstall flow removes it). It is optional — the scripts work without it.
 
 - **`git-guard`** (`PreToolUse` / `Bash`, severity `ask`) — when a raw **mutation/PR** command is about to run (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`), it surfaces a permission prompt suggesting the matching script (`ship.sh`/`pr.sh`/`issue.sh`/`repo.sh`). Read-only `git status`/`diff`/`log` are left untouched, so it does not overlap RTK's git proxy. Commands that already invoke `github-ops/scripts/` are allowed silently.
-- **`auto-stage`** (`PostToolUse` / `Edit|Write`) — `git add`s the edited file so `ship.sh`/`inspect.sh` see a warm index. Skips secret-looking paths (`.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json`). Silent and reversible.
 
 ## Platform support
 

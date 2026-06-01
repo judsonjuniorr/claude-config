@@ -422,7 +422,7 @@ uninstall_mode() {
 }
 
 # ── github-ops hooks (settings.json) ───────────────────────────────────────────
-# The github-ops skill ships PreToolUse/PostToolUse hooks (git-guard, auto-stage).
+# The github-ops skill ships a PreToolUse hook (git-guard).
 # These are registered in ~/.claude/settings.json rather than symlinked, so they
 # need an explicit merge/remove pass tagged by the "github-ops/hooks/" marker.
 GHO_HOOKS_SRC="$REPO_DIR/skills/github-ops/hooks/hooks.json"
@@ -456,7 +456,7 @@ merge_github_ops_hooks() {
             .hooks[$e.key] = ((.hooks[$e.key] // []) + $e.value))
       ' "$settings" > "$settings.tmp"; then
     mv "$settings.tmp" "$settings"
-    echo "  ↳ hooks registered in settings.json (git-guard, auto-stage)"
+    echo "  ↳ hooks registered in settings.json (git-guard)"
   else
     rm -f "$settings.tmp"
     echo "  ↳ hooks: merge failed — settings.json left unchanged (backup at settings.json.bak)"

@@ -48,16 +48,14 @@ github-ops/
 │   └── repo.sh           # info | releases | runs | workflow-run
 └── hooks/
     ├── git-guard.sh      # PreToolUse/Bash — nudge raw mutations → scripts
-    ├── auto-stage.sh     # PostToolUse/Edit|Write — git add edited file
     └── hooks.json        # entries install.sh merges into settings.json
 ```
 
 ### Hooks (registered by `install.sh`)
 
-Installing the skill also merges two hooks into `~/.claude/settings.json` (idempotent; uninstall removes them, tagged by the `github-ops/hooks/` marker). jq is required for the merge; without it `install.sh` prints the snippet to add manually. Both are optional.
+Installing the skill also merges one hook into `~/.claude/settings.json` (idempotent; uninstall removes it, tagged by the `github-ops/hooks/` marker). jq is required for the merge; without it `install.sh` prints the snippet to add manually. It is optional.
 
 - **`git-guard`** (`PreToolUse`/`Bash`, severity `ask`) — intercepts raw **mutation/PR** commands (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`) and prompts with the matching script. Read-only `git status`/`diff`/`log` are left to RTK's proxy (no overlap); calls that already run `github-ops/scripts/` pass through silently.
-- **`auto-stage`** (`PostToolUse`/`Edit|Write`) — `git add`s the edited file (skips `.env`/`*.key`/`*.pem`/`*_rsa`/`*credentials*.json`) so `ship.sh`/`inspect.sh` see a warm index.
 
 ## Output format
 

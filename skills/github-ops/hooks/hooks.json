@@ -6,13 +6,5 @@
         { "type": "command", "command": "bash {{HOOKS_DIR}}/git-guard.sh" }
       ]
     }
-  ],
-  "PostToolUse": [
-    {
-      "matcher": "Edit|Write",
-      "hooks": [
-        { "type": "command", "command": "bash {{HOOKS_DIR}}/auto-stage.sh" }
-      ]
-    }
   ]
 }
