@@ -64,6 +64,12 @@ if [ -z "$MSG" ] && [ "$AMEND" = "0" ]; then
   die "need-message" "re-run with --message \"<conventional-commit subject>\""
 fi
 
+# Never allow AI-attribution trailers into the commit, no matter what was
+# passed via --message.
+if [ -n "$MSG" ]; then
+  MSG="$(printf '%s\n' "$MSG" | strip_attribution)"
+fi
+
 if [ "$AMEND" = "1" ]; then
   if [ -z "$MSG" ]; then
     git commit --amend --no-edit >/dev/null

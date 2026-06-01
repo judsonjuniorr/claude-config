@@ -138,6 +138,24 @@ emit_compact() {
   fi
 }
 
+# Scrub AI-attribution lines from stdin (commit messages, PR/MR bodies).
+# NEVER let "Co-Authored-By: Claude", "Generated with Claude Code", or the
+# 🤖 footer reach a commit or PR — strip them unconditionally, then trim any
+# trailing blank lines the removed footer block left behind.
+strip_attribution() {
+  grep -viE '^[[:space:]]*(co-authored-by:[[:space:]]*claude|co-authored-by:[[:space:]].*noreply@anthropic\.com|🤖[[:space:]]*generated with|generated with \[?claude code)' \
+    | sed -e 's/[[:space:]]*🤖[[:space:]]*Generated with.*$//' \
+    | awk '{ lines[NR]=$0 } END { last=NR; while (last>0 && lines[last] ~ /^[[:space:]]*$/) last--; for (i=1;i<=last;i++) print lines[i] }'
+}
+
+# Scrub a file's contents in place through strip_attribution.
+scrub_body_file() {
+  local f="$1" tmp
+  tmp="$(mktemp)"
+  strip_attribution < "$f" > "$tmp"
+  mv "$tmp" "$f"
+}
+
 # Returns 0 if any staged path matches secret patterns.
 has_secret_paths() {
   git diff --cached --name-only \

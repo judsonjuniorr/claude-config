@@ -9,6 +9,10 @@ description: GitHub/GitLab workflow operations via gh/glab CLI with token-effici
 
 Use `gh` (GitHub) or `glab` (GitLab) for all remote operations. Scripts auto-detect the platform from `origin` and return **pipe-delimited** output — 1 line per record, no colors, no labels you don't need.
 
+## NEVER add AI attribution
+
+**Never, under any circumstance, add `Co-Authored-By: Claude`, `🤖 Generated with Claude Code`, or any similar AI-attribution line to a commit message or a PR/MR body.** Do not append it yourself when crafting `--message` or `--body`. The scripts strip these lines defensively and the `git-guard` hook hard-denies any raw `git`/`gh`/`glab` command that contains them — but the rule is yours to follow first: write clean commit subjects and PR bodies with no attribution footer.
+
 ## Self-contained — do not pre-inspect
 
 Scripts in this skill are self-contained. **Do not** run `git status`, `git diff`, `git log`, `gh pr view`, `gh pr list`, `glab mr view`, etc. before invoking a script — the script's pipe-delimited output already contains what you need.

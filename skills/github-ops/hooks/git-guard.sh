@@ -14,6 +14,16 @@ CMD="$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_in
 # Strip a leading RTK proxy prefix so `rtk git commit` matches like `git commit`.
 CMD="${CMD#rtk }"
 
+# Hard block: NEVER allow AI-attribution trailers into a commit or PR/MR body,
+# under any circumstance — even via the github-ops scripts (they strip it too,
+# this is the belt-and-suspenders deny). Catches Co-Authored-By: Claude and the
+# "Generated with Claude Code" footer in any git/gh/glab mutation command.
+if printf '%s' "$CMD" | grep -qiE 'co-authored-by:[[:space:]]*claude|noreply@anthropic\.com|generated with \[?claude code|🤖[[:space:]]*generated with'; then
+  reason="github-ops: refusing — never add Co-Authored-By: Claude or 'Generated with Claude Code' attribution to commits or PRs. Remove the attribution and retry."
+  python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'deny','permissionDecisionReason':sys.argv[1]}}))" "$reason"
+  exit 0
+fi
+
 # Allow the github-ops scripts themselves (they call git/gh internally).
 case "$CMD" in
   *github-ops/scripts/*) exit 0 ;;

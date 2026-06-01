@@ -48,6 +48,8 @@ cmd_create() {
     } > "$body_file"
   fi
   [ -n "$title" ] || title="$(git log -1 --pretty=%s)"
+  # Never let AI-attribution footers reach the PR/MR body.
+  scrub_body_file "$body_file"
 
   if [ "$CLI" = "gh" ]; then
     local args=(--title "$title" --body-file "$body_file" --base "$base" --head "$head")
@@ -80,6 +82,9 @@ cmd_edit() {
     esac
   done
   [ -n "$title$body$body_file$add_label$rm_label" ] || die "usage" "pr.sh edit <num> needs at least one field to change"
+  # Never let AI-attribution footers reach the PR/MR body.
+  [ -n "$body_file" ] && scrub_body_file "$body_file"
+  [ -n "$body" ] && body="$(printf '%s\n' "$body" | strip_attribution)"
 
   if [ "$CLI" = "gh" ]; then
     local args=("$num")
