@@ -7,6 +7,27 @@ Slash commands for Claude Code. Each command lives in its own subdirectory conta
 
 ## Available
 
+### [`/create-prd`](./create-prd/)
+
+Brainstorm the inputs first, write second: extract every requirement a Product Requirements Document needs through structured questioning, then synthesize the PRD — lean one-pager or comprehensive.
+
+**What it does**
+
+1. Takes a feature name / one-line idea from `$ARGUMENTS` (asks if empty), derives a slug, then asks for **depth** (lean one-pager vs comprehensive) — which selects both the questions and the output template.
+2. Runs structured `AskUserQuestion` discovery rounds: problem & evidence, who's affected, 5-Whys root cause, jobs-to-be-done & key flows, in/out-of-scope, success metrics (primary/secondary/guardrail), risks, and — for comprehensive — UX requirements plus an optional `backend-architect` handoff for high-level technical considerations. Skips anything already answered; never fabricates evidence or metrics — unknowns become open questions.
+3. Synthesizes the PRD inline using the depth-appropriate sections — no time estimates, *what & why* never *how*, every requirement traceable to a user need. Comprehensive output includes personas, jobs-to-be-done, prioritized requirements, and user stories with `GIVEN/WHEN/THEN` acceptance criteria.
+4. Offers to save. Chat-only by default; writes `docs/prd/<slug>.md` (or a chosen path) only if the user opts in — never unprompted.
+
+**Allowed tools**: `AskUserQuestion`, `Read`, `Write`, `Glob`, `Grep`, `Agent`.
+
+**Language**: English.
+
+**When to use**: a vague idea needs a structured brief before engineering scopes it; you want a repeatable PRD with explicit problem, scope boundaries, and a primary/secondary/guardrail metric split rather than a free-form doc.
+
+**Prerequisites**:
+- None required — the PRD renders in chat; a file is written only on request.
+- Optional: the [`backend-architect`](../agents/backend-architect.md) agent for the high-level technical-considerations section (fills inline if absent).
+
 ### [`/file-organizer`](./file-organizer/)
 
 Analyze a directory, surface duplicates and clutter, propose a tidy structure, and only after explicit approval move/rename files — every destructive action is logged so it can be reversed.
