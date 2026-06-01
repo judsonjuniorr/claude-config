@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Memória financeira persistente (provider-agnóstica).
+"""Persistent financial memory (provider-agnostic).
 
-Armazena restrições, contextos e preferências do usuário que a IA deve respeitar
-nas análises futuras. Exemplo: "não consigo diminuir a parcela da casa" — daí
-em diante o subagent não sugere isso.
+Stores user constraints, contexts, and preferences that the AI must respect
+in future analyses. Example: "I can't reduce my mortgage payment" — from
+that point on the subagent does not suggest it.
 
-Cada entrada vai com timestamp; entradas mais recentes pesam mais (mas nada é
-descartado automaticamente — use `prune` para remover obsoletas).
+Each entry is timestamped; more recent entries carry more weight (but nothing
+is discarded automatically — use `prune` to remove obsolete ones).
 
-Arquivo: ~/finance/memory.md (markdown legível, editável manualmente).
+File: ~/finance/memory.md (readable markdown, manually editable).
 
 Usage:
-  memory.py add "<texto>"           # adiciona entrada
-  memory.py add --tag dívida "..."  # com tag opcional
-  memory.py list [--recent N]       # lista (default: tudo)
-  memory.py render                  # imprime formatado para injeção em prompt
-  memory.py prune --older-than 365  # remove entradas mais velhas que N dias
+  memory.py add "<text>"           # add entry
+  memory.py add --tag debt "..."   # with optional tag
+  memory.py list [--recent N]      # list (default: all)
+  memory.py render                 # print formatted for prompt injection
+  memory.py prune --older-than 365 # remove entries older than N days
 """
 from __future__ import annotations
 
@@ -54,9 +54,9 @@ def _load() -> list[dict]:
 
 def _save(entries: list[dict]) -> None:
     MEM.parent.mkdir(parents=True, exist_ok=True)
-    out = ["# Memória financeira", "",
-           "Restrições, contextos e preferências que a IA DEVE respeitar.",
-           "Entradas mais recentes no topo; edição manual permitida.", ""]
+    out = ["# Financial memory", "",
+           "Constraints, contexts, and preferences the AI MUST respect.",
+           "Most recent entries at top; manual editing allowed.", ""]
     for e in sorted(entries, key=lambda x: x["ts"], reverse=True):
         tag = f" [{e['tag']}]" if e.get("tag") else ""
         out.append(f"## {e['ts']}{tag}")
@@ -85,7 +85,7 @@ def cmd_list(args) -> int:
     if args.recent:
         entries = entries[: args.recent]
     if not entries:
-        print("(memória vazia)", file=sys.stderr)
+        print("(memory is empty)", file=sys.stderr)
         return 0
     for e in entries:
         tag = f" [{e['tag']}]" if e.get("tag") else ""
@@ -96,22 +96,22 @@ def cmd_list(args) -> int:
 
 
 def cmd_render(args) -> int:
-    """Imprime memória pronta para injeção em prompt do subagent."""
+    """Print memory ready for injection into the subagent prompt."""
     entries = sorted(_load(), key=lambda x: x["ts"], reverse=True)
     if not entries:
         return 0
     today = dt.date.today()
-    print("# Memória do usuário (RESTRIÇÕES E CONTEXTO — RESPEITAR)")
+    print("# User memory (CONSTRAINTS AND CONTEXT — MUST RESPECT)")
     print()
-    print("Cada item abaixo é uma decisão/restrição registrada pelo usuário em ")
-    print("conversas anteriores. **Não sugira ações que contradigam estes itens.** ")
-    print("Itens com data mais recente têm maior peso.")
+    print("Each item below is a decision/constraint recorded by the user in ")
+    print("previous conversations. **Do not suggest actions that contradict these items.** ")
+    print("More recent items carry greater weight.")
     print()
     for e in entries:
         try:
             d = dt.datetime.strptime(e["ts"], "%Y-%m-%d %H:%M").date()
             age = (today - d).days
-            recency = "recente" if age <= 30 else ("vigente" if age <= 180 else "antiga")
+            recency = "recent" if age <= 30 else ("current" if age <= 180 else "old")
         except Exception:
             recency = "?"
         tag = f" `{e['tag']}`" if e.get("tag") else ""

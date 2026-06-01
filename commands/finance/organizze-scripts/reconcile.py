@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Reconcile calculated balances vs real balances shown in the Organizze app.
 
-A API /accounts não devolve o saldo atual. O pull.py soma transações pagas
-(janela longa) para estimar — mas o saldo inicial configurado pelo usuário
-ao criar a conta não aparece em /transactions. Este script captura a diferença
-como offset em ~/finance/organizze/balances.json, que pull.py soma na próxima
-execução.
+The /accounts API does not return the current balance. pull.py sums paid
+transactions (long window) to estimate — but the initial balance configured by
+the user when creating the account does not appear in /transactions. This script
+captures the difference as an offset in ~/finance/organizze/balances.json, which
+pull.py adds on the next run.
 
-Modo 1 — pares conta_id=valor_em_centavos via CLI:
-  reconcile.py --snapshot PATH <conta_id_1>=<centavos> <conta_id_2>=<centavos>
-  ex.: reconcile.py --snapshot PATH 1234567=80174 7654321=194746
+Mode 1 — account_id=value_in_cents pairs via CLI:
+  reconcile.py --snapshot PATH <account_id_1>=<cents> <account_id_2>=<cents>
+  e.g.: reconcile.py --snapshot PATH 1234567=80174 7654321=194746
 
-Modo 2 — JSON via stdin:
+Mode 2 — JSON via stdin:
   echo '{"1234567": 80174, "7654321": 194746}' | reconcile.py --snapshot PATH -
 
-Modo 3 — interativo (default sem args):
+Mode 3 — interactive (default without args):
   reconcile.py --snapshot PATH
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ def brl_to_cents(s: str) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", required=True)
-    ap.add_argument("pairs", nargs="*", help="account_id=valor_em_centavos (ou '-' para ler JSON do stdin)")
+    ap.add_argument("pairs", nargs="*", help="account_id=value_in_cents (or '-' to read JSON from stdin)")
     args = ap.parse_args()
 
     snap = json.loads(pathlib.Path(args.snapshot).read_text())
@@ -62,10 +62,10 @@ def main() -> int:
             k, v = p.split("=", 1)
             desired[int(k)] = int(v)
     else:
-        print("Contas ativas — digite o saldo REAL mostrado no app (ENTER para pular):", file=sys.stderr)
+        print("Active accounts — enter the REAL balance shown in the app (ENTER to skip):", file=sys.stderr)
         for a in active:
             calc = a.get("_balance_cents") or 0
-            prompt = f"  {a['name']} ({a['id']}) — calculado {cents_to_brl(calc)} · real: "
+            prompt = f"  {a['name']} ({a['id']}) — calculated {cents_to_brl(calc)} · real: "
             print(prompt, end="", file=sys.stderr, flush=True)
             line = sys.stdin.readline().strip()
             if not line:
@@ -73,7 +73,7 @@ def main() -> int:
             desired[a["id"]] = brl_to_cents(line)
 
     if not desired:
-        print("err|nothing-to-reconcile|", file=sys.stderr)
+        print("err|nothing-to-reconcile|no input provided", file=sys.stderr)
         return 1
 
     HOME.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 # financial-analyst
 
-Subagent for personal financial analysis. Consumes a pre-built data snapshot (saldos, transações, atrasadas, parcelamentos, orçamentos, memória do usuário) and outputs an opinionated, prioritized action plan — never fetches data on its own.
+Subagent for personal financial analysis. Consumes a pre-built data snapshot (balances, transactions, overdue items, installments, budgets, user memory) and outputs an opinionated, prioritized action plan — never fetches data on its own.
 
 ## Making it used system-wide
 
@@ -35,18 +35,18 @@ A general-purpose agent given raw financial data wanders: invents averages, igno
 - **Memory as law** — if the user said "don't touch the mortgage", the agent never proposes it again.
 - **Overdue first** — unpaid past transactions surface before any optimization.
 - **Merchant-level cuts** — uses the actual `description` from the snapshot, never invents merchant names. 3-5 specific cuts per analysis.
-- **Market research arrives pre-collected** — the caller (`/finance:organizze`) dispatches `search-specialist` agents **in parallel** (one per target category) before invoking this agent; results are injected as a "Pesquisa de mercado (PRÉ-COLETADA)" block. The analyst consumes the block instead of running WebSearch itself (~3x faster, saves the analyst's tokens). Falls back to its own WebSearch only when the block is missing or incomplete.
-- **Parcela semantics** — "acabando" (≤3 left → cash relief incoming, don't replace) vs "longe do fim" (≥12 total + half remaining → real future drag).
+- **Market research arrives pre-collected** — the caller (`/finance:organizze`) dispatches `search-specialist` agents **in parallel** (one per target category) before invoking this agent; results are injected as a `# Market research (PRE-COLLECTED — DO NOT REDO WebSearch)` block. The analyst consumes the block instead of running WebSearch itself (~3x faster, saves the analyst's tokens). Falls back to its own WebSearch only when the block is missing or incomplete.
+- **Installment semantics** — "almost done" (≤3 left → cash relief incoming, don't replace) vs "far from done" (≥12 total + half remaining → real future drag).
 - **Payoff strategy by risk profile** — avalanche (highest interest first) for `agressivo`, snowball (smallest balance first) for `conservador`/`moderado`. Justified, never silent.
 - **Numbers are sourced** — no invented metrics; everything traces to the snapshot or to a cited WebSearch URL.
-- **Open questions loop** — emits `[PERGUNTA]` markers when critical context is missing; the calling command captures them and asks the user, feeding the answers into the next run.
-- **Crisis protocol** — recurring negative balance / parcela >30% renda triggers a different output shape.
+- **Open questions loop** — emits `[QUESTION]` markers when critical context is missing; the calling command captures them and asks the user, feeding the answers into the next run.
+- **Crisis protocol** — recurring negative balance / installment >30% of income triggers a different output shape.
 
 ## Prerequisites
 
 - Claude Code with subagents support.
 - Caller supplies the full prompt (data + profile + memory + plans + task). The agent doesn't pull data itself.
-- **User profile** in `~/finance/profile.md` (managed via `/finance:profile`) — without it, recommendations stay generic and the agent will emit `[PERGUNTA]` markers asking for the missing fields.
+- **User profile** in `~/finance/profile.md` (managed via `/finance:profile`) — without it, recommendations stay generic and the agent will emit `[QUESTION]` markers asking for the missing fields.
 - **WebSearch access** — required for the market-research section (otherwise that block will show `(sem alternativa encontrada)`).
 
 ## Structure
@@ -71,24 +71,24 @@ financial-analyst/
 Every response follows this exact order (15 sections):
 
 1. **TL;DR** — 3 lines (state · nearest risk · biggest opportunity), citing ≥1 profile field.
-2. **Números-chave** — markdown table (balance, projections, % committed, parcelas, overdue, top category, next invoice).
-3. **Atrasadas — ação imediata** — ≤3 bullets `pay/collect by <date> · <amount>`.
-4. **Metas de categoria — status** — ≤5 bullets (risk + opportunity).
-5. **Objetivos do usuário — viabilidade neste mês** — 1 bullet per active goal.
-6. **Plano de transferências e poupança** — ≤5 bullets `[CRÍTICO]`/`[RENEGOCIAR]`/`[POUPANÇA]`.
-7. **Objetivos pausados neste ciclo** — omit if empty.
-8. **Parcelamentos — visão acionável** — ≤5 bullets, highlight "acabando" and "longe do fim".
-9. **Cortes específicos sugeridos** — 3-5 `[CORTE] merchant · R$ X/mês → alternativa · economia · justificativa`.
-10. **Quitação priorizada** — strategy (avalanche/snowball) chosen by `tolerancia_risco` + ordered list of eligible debts.
-11. **Alternativas de mercado** — 1 block per `TARGET-WEBSEARCH` category (URL + price + potential savings).
-12. **3 recomendações priorizadas** — `[IMPACT · EFFORT] title / Economia / Evidência / Ação / Por que pra você (perfil)`.
-13. **Próximos passos verificáveis** — ≤3 bullets, each with a measurable criterion.
-14. **Perguntas em aberto** — up to 3 lines `[PERGUNTA] <text>` (no leading hyphen/bullet) — captured by the calling command.
-15. Disclaimer: `Isto não é aconselhamento financeiro licenciado.`
+2. **Key numbers** — markdown table (balance, projections, % committed, installments, overdue, top category, next invoice).
+3. **Overdue — immediate action** — ≤3 bullets `pay/collect by <date> · <amount>`.
+4. **Category goals — status** — ≤5 bullets (risk + opportunity).
+5. **User goals — feasibility this month** — 1 bullet per active goal.
+6. **Transfer and savings plan** — ≤5 bullets `[CRITICAL]`/`[RENEGOTIATE]`/`[SAVINGS]`.
+7. **Goals paused this cycle** — omit if empty.
+8. **Installments — actionable view** — ≤5 bullets, highlight "almost done" and "long way to go".
+9. **Suggested specific cuts** — 3-5 `[CUT] merchant · R$ X/month → alternative · savings · justification`.
+10. **Prioritized payoff** — strategy (avalanche/snowball) chosen by `tolerancia_risco` + ordered list of eligible debts.
+11. **Market alternatives** — 1 block per `TARGET-WEBSEARCH` category (URL + price + potential savings).
+12. **3 prioritized recommendations** — `[IMPACT · EFFORT] title / Savings / Evidence / Action / Why for you (profile)`.
+13. **Verifiable next steps** — ≤3 bullets, each with a measurable criterion.
+14. **Open questions** — up to 3 lines `[QUESTION] <text>` (no leading hyphen/bullet) — captured by the calling command.
+15. Disclaimer: `This is not licensed financial advice.`
 
 ## Inviolable rules
 
-1. Never invent numbers — every metric comes from supplied data or is tagged `[estimado: <fonte>]`.
+1. Never invent numbers — every metric comes from supplied data or is tagged `[estimated: <source>]`.
 2. Commit to methodology before calculating.
 3. Local only — no exfiltration; no external calls except `WebSearch` on the 3 target categories for market alternatives.
 4. Strip PII when generating exports.
@@ -96,14 +96,14 @@ Every response follows this exact order (15 sections):
 6. Crisis protocol first if applicable.
 7. **User memory is law** — never propose anything that contradicts it; recency = weight.
 8. Overdue requires immediate action — surface at top.
-9. Distinguish parcelas "acabando" (≤3 left) from "longe do fim" (≥12 total, ≥half remaining).
+9. Distinguish installments "almost done" (≤3 left) from "far from done" (≥12 total, ≥half remaining).
 10. Day-of source balance for transfer suggestions (validate via cashflow per account).
 11. Proactive renegotiation when recurring debit consistently lands on a no-cash day.
 12. **Profile personalization is mandatory** — every recommendation cites ≥1 field from the user profile.
 13. **3-5 merchant-level cuts** — using the actual snapshot description, never inventing.
 14. **Consume the pre-collected market research block** — `search-specialist` agents already searched in parallel; only use WebSearch as fallback when block is missing/incomplete.
 15. **Payoff strategy chosen by risk tolerance** — avalanche for `agressivo`, snowball for `conservador`/`moderado`.
-16. **Up to 3 `[PERGUNTA]` markers** at the end when critical context is missing; the calling command captures them.
+16. **Up to 3 `[QUESTION]` markers** at the end when critical context is missing; the calling command captures them.
 
 ## Pairs naturally with
 

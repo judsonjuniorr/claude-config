@@ -24,7 +24,7 @@ from _paths import migrate_legacy  # noqa: E402
 
 migrate_legacy()
 
-DEFAULT_FRAMEWORK = pathlib.Path(__file__).resolve().parents[3] / "analista-financeiro-claude-code.md"
+DEFAULT_FRAMEWORK = pathlib.Path(__file__).resolve().parents[3] / "agents" / "financial-analyst" / "financial-analyst.md"
 
 
 def cents_to_brl(c: int | float | None) -> str:
@@ -36,25 +36,15 @@ def cents_to_brl(c: int | float | None) -> str:
 
 
 def extract_system_prompt(framework_md: str) -> str:
-    """Extract section 4.1 (system prompt) verbatim from the framework doc."""
+    """Extract the system prompt from financial-analyst.md (body after YAML frontmatter)."""
     lines = framework_md.splitlines()
-    out: list[str] = []
-    inside = False
-    for line in lines:
-        if line.startswith("### 4.1"):
-            inside = True
-            continue
-        if inside and (line.startswith("### 4.2") or line.startswith("## ")):
-            break
-        if inside:
-            out.append(line)
-    # strip leading blank lines + leading "> " quote markers
-    text = "\n".join(out).strip()
-    text = "\n".join(
-        ln[2:] if ln.startswith("> ") else (ln[1:] if ln.startswith(">") else ln)
-        for ln in text.splitlines()
-    ).strip()
-    return text or "Você é um analista financeiro pessoal sênior."
+    # Strip YAML frontmatter (--- ... ---) if present
+    if lines and lines[0].strip() == "---":
+        end = 1
+        while end < len(lines) and lines[end].strip() != "---":
+            end += 1
+        lines = lines[end + 1:]
+    return "\n".join(lines).strip() or "You are a senior personal financial analyst."
 
 
 _INVOICE_NAME_RE = re.compile(
@@ -64,15 +54,16 @@ _INVOICE_NAME_RE = re.compile(
 
 
 def _is_invoice_category_name(name: str | None) -> bool:
-    """True se o nome da categoria parece ser pagamento de fatura de cartão.
+    """True if the category name looks like a credit card invoice payment.
 
-    Usado pra excluir essas categorias do top de gastos efetivos (elas inflam
-    artificialmente: o gasto real foi a compra no cartão, e a fatura é só
-    a quitação correspondente).
+    Used to exclude these categories from the effective spending top list
+    (they inflate artificially: the real spend was the card purchase, and
+    the invoice is just the corresponding settlement).
 
-    Conservador: casa apenas variações claras de "fatura" / "pagamento de
-    fatura" / "fatura de cartão". NÃO filtra categorias como "Cartão Refeição"
-    ou "Cartão Alimentação" (vale-refeição/alimentação, gastos efetivos reais)."""
+    Conservative: only matches clear variations of "fatura" / "pagamento de
+    fatura" / "fatura de cartão". Does NOT filter categories like "Cartão
+    Refeição" or "Cartão Alimentação" (meal/food vouchers — real effective
+    spending)."""
     if not name:
         return False
     return bool(_INVOICE_NAME_RE.search(name))
@@ -87,17 +78,17 @@ def top_categories(snapshot: dict, month: dt.date | None = None) -> list[tuple[s
             continue
         amt = int(t.get("amount_cents") or 0)
         if amt >= 0:
-            continue  # apenas despesas
-        name = cats.get(t.get("category_id")) or "Sem categoria"
+            continue  # expenses only
+        name = cats.get(t.get("category_id")) or "Uncategorized"
         totals[name] += -amt
     return sorted(totals.items(), key=lambda x: -x[1])[:10]
 
 
 def top_categories_effective(snapshot: dict, month: dt.date | None = None,
                               limit: int = 3) -> list[tuple[str, int]]:
-    """Top N categorias de gasto efetivo do mês, EXCLUINDO categorias cujo nome
-    contém 'fatura'/'cartão'/'invoice' (pagamentos de fatura, que não são
-    gastos novos)."""
+    """Top N effective spending categories for the month, EXCLUDING categories
+    whose name contains 'fatura'/'cartão'/'invoice' (invoice payments, which
+    are not new spending)."""
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     totals: dict[str, int] = defaultdict(int)
     target_month = (month or dt.date.today()).strftime("%Y-%m")
@@ -107,7 +98,7 @@ def top_categories_effective(snapshot: dict, month: dt.date | None = None,
         amt = int(t.get("amount_cents") or 0)
         if amt >= 0:
             continue
-        name = cats.get(t.get("category_id")) or "Sem categoria"
+        name = cats.get(t.get("category_id")) or "Uncategorized"
         if _is_invoice_category_name(name):
             continue
         totals[name] += -amt
@@ -126,7 +117,7 @@ def top_transactions_of_category(snapshot: dict, cat_name: str,
         amt = int(t.get("amount_cents") or 0)
         if amt >= 0:
             continue
-        name = cats.get(t.get("category_id")) or "Sem categoria"
+        name = cats.get(t.get("category_id")) or "Uncategorized"
         if name != cat_name:
             continue
         rows.append(t)
@@ -135,7 +126,7 @@ def top_transactions_of_category(snapshot: dict, cat_name: str,
 
 
 def category_median_6m(snapshot: dict, cat_name: str) -> int:
-    """Mediana mensal dos últimos 6 meses para a categoria (em centavos, despesa)."""
+    """Monthly median over the last 6 months for the category (in cents, expense)."""
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     today = dt.date.today()
     months: list[str] = []
@@ -154,7 +145,7 @@ def category_median_6m(snapshot: dict, cat_name: str) -> int:
         amt = int(t.get("amount_cents") or 0)
         if amt >= 0:
             continue
-        name = cats.get(t.get("category_id")) or "Sem categoria"
+        name = cats.get(t.get("category_id")) or "Uncategorized"
         if name != cat_name:
             continue
         totals[key] += -amt
@@ -167,8 +158,8 @@ def category_median_6m(snapshot: dict, cat_name: str) -> int:
 
 def top_transactions_of_month(snapshot: dict, month: dt.date | None = None,
                                limit: int = 20) -> list[dict]:
-    """Top N despesas do mês ordenadas por valor absoluto, excluindo categorias
-    de pagamento de fatura (que duplicam gastos do cartão)."""
+    """Top N expenses of the month ordered by absolute value, excluding invoice
+    payment categories (which duplicate card spending)."""
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     target_month = (month or dt.date.today()).strftime("%Y-%m")
     rows: list[dict] = []
@@ -178,7 +169,7 @@ def top_transactions_of_month(snapshot: dict, month: dt.date | None = None,
         amt = int(t.get("amount_cents") or 0)
         if amt >= 0:
             continue
-        name = cats.get(t.get("category_id")) or "Sem categoria"
+        name = cats.get(t.get("category_id")) or "Uncategorized"
         if _is_invoice_category_name(name):
             continue
         rows.append(t)
@@ -187,7 +178,7 @@ def top_transactions_of_month(snapshot: dict, month: dt.date | None = None,
 
 
 def category_delta(snapshot: dict) -> list[tuple[str, int, int, float]]:
-    """(categoria, mes_atual_cents, mes_anterior_cents, variacao_pct)"""
+    """(category, current_month_cents, previous_month_cents, change_pct)"""
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     today = dt.date.today()
     prev = (today.replace(day=1) - dt.timedelta(days=1))
@@ -199,7 +190,7 @@ def category_delta(snapshot: dict) -> list[tuple[str, int, int, float]]:
         amt = int(t.get("amount_cents") or 0)
         if amt >= 0:
             continue
-        name = cats.get(t.get("category_id")) or "Sem categoria"
+        name = cats.get(t.get("category_id")) or "Uncategorized"
         key = (t.get("date") or "")[:7]
         if key == cur_key:
             cur[name] += -amt
@@ -223,20 +214,20 @@ def summarize(snapshot: dict) -> str:
     today = dt.date.today()
 
     out: list[str] = []
-    out.append(f"# Snapshot Organizze — {m.get('pulled_at', '')}")
-    out.append(f"Período: {m.get('periodo', {}).get('history_start')} → {m.get('periodo', {}).get('future_end')}")
+    out.append(f"# Organizze Snapshot — {m.get('pulled_at', '')}")
+    out.append(f"Period: {m.get('periodo', {}).get('history_start')} → {m.get('periodo', {}).get('future_end')}")
     out.append("")
-    out.append("## Saldo consolidado e projeção")
-    out.append(f"- Saldo atual: **{cents_to_brl(t.get('saldo_cents'))}**")
-    out.append(f"- Projeção +7d: {cents_to_brl(t.get('saldo_proj_7d_cents'))}")
-    out.append(f"- Projeção +30d: {cents_to_brl(t.get('saldo_proj_30d_cents'))}")
-    out.append(f"- Projeção +90d: {cents_to_brl(t.get('saldo_proj_90d_cents'))}")
+    out.append("## Consolidated balance and projection")
+    out.append(f"- Current balance: **{cents_to_brl(t.get('saldo_cents'))}**")
+    out.append(f"- Projection +7d: {cents_to_brl(t.get('saldo_proj_7d_cents'))}")
+    out.append(f"- Projection +30d: {cents_to_brl(t.get('saldo_proj_30d_cents'))}")
+    out.append(f"- Projection +90d: {cents_to_brl(t.get('saldo_proj_90d_cents'))}")
     out.append("")
     def is_principal(a):
         return (not a.get("archived")
                 and a.get("type") in ("checking", "savings", "other"))
 
-    out.append("## Saldo por conta principal (entra no consolidado)")
+    out.append("## Balance by main account (included in consolidated)")
     for a in accounts:
         if not is_principal(a):
             continue
@@ -244,7 +235,7 @@ def summarize(snapshot: dict) -> str:
         out.append(f"- {a.get('name')} ({a.get('type')}): {cents_to_brl(bal)}")
 
     out.append("")
-    out.append("## Outras contas (não somam no consolidado: caixinhas, contas auxiliares)")
+    out.append("## Other accounts (not included in consolidated: savings pots, auxiliary accounts)")
     for a in accounts:
         if a.get("archived") or is_principal(a):
             continue
@@ -253,7 +244,7 @@ def summarize(snapshot: dict) -> str:
         out.append(f"- {a.get('name')} ({kind}): {cents_to_brl(bal)}")
     out.append("")
 
-    # Mapa cartão → conta pagadora (config) para mostrar quem debita cada fatura
+    # Card → paying account map (config) to show which account debits each invoice
     try:
         sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
         from config import card_to_account_map  # type: ignore
@@ -265,7 +256,7 @@ def summarize(snapshot: dict) -> str:
     def _inv_amount(inv: dict) -> int:
         return int(inv.get("amount_cents") or inv.get("total_cents") or 0)
 
-    out.append("## Faturas a vencer (próximos 7 dias)")
+    out.append("## Invoices due (next 7 days)")
     n = 0
     for inv in invoices:
         d = (inv.get("date") or "")[:10]
@@ -277,18 +268,18 @@ def summarize(snapshot: dict) -> str:
         if amt == 0:
             continue
         if today <= due <= today + dt.timedelta(days=7):
-            out.append(f"- {inv.get('_credit_card_name')} · vence {d} · {cents_to_brl(amt)}")
+            out.append(f"- {inv.get('_credit_card_name')} · due {d} · {cents_to_brl(amt)}")
             n += 1
     if n == 0:
-        out.append("- (nenhuma)")
+        out.append("- (none)")
     out.append("")
 
-    # Faturas no restante do horizonte (8-90d) — entram no cashflow projetado,
-    # mas só aparecem como driver nominal quando o dia é crítico. Listar aqui
-    # força o analyst a dimensionar transferências contando com elas mesmo
-    # quando o saldo pós-fatura ainda fica positivo.
-    out.append("## Faturas a vencer no horizonte (8–90 dias)")
-    out.append("_Já embutidas no saldo projetado da conta pagadora. Não duplicar como débito extra ao recomendar transferências — mas considerar como o MAIOR débito do mês ao dimensionar caixa da conta pagadora._")
+    # Invoices in the rest of the horizon (8-90d) — included in projected cashflow,
+    # but only appear as a nominal driver when the day is critical. Listing them here
+    # forces the analyst to size transfers accounting for them even when the
+    # post-invoice balance remains positive.
+    out.append("## Invoices due on the horizon (8–90 days)")
+    out.append("_Already embedded in the projected balance of the paying account. Do not duplicate as an extra debit when recommending transfers — but consider as the LARGEST debit of the month when sizing the paying account's cash._")
     n = 0
     for inv in sorted(invoices, key=lambda x: (x.get("date") or "")):
         d = (inv.get("date") or "")[:10]
@@ -302,31 +293,31 @@ def summarize(snapshot: dict) -> str:
         if today + dt.timedelta(days=8) <= due <= today + dt.timedelta(days=90):
             cid = inv.get("credit_card_id") or inv.get("_credit_card_id")
             pay_acc_id = _card_map.get(cid) if cid is not None else None
-            pay_acc = _acc_name_by_id.get(pay_acc_id, "⚠️ sem conta pagadora mapeada") if pay_acc_id else "⚠️ sem conta pagadora mapeada"
-            out.append(f"- {inv.get('_credit_card_name')} · vence {d} · {cents_to_brl(amt)} · debita de **{pay_acc}**")
+            pay_acc = _acc_name_by_id.get(pay_acc_id, "⚠️ no paying account mapped") if pay_acc_id else "⚠️ no paying account mapped"
+            out.append(f"- {inv.get('_credit_card_name')} · due {d} · {cents_to_brl(amt)} · debits from **{pay_acc}**")
             n += 1
     if n == 0:
-        out.append("- (nenhuma)")
+        out.append("- (none)")
     out.append("")
 
-    out.append("## Top 10 categorias — mês corrente")
+    out.append("## Top 10 categories — current month")
     tops = top_categories(snapshot)
     if not tops:
-        out.append("- (sem despesas no mês corrente)")
+        out.append("- (no expenses in the current month)")
     else:
         for name, amt in tops:
             out.append(f"- {name}: {cents_to_brl(amt)}")
     out.append("")
 
-    out.append("## Variação por categoria — mês atual vs. anterior")
+    out.append("## Category change — current vs. previous month")
     for name, c, p, delta in category_delta(snapshot):
         sign = "+" if delta >= 0 else ""
-        out.append(f"- {name}: {cents_to_brl(c)} (anterior {cents_to_brl(p)}, {sign}{delta:.1f}%)")
+        out.append(f"- {name}: {cents_to_brl(c)} (previous {cents_to_brl(p)}, {sign}{delta:.1f}%)")
     out.append("")
 
-    out.append("## Transações recorrentes detectadas")
+    out.append("## Detected recurring transactions")
     rec = [t for t in (snapshot.get("transactions_past") or []) if t.get("is_recurring")]
-    by_payee: dict[str, tuple[int, int]] = {}  # payee -> (count, soma)
+    by_payee: dict[str, tuple[int, int]] = {}  # payee -> (count, sum)
     for t in rec:
         p = t.get("description") or "?"
         c, s = by_payee.get(p, (0, 0))
@@ -334,43 +325,43 @@ def summarize(snapshot: dict) -> str:
     for payee, (c, s) in sorted(by_payee.items(), key=lambda x: -x[1][0])[:15]:
         out.append(f"- {payee}: {c}x · total {cents_to_brl(s)}")
     if not by_payee:
-        out.append("- (nenhuma identificada)")
+        out.append("- (none identified)")
     out.append("")
 
-    # === Transações passadas NÃO PAGAS (atrasadas) ===
-    out.append("## ⚠️ Transações atrasadas (passadas, NÃO pagas)")
+    # === Past transactions NOT PAID (overdue) ===
+    out.append("## ⚠️ Overdue transactions (past, NOT paid)")
     overdue = [t for t in (snapshot.get("transactions_past") or [])
                if not t.get("paid") and t.get("credit_card_id") is None]
     overdue.sort(key=lambda x: (x.get("date") or ""))
     if not overdue:
-        out.append("- (nenhuma)")
+        out.append("- (none)")
     else:
         for t in overdue[:40]:
             d = (t.get("date") or "")[:10]
             amt = int(t.get("amount_cents") or 0)
-            tag = "RECEITA atrasada" if amt > 0 else "DESPESA atrasada"
+            tag = "OVERDUE INCOME" if amt > 0 else "OVERDUE EXPENSE"
             out.append(f"- {d} · {tag} · {t.get('description') or '?'} · {cents_to_brl(amt)}")
         tot = snapshot.get("meta", {}).get("totais", {})
         out.append(
-            f"\nResumo: {tot.get('n_atrasadas_despesa',0)} despesas (total {cents_to_brl(-tot.get('soma_atrasadas_despesa_cents',0))}), "
-            f"{tot.get('n_atrasadas_receita',0)} receitas (total {cents_to_brl(tot.get('soma_atrasadas_receita_cents',0))}) — devem ser pagas/recebidas o quanto antes."
+            f"\nSummary: {tot.get('n_atrasadas_despesa',0)} expenses (total {cents_to_brl(-tot.get('soma_atrasadas_despesa_cents',0))}), "
+            f"{tot.get('n_atrasadas_receita',0)} income (total {cents_to_brl(tot.get('soma_atrasadas_receita_cents',0))}) — should be paid/collected as soon as possible."
         )
     out.append("")
 
-    # === Parcelamentos em curso ===
-    out.append("## Parcelamentos em curso")
+    # === Active installments ===
+    out.append("## Active installments")
     insts = snapshot.get("installments") or []
     if not insts:
-        out.append("- (nenhum)")
+        out.append("- (none)")
     else:
-        out.append("| Descrição | Progresso | Parcela média | Faltam | Restante | Fim previsto | Status |")
+        out.append("| Description | Progress | Avg installment | Remaining | Amount left | Expected end | Status |")
         out.append("|---|:---:|---:|:---:|---:|:---:|:---|")
         for r in insts[:25]:
             status_parts = []
             if r.get("almost_done"):
-                status_parts.append("**acabando**")
+                status_parts.append("**almost done**")
             if r.get("long_way"):
-                status_parts.append("**longe do fim**")
+                status_parts.append("**long way to go**")
             status = ", ".join(status_parts) or "—"
             out.append(
                 f"| {r['description'][:50]} "
@@ -383,7 +374,7 @@ def summarize(snapshot: dict) -> str:
             )
     out.append("")
 
-    out.append("## Lançamentos futuros confirmados (próximos 30 dias)")
+    out.append("## Confirmed future entries (next 30 days)")
     n = 0
     for t in (snapshot.get("transactions_future") or [])[:50]:
         d = (t.get("date") or "")[:10]
@@ -395,36 +386,36 @@ def summarize(snapshot: dict) -> str:
             out.append(f"- {d}: {t.get('description') or '?'} · {cents_to_brl(t.get('amount_cents'))}")
             n += 1
     if n == 0:
-        out.append("- (nenhum)")
+        out.append("- (none)")
     out.append("")
 
-    # === Fluxo por conta — projeção diária + dias críticos ===
+    # === Cash flow per account — daily projection + critical days ===
     cf_block = render_cashflow_block(snapshot)
     if cf_block:
         out.append(cf_block)
         out.append("")
 
-    # === Top 20 transações do mês (gasto efetivo, ex-faturas de cartão) ===
-    out.append("## Top 20 transações do mês corrente (despesas, ex-pagamentos de fatura)")
+    # === Top 20 transactions of the month (effective spending, ex-card invoices) ===
+    out.append("## Top 20 transactions of the current month (expenses, ex-invoice payments)")
     out.append("")
-    out.append("Use esta tabela para sugerir cortes/substituições merchant-level "
-               "(regra inviolável `[CORTE]`). Cada linha é um gasto real do mês "
-               "— compras no cartão entram aqui (categorias rotuladas como "
-               "'Fatura/Cartão' foram filtradas pra não duplicar).")
+    out.append("Use this table to suggest merchant-level cuts/substitutions "
+               "(non-negotiable rule `[CUT]`). Each line is a real expense of the month "
+               "— card purchases appear here (categories labelled "
+               "'Invoice/Card' have been filtered to avoid duplication).")
     out.append("")
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     accounts_by_id = {a.get("id"): a.get("name") for a in snapshot.get("accounts") or []}
     cards_by_id = {c.get("id"): c.get("name") for c in snapshot.get("credit_cards") or []}
     top_tx = top_transactions_of_month(snapshot)
     if not top_tx:
-        out.append("- (sem despesas no mês corrente)")
+        out.append("- (no expenses in the current month)")
     else:
-        out.append("| Data | Descrição | Categoria | Origem | Valor | Paga? | Recorrente? |")
+        out.append("| Date | Description | Category | Source | Amount | Paid? | Recurring? |")
         out.append("|---|---|---|---|---:|:---:|:---:|")
         for t in top_tx:
             d = (t.get("date") or "")[:10]
             desc = (t.get("description") or "?").replace("|", "/")[:48]
-            cat_name = cats.get(t.get("category_id")) or "Sem categoria"
+            cat_name = cats.get(t.get("category_id")) or "Uncategorized"
             if t.get("credit_card_id"):
                 origin = f"💳 {cards_by_id.get(t.get('credit_card_id')) or '?'}"
             else:
@@ -435,29 +426,29 @@ def summarize(snapshot: dict) -> str:
             out.append(f"| {d} | {desc} | {cat_name} | {origin} | {amt} | {paid} | {rec} |")
     out.append("")
 
-    # === Categorias-alvo para pesquisa de mercado (top 3 ex-faturas) ===
-    out.append("## Categorias-alvo para pesquisa de mercado (TARGET-WEBSEARCH)")
+    # === Target categories for market research (top 3 ex-invoices) ===
+    out.append("## Target categories for market research (TARGET-WEBSEARCH)")
     out.append("")
-    out.append("Top 3 categorias de gasto efetivo do mês (excluindo pagamentos "
-               "de fatura). **Para cada uma, você DEVE rodar 1 `WebSearch` "
-               "buscando alternativas mais baratas considerando a `cidade` do "
-               "perfil do usuário** (regra inviolável 14). Apresente o resultado "
-               "na seção 'Alternativas de mercado' do relatório com URL + preço "
-               "encontrado. Se não houver alternativa razoável, marque "
-               "`(sem alternativa encontrada)`.")
+    out.append("Top 3 effective spending categories of the month (excluding invoice "
+               "payments). **For each one, you MUST run 1 `WebSearch` "
+               "looking for cheaper alternatives considering the `cidade` from "
+               "the user profile** (non-negotiable rule 14). Present the result "
+               "in the 'Market alternatives' section of the report with URL + price "
+               "found. If no reasonable alternative exists, mark "
+               "`(no alternative found)`.")
     out.append("")
     targets = top_categories_effective(snapshot, limit=3)
     if not targets:
-        out.append("- (sem categorias de gasto efetivo no mês corrente)")
+        out.append("- (no effective spending categories in the current month)")
     else:
         for cat_name, total in targets:
             median = category_median_6m(snapshot, cat_name)
             out.append(f"### TARGET-WEBSEARCH: {cat_name}")
-            out.append(f"- Total mês: **{cents_to_brl(total)}** · "
-                       f"mediana 6m: {cents_to_brl(median)}")
+            out.append(f"- Month total: **{cents_to_brl(total)}** · "
+                       f"6m median: {cents_to_brl(median)}")
             top5 = top_transactions_of_category(snapshot, cat_name, limit=5)
             if top5:
-                out.append("- Top 5 transações desta categoria no mês:")
+                out.append("- Top 5 transactions in this category this month:")
                 for t in top5:
                     d = (t.get("date") or "")[:10]
                     desc = (t.get("description") or "?")[:60]
@@ -465,7 +456,7 @@ def summarize(snapshot: dict) -> str:
             out.append("")
     out.append("")
 
-    out.append("## Orçamento do mês corrente (metas vs. realizado)")
+    out.append("## Current month budget (targets vs. actuals)")
     cur_key_y = today.year
     cur_key_m = today.month
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
@@ -483,7 +474,7 @@ def summarize(snapshot: dict) -> str:
     for name, spent, budget, pct in sorted(rows, key=lambda x: -x[3])[:15]:
         out.append(f"- {name}: {cents_to_brl(spent)} / {cents_to_brl(budget)} ({pct:.0f}%)")
     if not rows:
-        out.append("- (sem metas definidas)")
+        out.append("- (no budget targets defined)")
 
     return "\n".join(out)
 
@@ -492,7 +483,7 @@ _SHARED_SCRIPTS = pathlib.Path(__file__).resolve().parent.parent / "scripts"
 
 
 def load_memory_block() -> str:
-    """Lê ~/finance/memory.md e devolve um bloco renderizado para injeção."""
+    """Read ~/finance/memory.md and return a rendered block for injection."""
     mem_path = pathlib.Path.home() / "finance" / "memory.md"
     if not mem_path.exists():
         return ""
@@ -509,11 +500,11 @@ def load_memory_block() -> str:
 
 
 def load_profile_block() -> str:
-    """Lê ~/finance/profile.md e devolve um bloco renderizado para injeção.
+    """Read ~/finance/profile.md and return a rendered block for injection.
 
-    Sempre renderiza algo: se o perfil não existe, mostra o bloco com todos os
-    campos marcados (sem dados) — isso sinaliza ao subagent para emitir
-    [PERGUNTA] no relatório final."""
+    Always renders something: if the profile does not exist, shows the block with
+    all fields marked (no data) — this signals the subagent to emit [QUESTION]
+    in the final report."""
     import subprocess
     script = _SHARED_SCRIPTS / "profile.py"
     try:
@@ -527,7 +518,7 @@ def load_profile_block() -> str:
 
 
 def load_plans_block() -> str:
-    """Lê ~/finance/plans.md e devolve um bloco renderizado para injeção."""
+    """Read ~/finance/plans.md and return a rendered block for injection."""
     plans_path = pathlib.Path.home() / "finance" / "plans.md"
     if not plans_path.exists():
         return ""
@@ -544,10 +535,10 @@ def load_plans_block() -> str:
 
 
 def list_research_targets(snapshot: dict, limit: int = 3) -> list[dict]:
-    """Devolve as N categorias-alvo para pesquisa de mercado paralela.
+    """Return the N target categories for parallel market research.
 
-    Cada item: {name, total_cents, median_6m_cents, top_txs: [(date, desc, amount_cents), ...]}.
-    Excluindo categorias de pagamento de fatura (filtro `_is_invoice_category_name`)."""
+    Each item: {name, total_cents, median_6m_cents, top_txs: [(date, desc, amount_cents), ...]}.
+    Excludes invoice payment categories (filter `_is_invoice_category_name`)."""
     targets = top_categories_effective(snapshot, limit=limit)
     out: list[dict] = []
     for name, total in targets:
@@ -567,7 +558,7 @@ def list_research_targets(snapshot: dict, limit: int = 3) -> list[dict]:
 
 
 def _profile_city() -> str:
-    """Lê cidade do perfil; '(sem dados)' se vazio."""
+    """Read cidade from profile; '(no data)' if empty."""
     import subprocess
     script = _SHARED_SCRIPTS / "profile.py"
     try:
@@ -576,13 +567,13 @@ def _profile_city() -> str:
             capture_output=True, text=True, timeout=5,
         )
         v = (r.stdout or "").strip()
-        return v if v else "(sem dados)"
+        return v if v else "(no data)"
     except Exception:
-        return "(sem dados)"
+        return "(no data)"
 
 
 def render_list_targets(snapshot: dict) -> str:
-    """Saída pipe-delimited para consumo do organizze.md (disparo paralelo)."""
+    """Pipe-delimited output for consumption by organizze.md (parallel dispatch)."""
     city = _profile_city()
     lines: list[str] = [f"profile|cidade|{city}"]
     for tgt in list_research_targets(snapshot):
@@ -598,13 +589,12 @@ def render_list_targets(snapshot: dict) -> str:
 
 
 def load_research_block(research_dir: pathlib.Path | None) -> str:
-    """Lê os arquivos `<slug>.md` em `research_dir/` (resultados pré-coletados
-    por agentes search-specialist em paralelo) e devolve bloco markdown pronto
-    pra anexar ao prompt do analyst.
+    """Read `<slug>.md` files in `research_dir/` (results pre-collected by
+    parallel search-specialist agents) and return a markdown block ready to
+    append to the analyst prompt.
 
-    Cada arquivo é um relatório de pesquisa de uma categoria. Mostra mtime de
-    cada arquivo (ISO) pra o subagent saber se é fresh ou reaproveitado do
-    cache.
+    Each file is a research report for one category. Shows mtime (ISO) of
+    each file so the subagent knows whether it is fresh or reused from cache.
     """
     if not research_dir or not research_dir.exists():
         return ""
@@ -613,20 +603,20 @@ def load_research_block(research_dir: pathlib.Path | None) -> str:
         return ""
     today = dt.date.today()
     out: list[str] = []
-    out.append("# Pesquisa de mercado (PRÉ-COLETADA — NÃO REFAÇA WebSearch)")
+    out.append("# Market research (PRE-COLLECTED — DO NOT REDO WebSearch)")
     out.append("")
-    out.append("Cada categoria abaixo foi pesquisada por um agente "
-               "`search-specialist` dedicado, ANTES desta análise. Pesquisas "
-               "recentes são reaproveitadas do cache (TTL ~14 dias) — a data "
-               "de coleta está no header de cada bloco. **Consuma estes "
-               "resultados** na seção 'Alternativas de mercado' do relatório.")
+    out.append("Each category below was researched by a dedicated "
+               "`search-specialist` agent, BEFORE this analysis. Recent searches "
+               "are reused from cache (TTL ~14 days) — the collection date "
+               "is in the header of each block. **Consume these "
+               "results** in the 'Market alternatives' section of the report.")
     out.append("")
     for f in files:
         try:
             mtime = dt.date.fromtimestamp(f.stat().st_mtime)
             age = (today - mtime).days
-            age_str = f"hoje" if age == 0 else f"{age}d"
-            out.append(f"## {f.stem} _(coletado em {mtime.isoformat()} · há {age_str})_")
+            age_str = f"today" if age == 0 else f"{age}d ago"
+            out.append(f"## {f.stem} _(collected on {mtime.isoformat()} · {age_str})_")
         except OSError:
             out.append(f"## {f.stem}")
         out.append("")
@@ -636,13 +626,13 @@ def load_research_block(research_dir: pathlib.Path | None) -> str:
 
 
 def find_cached_research(category: str, max_age_days: int = 14) -> pathlib.Path | None:
-    """Procura o arquivo `<category>.md` mais recente em todos os research dirs
-    históricos (`~/finance/organizze/research/*/`). Retorna path se mtime <=
-    max_age_days, senão None.
+    """Search for the most recent `<category>.md` file across all historical
+    research dirs (`~/finance/organizze/research/*/`). Returns path if mtime <=
+    max_age_days, otherwise None.
 
-    Comparação por nome literal — o organizze.md grava cada relatório com o
-    nome exato da categoria (`Alimentação.md`, `Transporte.md`), então um hit
-    aqui significa pesquisa fresca pra essa categoria específica.
+    Comparison is by literal name — organizze.md writes each report with the
+    exact category name (`Alimentação.md`, `Transporte.md`), so a hit here
+    means fresh research for that specific category.
     """
     base = pathlib.Path.home() / "finance" / "organizze" / "research"
     if not base.exists():
@@ -668,7 +658,7 @@ def find_cached_research(category: str, max_age_days: int = 14) -> pathlib.Path 
 
 
 def render_cashflow_block(snapshot: dict) -> str:
-    """Roda cashflow.per_account_projection e devolve markdown pronto."""
+    """Run cashflow.per_account_projection and return ready markdown."""
     try:
         sys.path.insert(0, str(pathlib.Path(__file__).parent))
         from cashflow import per_account_projection, render_markdown
@@ -676,7 +666,7 @@ def render_cashflow_block(snapshot: dict) -> str:
         proj = per_account_projection(snapshot, threshold_cents=threshold_cents(), horizon_days=90)
         return render_markdown(proj).strip()
     except Exception as e:
-        return f"## Fluxo por conta\n_(erro ao computar projeção: {e})_"
+        return f"## Cash flow per account\n_(error computing projection: {e})_"
 
 
 def render_prompt(snapshot: dict, framework_md: str,
@@ -692,154 +682,154 @@ def render_prompt(snapshot: dict, framework_md: str,
     plans_section = f"\n---\n\n{plans_block}\n" if plans_block else ""
     research_section = f"\n---\n\n{research_block}\n" if research_block else ""
 
-    # Lista de nomes de contas existentes (para guardrail de transferências)
+    # List of existing account names (for transfer guardrail)
     existing_accounts = [a.get("name") for a in (snapshot.get("accounts") or [])
                          if not a.get("archived") and a.get("type")]
-    accounts_hint = ", ".join(f"`{n}`" for n in existing_accounts if n) or "(nenhuma)"
+    accounts_hint = ", ".join(f"`{n}`" for n in existing_accounts if n) or "(none)"
 
     return f"""{system}
 {profile_section}{memory_section}{plans_section}{research_section}
 ---
 
-# Dados consolidados (Organizze)
+# Consolidated data (Organizze)
 
 {summary}
 
 ---
 
-# Diretrizes obrigatórias
+# Mandatory guidelines
 
-1. **Metas por categoria**: o Organizze já define orçamento por categoria (seção "Orçamento do mês corrente"). Sua análise DEVE priorizar atingir essas metas — destaque categorias acima de 80% do orçamento como risco e categorias bem abaixo como oportunidade de realocação.
+1. **Budget targets by category**: Organizze already defines a budget per category (section "Current month budget"). Your analysis MUST prioritize hitting those targets — highlight categories above 80% of budget as risk and categories well below as reallocation opportunities.
 
-2. **Objetivos do usuário** (seção acima, se houver): avalie ad-hoc se há espaço no mês para cada objetivo a partir do **saldo atual + tx_future**, sem pressupor aporte mensal fixo. Para cada objetivo `active` diga claramente: "viável neste mês: SIM/NÃO/PARCIAL — R$ X possível", com justificativa numérica.
+2. **User objectives** (section above, if any): evaluate ad-hoc whether there is room in the month for each objective from the **current balance + tx_future**, without assuming a fixed monthly contribution. For each `active` objective state clearly: "viable this month: YES/NO/PARTIAL — R$ X possible", with numerical justification.
 
-3. **Conflito objetivo vs. débito iminente**: se algum dia crítico aparece em qualquer conta principal (seção "Fluxo por conta"), **pause objetivos com priority=negociavel neste ciclo** e nomeie-os explicitamente em "Objetivos pausados". Objetivos com priority=inegociavel devem ser mantidos cortando gastos em outras categorias.
+3. **Objective vs. imminent debit conflict**: if any critical day appears in any main account (section "Cash flow per account"), **pause objectives with priority=negociavel this cycle** and name them explicitly in "Paused objectives". Objectives with priority=inegociavel must be maintained by cutting spending in other categories.
 
-4. **Transferências inter-contas (GUARDRAIL ESTRITO)**: contas que EXISTEM neste snapshot: {accounts_hint}. Toda sugestão de transferência deve nomear **duas dessas contas** e cobrir débito específico com data. Se o objetivo do usuário cita uma conta-alvo que NÃO está na lista acima, NÃO invente: diga "reserve R$ X para Y" sem nomear conta.
+4. **Inter-account transfers (STRICT GUARDRAIL)**: accounts that EXIST in this snapshot: {accounts_hint}. Every transfer suggestion must name **two of these accounts** and cover a specific debit with a date. If the user's objective cites a target account NOT in the list above, do NOT invent: say "reserve R$ X for Y" without naming an account.
 
-5. **Saldo dia-a-dia da origem (REGRA CRÍTICA)**: ao sugerir transferência da conta A para a conta B na data D, **a conta A precisa ter saldo ≥ valor sugerido em D E permanecer ≥ 0 até o fim do horizonte projetado** (não basta cobrir D — precisa cobrir D, D+1, …, até o último débito confirmado da conta A no ciclo). Use a seção "Fluxo por conta" para validar — se o dia D aparece com `❌ nenhuma conta principal com folga suficiente`, ou se a lista `contas com folga nesse dia` não inclui A com valor suficiente, ou se A tem débito futuro confirmado (financiamento, fatura, débito automático) entre D e o fim do horizonte que estoura o saldo pós-transferência, **NÃO sugira essa transferência**. Em vez disso:
-   (a) adie a transferência para a primeira data em que A tem folga sustentável (ex.: após entrada salário/receita confirmada E antes do próximo grande débito);
-   (b) proponha renegociar/postergar o débito da conta destino para depois da próxima entrada;
-   (c) sugira reordenar pagamentos do mês para encaixar no fluxo.
-   Sempre cite **o saldo de origem na data E o saldo projetado da origem no fim do ciclo** ("<conta origem> em DD/MM: R$ X · fim do ciclo: R$ Y") como evidência. Refazer a conta dia-a-dia mentalmente é OBRIGATÓRIO — não basta confiar em "folga nesse dia" do snapshot, porque a coluna `contas com folga nesse dia` mostra o saldo NA DATA, sem subtrair os débitos futuros confirmados.
+5. **Day-by-day source balance (CRITICAL RULE)**: when suggesting a transfer from account A to account B on date D, **account A must have balance ≥ suggested amount on D AND remain ≥ 0 until the end of the projected horizon** (not just D — needs to cover D, D+1, …, until the last confirmed debit of account A in the cycle). Use the "Cash flow per account" section to validate — if day D appears with `❌ no main account with sufficient slack`, or the `accounts with slack on that day` list does not include A with sufficient amount, or A has a confirmed future debit (financing, invoice, automatic debit) between D and the end of the horizon that overdraws the post-transfer balance, **DO NOT suggest that transfer**. Instead:
+   (a) delay the transfer to the first date on which A has sustainable slack (e.g.: after a confirmed salary/income entry AND before the next large debit);
+   (b) propose renegotiating/deferring the destination account's debit to after the next income entry;
+   (c) suggest reordering the month's payments to fit the cash flow.
+   Always cite **the source balance on the date AND the projected source balance at end of cycle** ("<source account> on DD/MM: R$ X · end of cycle: R$ Y") as evidence. Mentally redoing the day-by-day math is MANDATORY — do not just rely on "slack on that day" from the snapshot, because the `accounts with slack on that day` column shows the balance ON THE DATE, without subtracting confirmed future debits.
 
-5b. **Transferência recorrente já existente é a padrão — NÃO duplique** (REGRA CRÍTICA). Antes de sugerir QUALQUER transferência entre contas, cheque a seção "Lançamentos futuros confirmados" e "Transações recorrentes detectadas" para identificar transferências recorrentes já programadas (ex.: repasse mensal entre conta de salário e conta operacional, ou aportes recorrentes em cofrinhos). Se a transferência recorrente já cobre o saldo da conta-destino no ciclo (conta-destino projetada fica ≥ 0 sem aporte adicional), **não recomende transferências extras** — elas são redundantes e furam a conta-origem que está contando com o caixa para outros débitos próprios. Cite explicitamente: "transferência recorrente de R$ X em <data> já cobre <conta destino> — sem necessidade de aporte adicional". Os "dias críticos" da conta-destino podem ser falso-positivo quando o `cashflow_by_account` não casa o crédito da transferência paired com o débito da outra ponta — valide sempre refazendo a conta-destino dia-a-dia COM os créditos das transferências internas no mesmo dia em que elas saem da origem.
+5b. **Existing recurring transfer is the default — DO NOT duplicate** (CRITICAL RULE). Before suggesting ANY inter-account transfer, check the "Confirmed future entries" and "Detected recurring transactions" sections to identify already-scheduled recurring transfers (e.g.: monthly allocation between salary account and operating account, or recurring contributions to savings pots). If the recurring transfer already covers the destination account balance in the cycle (destination projected ≥ 0 without additional contribution), **do not recommend extra transfers** — they are redundant and drain the source account which is counting on that cash for its own debits. Cite explicitly: "recurring transfer of R$ X on <date> already covers <destination account> — no additional contribution needed". Critical days on the destination account may be false positives when `cashflow_by_account` does not match the transfer credit with the debit on the other side — always validate by redoing the destination day-by-day WITH the internal transfer credits on the same day they leave the source.
 
-6. **Renegociação de vencimentos (use quando o fluxo não fecha)**: se um débito recorrente cai sistematicamente em data sem caixa (ex.: assinatura dia 5 quando salário cai dia 6), recomende **alterar a data de vencimento** ou **mudar a forma de pagamento** (débito em conta → cartão, antecipa boleto, etc.). Inclua no formato:
-   `[RENEGOCIAR · <credor>] Mover vencimento de <data atual> para <data sugerida> — motivo: caixa em <data atual> é R$ X, insuficiente para débito de R$ Y`.
+6. **Due date renegotiation (use when cash flow does not close)**: if a recurring debit consistently falls on a date with no cash (e.g.: subscription on day 5 when salary arrives on day 6), recommend **changing the due date** or **changing the payment method** (bank debit → card, prepay bill, etc.). Include in format:
+   `[RENEGOTIATE · <creditor>] Move due date from <current date> to <suggested date> — reason: cash on <current date> is R$ X, insufficient for debit of R$ Y`.
 
-7. **Tom**: sem floreio, sem hedge. Números primeiro, recomendação depois.
+7. **Tone**: no fluff, no hedging. Numbers first, recommendation after.
 
-8. **Personalização via perfil (CRÍTICO)**: o bloco "Perfil do usuário" no topo traz idade, renda, dependentes, moradia, cidade, tolerância a risco. **Toda recomendação cita ao menos um campo do perfil**. Ex.: "para alguém com `2 filhos pequenos` em `São Paulo, SP` financiando casa (`R$ 2.500/mês`), reserva mínima sugerida = 6 meses de despesas (~R$ X)". Se algum campo crítico estiver `(sem dados)`, emita uma `[PERGUNTA]` no bloco final.
+8. **Personalization via profile (CRITICAL)**: the "User profile" block at the top has age, income, dependents, housing, city, risk tolerance. **Every recommendation cites at least one profile field**. Ex.: "for someone with `2 small children` in `São Paulo, SP` financing a home (`R$ 2,500/month`), suggested minimum reserve = 6 months of expenses (~R$ X)". If any critical field is `(no data)`, emit a `[QUESTION]` in the final block.
 
-9. **Cortes merchant-level (3-5 obrigatórios)**: usando a tabela "Top 20 transações do mês corrente", identifique 3-5 transações específicas para cortar/substituir. Cada item no formato `[CORTE] <merchant/descrição> · R$ X/mês → alternativa Y · economia R$ Z/mês · R$ Z*12/ano`. Use a `descrição` real do snapshot, não invente nome de merchant.
+9. **Merchant-level cuts (3-5 mandatory)**: using the "Top 20 transactions of the current month" table, identify 3-5 specific transactions to cut/substitute. Each item in format `[CUT] <merchant/description> · R$ X/month → alternative Y · savings R$ Z/month · R$ Z*12/year`. Use the real `description` from the snapshot, do not invent merchant names.
 
-10. **Pesquisa de mercado — CONSUMA, NÃO REFAÇA.** O comando que te invocou disparou agentes `search-specialist` em paralelo (1 por categoria-alvo) ANTES desta análise; os resultados estão no bloco "Pesquisa de mercado (PRÉ-COLETADA)" acima — se esse bloco existe, **use-o** na seção 'Alternativas de mercado' (cite URLs e preços direto dele, não invoque WebSearch). **Use WebSearch apenas como fallback** quando esse bloco estiver ausente OU não cobrir uma categoria-alvo específica — nesse caso faça no máximo 1 busca extra por categoria descoberta. Sem fonte útil = `(sem alternativa encontrada)`.
+10. **Market research — CONSUME, DO NOT REDO.** The command that invoked you dispatched `search-specialist` agents in parallel (1 per target category) BEFORE this analysis; the results are in the "Market research (PRE-COLLECTED)" block above — if that block exists, **use it** in the 'Market alternatives' section (cite URLs and prices directly from it, do not invoke WebSearch). **Use WebSearch only as fallback** when that block is absent OR does not cover a specific target category — in that case run at most 1 extra search per discovered category. No useful source = `(no alternative found)`.
 
-11. **Quitação priorizada**: liste parcelamentos e dívidas detectáveis no snapshot ordenados por estratégia escolhida: **avalanche** (maior juros/parcela primeiro — racional, economiza mais) ou **snowball** (menor saldo primeiro — psicológico, motiva). Escolha pela `tolerancia_risco` do perfil (`conservador`/`moderado` → snowball; `agressivo` → avalanche). Respeite memória do usuário (não propor quitar item marcado "não-negociável" ou "essencial").
+11. **Prioritized payoff**: list installments and debts detectable in the snapshot ordered by chosen strategy: **avalanche** (highest interest/payment first — rational, saves more) or **snowball** (lowest balance first — psychological, motivating). Choose by `tolerancia_risco` from profile (`conservador`/`moderado` → snowball; `agressivo` → avalanche). Respect user memory (do not propose paying off items marked "non-negotiable" or "essential").
 
-12. **Perguntas em aberto (bloco final)**: ao final do relatório, liste **até 3 perguntas concretas** que melhorariam a próxima análise, no formato exato `[PERGUNTA] <texto da pergunta>` (uma por linha, sem bullets nem hifens à frente). Exemplos: "[PERGUNTA] Você tem alguma dívida fora do Organizze (financiamento, empréstimo família)?", "[PERGUNTA] A assinatura X de R$ Y é essencial?". O comando que te invocou vai capturar essas perguntas e levar ao usuário. Sem perguntas? Escreva apenas: `(sem perguntas em aberto)`.
+12. **Open questions (final block)**: at the end of the report, list **up to 3 concrete questions** that would improve the next analysis, in the exact format `[QUESTION] <question text>` (one per line, no bullets or hyphens in front). Examples: "[QUESTION] Do you have any debt outside Organizze (financing, family loan)?", "[QUESTION] Is subscription X of R$ Y essential?". The command that invoked you will capture these questions and bring them to the user. No questions? Write only: `(no open questions)`.
 
 ---
 
-# Tarefa — produza EXATAMENTE este formato
+# Task — produce EXACTLY this format
 
-**TL;DR** (3 linhas): situação atual + risco mais próximo + maior oportunidade.
+**TL;DR** (3 lines): current situation + nearest risk + biggest opportunity.
 
-**Números-chave** (tabela markdown): saldo atual, projeção 7/30/90d, % comprometido com recorrentes,
-parcelamentos em curso (total restante), atrasadas (despesa/receita), maior categoria do mês, fatura mais próxima, nº de dias críticos por conta.
+**Key numbers** (markdown table): current balance, 7/30/90d projection, % committed to recurring,
+active installments (total remaining), overdue (expense/income), largest category this month, nearest invoice, number of critical days per account.
 
-**Atrasadas — ação imediata** (≤3 bullets): para cada transação atrasada relevante, indique
-"pagar/cobrar até <data>".
+**Overdue — immediate action** (≤3 bullets): for each relevant overdue transaction, indicate
+"pay/collect by <date>".
 
-**Metas de categoria — status** (≤5 bullets): categorias em risco (>80% gasto) e categorias com folga relevante. Use os números da seção "Orçamento do mês corrente".
+**Category targets — status** (≤5 bullets): categories at risk (>80% spent) and categories with relevant slack. Use numbers from the "Current month budget" section.
 
-**Objetivos do usuário — viabilidade neste mês** (1 bullet por objetivo ativo): nome curto · viável SIM/NÃO/PARCIAL · valor possível neste mês · justificativa em 1 linha. Se não há objetivos ativos, escreva "(sem objetivos ativos)".
+**User objectives — viability this month** (1 bullet per active objective): short name · viable YES/NO/PARTIAL · amount possible this month · justification in 1 line. If no active objectives, write "(no active objectives)".
 
-**Plano de transferências e poupança** (≤5 bullets): para cada dia crítico relevante OU objetivo viável, formato:
+**Transfer and savings plan** (≤5 bullets): for each relevant critical day OR viable objective, format:
 ```
-[CRÍTICO · em <data>] Transferir R$ X de "<conta origem>" para "<conta destino>"
-  Saldo origem em <data>: R$ Y  ← obrigatório, deve ser ≥ X
-  Motivo: <débito específico em <data> deixa destino em <valor>>
+[CRITICAL · on <date>] Transfer R$ X from "<source account>" to "<destination account>"
+  Source balance on <date>: R$ Y  ← mandatory, must be ≥ X
+  Reason: <specific debit on <date> leaves destination at <amount>>
 ```
-ou
+or
 ```
-[RENEGOCIAR · <credor>] Mover vencimento/forma de pagamento de <data atual> para <data sugerida>
-  Caixa em <data atual>: R$ Y (insuficiente p/ débito R$ Z)
-  Alvo: encaixar débito em data com folga ≥ R$ Z
+[RENEGOTIATE · <creditor>] Move due date/payment method from <current date> to <suggested date>
+  Cash on <current date>: R$ Y (insufficient for debit R$ Z)
+  Target: fit debit on a date with slack ≥ R$ Z
 ```
-ou
+or
 ```
-[POUPANÇA · neste mês] Reservar R$ X para "<conta destino se existe>" OU "<objetivo Y>" se conta não cadastrada
-  Origem: <conta com folga ou sobra mensal>
+[SAVINGS · this month] Reserve R$ X for "<destination account if it exists>" OR "<objective Y>" if account not registered
+  Source: <account with slack or monthly surplus>
 ```
-**Regras**: (a) apenas use contas da lista de existentes; (b) nunca sugira transferência da conta A em data D se a seção "Fluxo por conta" indica que A não tem folga em D; (c) quando nenhuma conta tem folga no dia crítico, prefira `[RENEGOCIAR]` em vez de `[CRÍTICO]`. Se não há ação clara, escreva "(sem ações de transferência necessárias)".
+**Rules**: (a) only use accounts from the existing list; (b) never suggest transfer from account A on date D if the "Cash flow per account" section indicates A has no slack on D; (c) when no account has slack on the critical day, prefer `[RENEGOTIATE]` over `[CRITICAL]`. If no clear action, write "(no transfer actions needed)".
 
-**Objetivos pausados neste ciclo** (≤3 bullets, omita se vazio): nome do objetivo + razão (dia crítico em <data> ou meta de categoria em risco).
+**Paused objectives this cycle** (≤3 bullets, omit if empty): objective name + reason (critical day on <date> or category target at risk).
 
-**Parcelamentos — visão acionável** (≤5 bullets): destaque as que estão "acabando" e as "longe do fim". Não sugira renegociar parcelas que a memória do usuário explicitamente exclui.
+**Installments — actionable view** (≤5 bullets): highlight those that are "almost done" and those "long way to go". Do not suggest renegotiating installments that user memory explicitly excludes.
 
-**Cortes específicos sugeridos** (3-5 itens, formato `[CORTE]`): usando a tabela "Top 20 transações do mês corrente" e "Transações recorrentes detectadas", identifique gastos cortáveis ou substituíveis. Formato exato:
+**Specific cuts suggested** (3-5 items, format `[CUT]`): using the "Top 20 transactions of the current month" and "Detected recurring transactions" tables, identify cuttable or substitutable spending. Exact format:
 ```
-[CORTE] <descrição/merchant do snapshot> · R$ X/mês
-  Alternativa: <substituto concreto>
-  Economia: R$ Z/mês · R$ Z*12/ano
-  Justificativa: <1 linha citando perfil ou memória>
+[CUT] <description/merchant from snapshot> · R$ X/month
+  Alternative: <concrete substitute>
+  Savings: R$ Z/month · R$ Z*12/year
+  Justification: <1 line citing profile or memory>
 ```
-Se nada cortável (perfil já enxuto), escreva `(sem cortes recomendados — gasto já alinhado ao perfil)` e explique por quê em 1 linha.
+If nothing to cut (profile already lean), write `(no cuts recommended — spending already aligned with profile)` and explain why in 1 line.
 
-**Quitação priorizada** (lista ordenada, 1 linha por item): para cada parcelamento/dívida detectável no snapshot, ordene pela estratégia escolhida (avalanche ou snowball) e cite a primeira linha justificando a escolha pela `tolerancia_risco` do perfil. Formato:
+**Prioritized payoff** (ordered list, 1 line per item): for each installment/debt detectable in the snapshot, order by chosen strategy (avalanche or snowball) and cite the first line justifying the choice by the `tolerancia_risco` from the profile. Format:
 ```
-Estratégia: avalanche|snowball — escolhida pela tolerância `<valor>` do perfil.
-1. <descrição parcelamento/dívida> · R$ X restantes · <faltam N parcelas> · prioridade <Y>
+Strategy: avalanche|snowball — chosen by profile tolerance `<value>`.
+1. <installment/debt description> · R$ X remaining · <N installments left> · priority <Y>
 2. ...
 ```
-Se não houver dívidas elegíveis (zero parcelamentos ativos), escreva `(sem dívidas elegíveis para quitação acelerada)`.
+If no eligible debts (zero active installments), write `(no eligible debts for accelerated payoff)`.
 
-**Alternativas de mercado** (1 bloco por categoria-alvo `TARGET-WEBSEARCH`): para cada uma das top 3 categorias, mostre o resultado da pesquisa WebSearch. Formato:
+**Market alternatives** (1 block per `TARGET-WEBSEARCH` category): for each of the top 3 categories, show the WebSearch result. Format:
 ```
-### <Categoria>: <opção mais barata encontrada> · ~R$ X/mês
-  Fonte: <URL>
-  Economia potencial vs. atual: R$ Z/mês
-  Observação: <ressalva se cabível, ex.: 'preço varia por bairro'>
+### <Category>: <cheapest option found> · ~R$ X/month
+  Source: <URL>
+  Potential savings vs. current: R$ Z/month
+  Note: <caveat if applicable, e.g.: 'price varies by neighborhood'>
 ```
-Se WebSearch não retornou nada útil, escreva `(sem alternativa encontrada para <categoria>)`.
+If WebSearch returned nothing useful, write `(no alternative found for <category>)`.
 
-**3 recomendações priorizadas** no formato:
+**3 prioritized recommendations** in format:
 ```
-[ALTO/MÉDIO IMPACTO · BAIXO/MÉDIO ESFORÇO] <título curto>
-  Economia/ganho: <valor mensal · anual>
-  Evidência: <transações/categorias específicas dos dados acima>
-  Ação: <passo concreto>
-  Por que pra você: <referência ao perfil — idade, renda, dependentes, moradia, etc.>
+[HIGH/MEDIUM IMPACT · LOW/MEDIUM EFFORT] <short title>
+  Savings/gain: <monthly · annual amount>
+  Evidence: <specific transactions/categories from the data above>
+  Action: <concrete step>
+  Why for you: <reference to profile — age, income, dependents, housing, etc.>
 ```
-Nunca proponha algo que contradiga a memória do usuário nem que crie nova conta.
+Never propose something that contradicts user memory or creates a new account.
 
-**Próximos passos verificáveis** (≤3 bullets).
+**Next verifiable steps** (≤3 bullets).
 
-**Perguntas em aberto** (até 3, formato exato `[PERGUNTA] <texto>` — uma por linha, sem hífen/bullet): se algum dado pessoal crítico falta no perfil OU se há ambiguidade sobre um gasto/dívida específico, pergunte aqui. O comando que te invocou vai levar essas perguntas ao usuário e gravar as respostas para a próxima análise. Sem perguntas → escreva `(sem perguntas em aberto)`.
+**Open questions** (up to 3, exact format `[QUESTION] <text>` — one per line, no hyphen/bullet): if any critical personal data is missing from the profile OR if there is ambiguity about a specific expense/debt, ask here. The command that invoked you will bring these questions to the user and record the answers for the next analysis. No questions → write `(no open questions)`.
 
-Termine com o disclaimer: "Isto não é aconselhamento financeiro licenciado."
+End with the disclaimer: "This is not licensed financial advice."
 """
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", required=False,
-                    help="obrigatório exceto quando usando --research-cache-lookup")
+                    help="required except when using --research-cache-lookup")
     ap.add_argument("--framework", default=str(DEFAULT_FRAMEWORK))
     ap.add_argument("--out", default=None)
     ap.add_argument("--research-dir", default=None,
-                    help="dir com relatórios de pesquisa pré-coletada (1 .md por categoria)")
+                    help="dir with pre-collected research reports (1 .md per category)")
     ap.add_argument("--list-targets", action="store_true",
-                    help="apenas imprime as 3 categorias-alvo (pipe-delimited) e sai — "
-                         "consumido pelo organizze.md pra disparar agentes em paralelo")
-    ap.add_argument("--research-cache-lookup", metavar="CATEGORIA",
-                    help="procura relatório recente da categoria nos research dirs "
-                         "históricos; imprime path se hit, vazio se miss. Não precisa de --snapshot.")
+                    help="only prints the 3 target categories (pipe-delimited) and exits — "
+                         "consumed by organizze.md to dispatch agents in parallel")
+    ap.add_argument("--research-cache-lookup", metavar="CATEGORY",
+                    help="searches for a recent report for the category in historical research dirs; "
+                         "prints path if hit, empty if miss. Does not need --snapshot.")
     ap.add_argument("--max-age-days", type=int, default=14,
-                    help="TTL do cache de pesquisa (default 14)")
-    ap.add_argument("--dry-run", action="store_true", help="apenas imprime o prompt")
+                    help="research cache TTL (default 14)")
+    ap.add_argument("--dry-run", action="store_true", help="only prints the prompt")
     args = ap.parse_args()
 
     if args.research_cache_lookup:
@@ -849,7 +839,7 @@ def main() -> int:
         return 0
 
     if not args.snapshot:
-        print("err|missing-arg|--snapshot é obrigatório (exceto --research-cache-lookup)",
+        print("err|missing-arg|--snapshot is required (except --research-cache-lookup)",
               file=sys.stderr)
         return 2
 

@@ -1,61 +1,61 @@
 ---
-description: Gerencia restrições/contexto financeiro que análises futuras devem respeitar.
+description: Manages financial restrictions/context that future analyses must respect.
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "[<texto livre> | list | prune]"
+argument-hint: "[<free text> | list | prune]"
 ---
 
-# /finance:context — Restrições e contexto (provider-agnóstico)
+# /finance:context — Restrictions and context (provider-agnostic)
 
-> **REGRA GLOBAL — perguntas ao usuário:** toda pergunta que exija resposta do usuário deve ser feita via tool `AskUserQuestion`, com 2-4 opções estruturadas (o campo de texto livre "Outro" é automático). **Nunca** faça perguntas inline no texto.
+> **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Wrapper conversacional sobre `commands/finance/scripts/memory.py`. Os dados ficam em `~/finance/memory.md` e são injetados em qualquer análise (Organizze e futuros providers) como diretivas que **a IA não pode contradizer**.
+Conversational wrapper over `commands/finance/scripts/memory.py`. Data lives in `~/finance/memory.md` and is injected into any analysis (Organizze and future providers) as directives that **the AI cannot contradict**.
 
-Path absoluto do script:
+Absolute path of the script:
 `/Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py`
 
-Quando o usuário invocar `/finance:context`, classifique `$ARGUMENTS` e siga o fluxo. Não pré-inspecione filesystem.
+When the user invokes `/finance:context`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
 
 ---
 
-## Modo 1 — Sem args (gerenciar)
+## Mode 1 — No args (manage)
 
-1. Liste as 20 mais recentes:
+1. List the 20 most recent:
    ```bash
    python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py list --recent 20
    ```
 
-2. Mostre ao usuário e pergunte via `AskUserQuestion`:
-   - **A) Adicionar nova restrição** — vá ao Modo 2 pedindo o texto.
-   - **B) Ver tudo** — rode `memory.py list`.
-   - **C) Podar antigas (> 365d)** — rode `memory.py prune --older-than 365`.
-   - **D) Sair**.
+2. Show to the user and ask via `AskUserQuestion`:
+   - **A) Add new restriction** — go to Mode 2 asking for the text.
+   - **B) View all** — run `memory.py list`.
+   - **C) Prune old entries (> 365d)** — run `memory.py prune --older-than 365`.
+   - **D) Exit**.
 
-## Modo 2 — Texto livre (registrar)
+## Mode 2 — Free text (register)
 
-`$ARGUMENTS` traz uma restrição ou contexto (ex.: "remédio X é prescrição médica", "dízimo é não-negociável", "não consigo diminuir parcela da casa").
+`$ARGUMENTS` contains a restriction or context (e.g.: "medication X is a prescription", "tithe is non-negotiable", "I can't reduce the house installment").
 
-1. (Opcional) Sugira uma `--tag` inferida do texto (`saude`, `casa`, `dizimo`, `assinatura`, `dívida`, `metodologia`, ...) via `AskUserQuestion` com opção "Pular".
+1. (Optional) Suggest an inferred `--tag` from the text (`health`, `home`, `tithe`, `subscription`, `debt`, `methodology`, ...) via `AskUserQuestion` with a "Skip" option.
 
-2. Grave:
+2. Save:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py add "<texto>" [--tag <opcional>]
+   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py add "<text>" [--tag <optional>]
    ```
 
-3. Confirme em 1 linha: o que foi gravado e onde (`~/finance/memory.md`). Diga: "Próximo `/finance:organizze` já considera."
+3. Confirm in 1 line: what was saved and where (`~/finance/memory.md`). Say: "Next `/finance:organizze` will take this into account."
 
-## Modo 3 — Sub-comandos diretos
+## Mode 3 — Direct sub-commands
 
-| Argumento              | Comando                                          |
+| Argument               | Command                                          |
 |------------------------|--------------------------------------------------|
-| `list`                 | `memory.py list` (aceita `--recent N` extra)     |
-| `prune`                | `memory.py prune --older-than 365` (ou valor passado) |
+| `list`                 | `memory.py list` (accepts `--recent N` extra)    |
+| `prune`                | `memory.py prune --older-than 365` (or provided value) |
 
-Mostre a saída ao usuário.
+Show the output to the user.
 
 ---
 
-## Regras
+## Rules
 
-- **Não chame `/finance:organizze`** automaticamente. Apenas CRUD.
-- O script roda migração legacy automaticamente na primeira execução (`~/finance-organizze/memory.md` → `~/finance/memory.md`).
-- Storage é editável à mão (`~/finance/memory.md`).
+- **Do not call `/finance:organizze`** automatically. CRUD only.
+- The script runs legacy migration automatically on the first run (`~/finance-organizze/memory.md` → `~/finance/memory.md`).
+- Storage is hand-editable (`~/finance/memory.md`).

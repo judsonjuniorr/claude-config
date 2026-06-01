@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Objetivos financeiros (planos de poupança/economia) — provider-agnósticos.
+"""Financial goals (savings/economy plans) — provider-agnostic.
 
-Mesmo padrão da memory.py: markdown legível em ~/finance/plans.md,
-editável à mão. Cada entrada tem metadados inline no header.
+Same pattern as memory.py: readable markdown in ~/finance/plans.md,
+manually editable. Each entry has inline metadata in the header.
 
 Header format:
-  ## <ts> [target=<cents>][·deadline=<YYYY-MM-DD>][·account=<nome livre>][·category=<nome>][·priority=<negociavel|inegociavel>][·status=<active|done|paused|cancelled>]
+  ## <ts> [target=<cents>][·deadline=<YYYY-MM-DD>][·account=<free name>][·category=<name>][·priority=<negociavel|inegociavel>][·status=<active|done|paused|cancelled>]
 
 Usage:
-  plans.py add "<texto>" --target-cents N [--deadline YYYY-MM-DD] [--account "<nome>"] [--category "<nome>"] [--priority negociavel|inegociavel]
+  plans.py add "<text>" --target-cents N [--deadline YYYY-MM-DD] [--account "<name>"] [--category "<name>"] [--priority negociavel|inegociavel]
   plans.py list [--recent N] [--status active|done|paused|cancelled]
-  plans.py render             # bloco markdown pronto pra injetar no prompt
-  plans.py done <ts>          # marca status=done
-  plans.py status <ts> <novo_status>
+  plans.py render             # markdown block ready to inject into prompt
+  plans.py done <ts>          # mark status=done
+  plans.py status <ts> <new_status>
   plans.py prune --older-than-done 365
 """
 from __future__ import annotations
@@ -98,10 +98,10 @@ def _fmt_header(e: dict) -> str:
 
 def _save(entries: list[dict]) -> None:
     PLANS.parent.mkdir(parents=True, exist_ok=True)
-    out = ["# Objetivos financeiros", "",
-           "Planos de poupança/economia que a IA deve perseguir.",
-           "Editável à mão. Entradas mais recentes no topo.",
-           "Prioridade: `inegociavel` = não pausar mesmo com débito iminente.",
+    out = ["# Financial goals", "",
+           "Savings/economy plans the AI should pursue.",
+           "Manually editable. Most recent entries at top.",
+           "Priority: `inegociavel` = do not pause even with imminent debt.",
            ""]
     for e in sorted(entries, key=lambda x: x["ts"], reverse=True):
         out.append(_fmt_header(e))
@@ -156,7 +156,7 @@ def cmd_list(args) -> int:
     if args.recent:
         entries = entries[: args.recent]
     if not entries:
-        print("(sem objetivos)", file=sys.stderr)
+        print("(no goals)", file=sys.stderr)
         return 0
     for e in entries:
         print(_fmt_header(e))
@@ -170,36 +170,36 @@ def cmd_render(args) -> int:
     if not entries:
         return 0
     today = dt.date.today()
-    print("# Objetivos do usuário (METAS DE POUPANÇA/ECONOMIA — PERSEGUIR)")
+    print("# User goals (SAVINGS/ECONOMY TARGETS — PURSUE)")
     print()
-    print("Cada item é um objetivo financeiro registrado pelo usuário. "
-          "**Avalie ad-hoc se há espaço no mês para cada um** olhando saldo atual + "
-          "tx_future. NÃO assuma aporte mensal fixo. Se um dia crítico aparecer em "
-          "qualquer conta principal, **pause objetivos com priority=negociavel** "
-          "e priorize cobrir o débito; objetivos com priority=inegociavel devem "
-          "ser mantidos cortando gastos em outras categorias.")
+    print("Each item is a financial goal recorded by the user. "
+          "**Evaluate ad-hoc whether there is room in the month for each one** by looking at current balance + "
+          "tx_future. Do NOT assume a fixed monthly contribution. If a critical day appears in "
+          "any main account, **pause goals with priority=negociavel** "
+          "and prioritize covering the debt; goals with priority=inegociavel must "
+          "be maintained by cutting spending in other categories.")
     print()
-    print("Se o objetivo cita uma `account=` que NÃO existe em `accounts` do snapshot, "
-          "NÃO sugira transferência: recomende em formato genérico "
-          "('reserve R$ X para Y'). Toda sugestão de transferência deve nomear "
-          "duas contas que existem no snapshot.")
+    print("If the goal references an `account=` that does NOT exist in the snapshot `accounts`, "
+          "do NOT suggest a transfer: recommend in generic format "
+          "('set aside R$ X for Y'). Every transfer suggestion must name "
+          "two accounts that exist in the snapshot.")
     print()
     for e in sorted(entries, key=lambda x: x["ts"], reverse=True):
         bits = []
         if e.get("target_cents"):
-            bits.append(f"alvo {_brl(e['target_cents'])}")
+            bits.append(f"target {_brl(e['target_cents'])}")
         if e.get("deadline"):
             try:
                 d = dt.date.fromisoformat(e["deadline"])
                 days = (d - today).days
-                bits.append(f"prazo {e['deadline']} ({days}d)")
+                bits.append(f"deadline {e['deadline']} ({days}d)")
             except ValueError:
-                bits.append(f"prazo {e['deadline']}")
+                bits.append(f"deadline {e['deadline']}")
         if e.get("account"):
-            bits.append(f"conta-alvo: {e['account']}")
+            bits.append(f"target-account: {e['account']}")
         if e.get("category"):
-            bits.append(f"categoria: {e['category']}")
-        bits.append(f"prioridade: {e.get('priority')}")
+            bits.append(f"category: {e['category']}")
+        bits.append(f"priority: {e.get('priority')}")
         meta = " · ".join(bits)
         print(f"- ({e['ts']}) [{meta}] {e.get('body', '')}")
     print()

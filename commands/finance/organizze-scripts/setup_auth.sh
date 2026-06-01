@@ -16,7 +16,7 @@ if [ -t 0 ]; then
   read -r EMAIL
   printf "Organizze API token (https://app.organizze.com.br/configuracoes/api-keys): " >&2
   read -r TOKEN
-  printf "Organizze web password (para scraping; guardada no Keychain, não em disco): " >&2
+  printf "Organizze web password (for scraping; stored in Keychain, not on disk): " >&2
   read -rs SENHA
   echo >&2
 else
