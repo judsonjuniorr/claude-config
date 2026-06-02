@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # github-ops PreToolUse/Bash guard.
-# Nudges raw mutation/PR commands (git commit|push, gh|glab pr/issue/release/ci)
-# toward the github-ops scripts. Read-only git (status/diff/log) is left alone —
-# RTK's own hook handles those, so this guard does not overlap.
+# Nudges raw PR/issue/release commands (gh|glab pr/issue/release/ci) toward the
+# github-ops scripts. Raw git commit/push are left alone (handled by normal
+# permission rules); read-only git (status/diff/log) is RTK's own hook — so this
+# guard does not overlap.
 #
 # Severity: "ask" — surfaces the suggested script in a permission prompt; the
 # user can approve the raw command or let Claude re-issue via the script.
@@ -31,7 +32,6 @@ esac
 
 suggest=""
 case "$CMD" in
-  git\ commit*|git\ push*)                       suggest="ship.sh" ;;
   gh\ pr\ *|glab\ mr\ *)                          suggest="pr.sh" ;;
   gh\ issue\ *|glab\ issue\ *)                    suggest="issue.sh" ;;
   gh\ release\ *|gh\ run\ *|gh\ workflow\ *|glab\ ci\ *|glab\ release\ *) suggest="repo.sh" ;;
