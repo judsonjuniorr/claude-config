@@ -149,6 +149,13 @@ Audits UI/UX against a **consolidated** ruleset — Vercel's Web Interface Guide
 - `playwright-headless` MCP server for live validation (optional — falls back to static-only).
 - `context7` MCP server for lib/framework best practices (optional — skips if absent).
 
+## Namespaced suites
+
+Some commands are grouped under a namespace directory, invoked as **`/<namespace>:<name>`** (Claude Code's path-as-namespace convention). Each suite self-documents in its own README:
+
+- [`finance/`](./finance/) — personal finance: [`/finance:organizze`](./finance/), `/finance:goal`, `/finance:context`.
+- [`seo/`](./seo/) — SEO/GEO growth suite: 11 `/seo:*` commands (content-sprint, weekly-audit, indexation-check, geo-optimize, catalog-pages, ctr-tune, conversion-track, backlink-outreach, cost-guard, report, launch) + the `seo-strategist` / `content-engineer` / `technical-seo-auditor` agents. Encodes the Agensi SEO+GEO playbook with the skeptic corrections (CTR & conversion over impressions, indexation gate, GEO weighting, backlinks-are-human, information-gain bar, cost tiering); standalone with optional `toprank` delegation; every command ends at a human gate.
+
 ## Adding a new command
 
 1. Create a subdirectory `commands/<name>/`.
