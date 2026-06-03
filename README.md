@@ -17,18 +17,22 @@ claude-config/
 │   ├── graphify-install/        → see commands/graphify-install/README.md
 │   ├── refactor-code/           → see commands/refactor-code/README.md
 │   ├── release-notes/           → see commands/release-notes/README.md
+│   ├── seo/                     → see commands/seo/README.md (11 /seo:* commands)
 │   └── validate-ui/             → see commands/validate-ui/README.md
 ├── skills/                      # skills
 │   └── github-ops/              → see skills/github-ops/README.md
 └── agents/                      # subagents
     ├── backend-architect.md     → /agent backend-architect
     ├── code-reviewer.md         → /agent code-reviewer
+    ├── content-engineer.md      → /agent content-engineer
     ├── debugger.md              → /agent debugger
     ├── financial-analyst/       → see agents/financial-analyst/README.md
     ├── fullstack-developer.md   → /agent fullstack-developer
     ├── mobile-developer.md      → /agent mobile-developer
     ├── python-pro.md            → /agent python-pro
     ├── search-specialist.md     → /agent search-specialist
+    ├── seo-strategist.md        → /agent seo-strategist
+    ├── technical-seo-auditor.md → /agent technical-seo-auditor
     └── ui-ux-designer.md        → /agent ui-ux-designer
 ```
 
@@ -47,16 +51,20 @@ claude-config/
 | Command | [`/graphify-install`](./commands/graphify-install/README.md) | Bootstrap [graphify](https://github.com/safishamsi/graphify) inside any git repo end-to-end. |
 | Command | [`/refactor-code`](./commands/refactor-code/README.md)       | Safely refactor a file or function with tests-first, incremental changes, and static analysis verification. |
 | Command | [`/release-notes`](./commands/release-notes/README.md)       | Generate a user-friendly changelog (pt-br/en) from commits since the last tag, inline in the chat. |
+| Command | [`/seo:*`](./commands/seo/README.md)                         | SEO/GEO growth suite — 11 `/seo:*` commands encoding the Agensi playbook with skeptic corrections (CTR & conversion over impressions, indexation gate, GEO weighting, backlinks-are-human, information-gain bar, cost tiering). Standalone + optional `toprank`; every command ends at a human gate. |
 | Command | [`/validate-ui`](./commands/validate-ui/README.md)           | Audit UI/UX against a consolidated ruleset (Vercel Web Interface Guidelines + 3 design skills + Context7 lib docs), static plus opportunistic live validation. Read-only. |
 | Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab`. Conventional Commits, pre-commit checks, split detection, PR/issue/CI management. |
 | Agent   | [`backend-architect`](./agents/backend-architect.md)         | Produces architecture documents: OpenAPI specs, database schemas, event schemas, diagrams, and trade-off analyses. Design only — not implementation. |
 | Agent   | [`code-reviewer`](./agents/code-reviewer.md)                 | Senior code reviewer focused on security, correctness, and performance. Detects the project's package manager automatically. |
+| Agent   | [`content-engineer`](./agents/content-engineer.md)           | SEO/GEO content engineer — drafts articles, FAQ schema, quick-answers, internal links, with a hard information-gain gate. Part of the `/seo:*` suite. |
 | Agent   | [`debugger`](./agents/debugger.md)                           | Systematic fault-localization debugger. No fix without root cause. Writes a regression test for every bug fixed. |
 | Agent   | [`financial-analyst`](./agents/financial-analyst/README.md)  | Personal finance analyst subagent — consumes pre-built snapshots, respects user memory, outputs prioritized action plans. |
 | Agent   | [`fullstack-developer`](./agents/fullstack-developer.md)     | End-to-end TypeScript implementation: Next.js 16, React 19+, tRPC, Drizzle ORM, shadcn/ui. UI to database. |
 | Agent   | [`mobile-developer`](./agents/mobile-developer.md)           | Cross-platform mobile with React Native 0.82+, Expo SDK, iOS 18, and Android 15. Performance-first. |
 | Agent   | [`python-pro`](./agents/python-pro.md)                       | Expert Python 3.12+ developer: FastAPI, Polars, uv, ruff, mypy strict, full type coverage. |
 | Agent   | [`search-specialist`](./agents/search-specialist.md)         | Web research with rigorous source evaluation, contradiction handling, and structured findings reports. |
+| Agent   | [`seo-strategist`](./agents/seo-strategist.md)               | Senior SEO/GEO strategist (Opus, no Write) — analyzes GSC exports, makes the call on what to build. Part of the `/seo:*` suite. |
+| Agent   | [`technical-seo-auditor`](./agents/technical-seo-auditor.md) | Parses GSC exports → prioritized fix list + indexation coverage + CTR diagnostics. Part of the `/seo:*` suite. |
 | Agent   | [`ui-ux-designer`](./agents/ui-ux-designer.md)               | Research-driven senior UI/UX designer. Evidence-backed critique, WCAG 2.2 AA, anti-generic aesthetics. |
 
 Each command, skill and agent has its own README with the full reference, examples, and rules.
