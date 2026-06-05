@@ -1,5 +1,5 @@
 ---
-description: Analyze a directory, find duplicates, propose a tidy structure, and reorganize files only after explicit approval.
+description: (herow) Analyze a directory, find duplicates, propose a tidy structure, and reorganize files only after explicit approval.
 argument-hint: "[target-directory] [conservative|comprehensive]"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion
 ---

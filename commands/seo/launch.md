@@ -1,5 +1,5 @@
 ---
-description: Heavy end-to-end orchestrator — bootstrap a NEW project through the whole corrected playbook (strategy → indexation gate → draft → GEO schema → audit) with cost + human gates between every stage. Most expensive command; prefer the individual /seo:* commands unless you are starting from scratch.
+description: (herow) Heavy end-to-end orchestrator — bootstrap a NEW project through the whole corrected playbook (strategy → indexation gate → draft → GEO schema → audit) with cost + human gates between every stage. Most expensive command; prefer the individual /seo:* commands unless you are starting from scratch.
 allowed-tools: Read, Write, Edit, Bash, WebFetch, WebSearch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
 ---

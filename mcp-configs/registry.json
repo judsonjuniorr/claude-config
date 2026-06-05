@@ -20,6 +20,32 @@
         "GITHUB_PERSONAL_ACCESS_TOKEN": "GitHub PAT — create at https://github.com/settings/tokens (repo scope). Or reuse `gh auth token`."
       },
       "note": "GitHub repo/PR/issue access."
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "env": {},
+      "note": "Structured step-by-step reasoning. No key."
+    },
+    "exa-web-search": {
+      "command": "npx",
+      "args": ["-y", "exa-mcp-server"],
+      "env": {
+        "EXA_API_KEY": "Neural web search. Get key at https://exa.ai"
+      },
+      "note": "Neural web search. Get key at https://exa.ai"
+    },
+    "omega-memory": {
+      "command": "uvx",
+      "args": ["omega-memory", "serve"],
+      "env": {},
+      "note": "Persistent memory. No key."
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"],
+      "env": {},
+      "note": "shadcn/ui registry. PROJECT-CONDITIONAL: only add when the project has components.json; write to the project's local .mcp.json, never global."
     }
   }
 }

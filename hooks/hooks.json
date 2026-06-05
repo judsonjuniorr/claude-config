@@ -13,10 +13,35 @@
       ]
     }
   ],
+  "PostToolUse": [
+    {
+      "matcher": "Edit|Write|MultiEdit",
+      "hooks": [
+        { "type": "command", "command": "node {{HOOKS_DIR}}/post-edit-accumulator.js" },
+        { "type": "command", "command": "node {{HOOKS_DIR}}/quality-gate.js" }
+      ]
+    },
+    {
+      "matcher": "Edit",
+      "hooks": [
+        { "type": "command", "command": "node {{HOOKS_DIR}}/post-edit-console-warn.js" }
+      ]
+    }
+  ],
   "Stop": [
     {
       "hooks": [
         { "type": "command", "command": "bash {{HOOKS_DIR}}/stop-guard.sh" }
+      ]
+    },
+    {
+      "hooks": [
+        { "type": "command", "command": "node {{HOOKS_DIR}}/stop-format-typecheck.js" }
+      ]
+    },
+    {
+      "hooks": [
+        { "type": "command", "command": "node {{HOOKS_DIR}}/check-console-log.js" }
       ]
     }
   ]

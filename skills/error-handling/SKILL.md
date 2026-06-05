@@ -1,6 +1,6 @@
 ---
 name: error-handling
-description: Patterns for robust error handling in TypeScript and Python. Covers typed error hierarchies, the Result pattern, API error envelopes, React error boundaries, retries with backoff, and user-facing error messages.
+description: (herow) Patterns for robust error handling in TypeScript and Python. Covers typed error hierarchies, the Result pattern, API error envelopes, React error boundaries, retries with backoff, and user-facing error messages.
 ---
 
 # Error Handling Patterns

@@ -1,5 +1,5 @@
 ---
-description: Pulls data from Organizze via REST API and generates a consolidated financial analysis (balance, projection, recommendations).
+description: (herow) Pulls data from Organizze via REST API and generates a consolidated financial analysis (balance, projection, recommendations).
 allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, mcp__playwright__browser_navigate, mcp__playwright__browser_close, mcp__playwright__browser_snapshot
 argument-hint: "[<free text> | --history-days N | --future-days N | --no-analyze]"
 ---

@@ -1,5 +1,5 @@
 ---
-description: Join GSC search traffic to conversion data, flag high-traffic / low-conversion pages, and gate every action on human approval.
+description: (herow) Join GSC search traffic to conversion data, flag high-traffic / low-conversion pages, and gate every action on human approval.
 allowed-tools: Read, Bash, WebFetch, WebSearch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
 ---

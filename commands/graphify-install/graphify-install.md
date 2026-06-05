@@ -1,5 +1,5 @@
 ---
-description: Bootstraps graphify in a git repository (stack-tuned .graphifyignore, .gitignore, first graph build, optional commit)
+description: (herow) Bootstraps graphify in a git repository (stack-tuned .graphifyignore, .gitignore, first graph build, optional commit)
 allowed-tools: Bash, Read, Write, Edit, AskUserQuestion, Skill
 argument-hint: ""
 ---

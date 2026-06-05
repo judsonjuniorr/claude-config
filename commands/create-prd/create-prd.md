@@ -1,5 +1,5 @@
 ---
-description: Brainstorm and extract every requirement, then generate a Product Requirements Document.
+description: (herow) Brainstorm and extract every requirement, then generate a Product Requirements Document.
 argument-hint: "[feature name or one-line idea]"
 allowed-tools: AskUserQuestion, Read, Write, Glob, Grep, Agent
 ---
