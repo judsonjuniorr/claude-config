@@ -37,9 +37,9 @@
     },
     "omega-memory": {
       "command": "uvx",
-      "args": ["omega-memory", "serve"],
+      "args": ["--from", "omega-memory[server]", "omega", "serve"],
       "env": {},
-      "note": "Persistent memory. No key."
+      "note": "Persistent memory. No key. Executable is `omega` and the MCP server lives behind the [server] extra — `uvx omega-memory serve` fails. For a faster, cache-eviction-proof setup, `uv tool install 'omega-memory[server]'` then point the command at ~/.local/share/uv/tools/omega-memory/bin/omega."
     },
     "shadcn": {
       "command": "npx",
