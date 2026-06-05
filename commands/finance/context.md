@@ -1,5 +1,5 @@
 ---
-description: Manages financial restrictions/context that future analyses must respect.
+description: (herow) Manages financial restrictions/context that future analyses must respect.
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "[<free text> | list | prune]"
 ---

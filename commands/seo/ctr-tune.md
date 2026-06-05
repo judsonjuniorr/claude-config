@@ -1,5 +1,5 @@
 ---
-description: CTR-first SERP tuning — find high-impression/low-CTR queries, rewrite titles + meta to win the click, gated on human approval.
+description: (herow) CTR-first SERP tuning — find high-impression/low-CTR queries, rewrite titles + meta to win the click, gated on human approval.
 allowed-tools: Read, Bash, WebFetch, WebSearch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
 ---

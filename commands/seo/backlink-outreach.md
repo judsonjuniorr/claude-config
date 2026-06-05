@@ -1,5 +1,5 @@
 ---
-description: The human-work command — finds relevant link targets, drafts personalized outreach, and tracks status. Cannot build links or manufacture DR; drafts only, you send.
+description: (herow) The human-work command — finds relevant link targets, drafts personalized outreach, and tracks status. Cannot build links or manufacture DR; drafts only, you send.
 allowed-tools: Read, Write, Edit, WebSearch, WebFetch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
 ---

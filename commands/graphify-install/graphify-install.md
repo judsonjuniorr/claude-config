@@ -1,5 +1,5 @@
 ---
-description: Bootstraps graphify in a git repository (stack-tuned .graphifyignore, .gitignore, first graph build, optional commit)
+description: (herow) Bootstraps graphify in a git repository (stack-tuned .graphifyignore, .gitignore, first graph build, optional commit)
 allowed-tools: Bash, Read, Write, Edit, AskUserQuestion, Skill
 argument-hint: ""
 ---
@@ -277,7 +277,7 @@ done
 git status --short
 ```
 
-**Commit** with a heredoc (follow the Co-Authored-By pattern from the system prompt):
+**Commit** with a heredoc (no AI attribution — never add Co-Authored-By or any Claude reference):
 
 ```bash
 git commit -m "$(cat <<'EOF'
@@ -286,8 +286,6 @@ chore: install graphify
 - add .graphifyignore tuned for detected stack
 - add graphify entries to .gitignore
 - initial knowledge graph build
-
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 EOF
 )"
 ```
