@@ -7,12 +7,20 @@ on:
       - commands/**
       - skills/**
       - agents/**
+      - hooks/**
+      - rules/**
+      - manifests/**
+      - mcp-configs/**
   pull_request:
     paths:
       - install.sh
       - commands/**
       - skills/**
       - agents/**
+      - hooks/**
+      - rules/**
+      - manifests/**
+      - mcp-configs/**
 
 jobs:
   install:
@@ -20,8 +28,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Hook scripts parse + executable
+        run: |
+          for s in hooks/*.sh; do
+            bash -n "$s" || { echo "FAIL: parse error in $s"; exit 1; }
+            [ -x "$s" ] || { echo "FAIL: $s is not executable"; exit 1; }
+          done
+          echo "OK: hook scripts parse and are executable"
+
+      - name: Manifest + registry are valid JSON
+        run: |
+          jq -e . manifests/profiles.json >/dev/null
+          jq -e . mcp-configs/registry.json >/dev/null
+          jq -e . mcp-configs/mcp.template.json >/dev/null
+          echo "OK: JSON valid"
+
       - name: Run install --all
         run: bash install.sh --all
+
+      - name: Doctor passes (symlinks, hooks, rules pointer, manifest ↔ disk)
+        run: bash install.sh --doctor
 
       - name: No README in ~/.claude
         run: |
@@ -44,5 +70,29 @@ jobs:
           done
           echo "OK: all symlinks are absolute"
 
+      - name: Global hooks merged + coexist with github-ops
+        run: |
+          gc=$(jq '[.hooks // {} | .. | strings | select(contains("claude-config-hooks/"))] | length' ~/.claude/settings.json)
+          go=$(jq '[.hooks // {} | .. | strings | select(contains("github-ops/hooks/"))] | length' ~/.claude/settings.json)
+          [ "$gc" -ge 1 ] || { echo "FAIL: claude-config hooks not registered"; exit 1; }
+          [ "$go" -ge 1 ] || { echo "FAIL: github-ops hook not registered"; exit 1; }
+          echo "OK: both hook markers present (claude-config=$gc, github-ops=$go)"
+
+      - name: Hook merge is idempotent (no duplicates on re-install)
+        run: |
+          before=$(jq '[.hooks.PreToolUse[].hooks[].command] | length' ~/.claude/settings.json)
+          bash install.sh --all >/dev/null
+          after=$(jq '[.hooks.PreToolUse[].hooks[].command] | length' ~/.claude/settings.json)
+          [ "$before" = "$after" ] || { echo "FAIL: hook count changed $before -> $after on re-install"; exit 1; }
+          echo "OK: hook count stable at $after"
+
       - name: Run install --all --replace (idempotent)
         run: bash install.sh --all --replace
+
+      - name: Uninstall --all clears the global hooks block
+        run: |
+          bash install.sh uninstall --all
+          left=$(jq '[.hooks // {} | .. | strings | select(contains("claude-config-hooks/"))] | length' ~/.claude/settings.json)
+          [ "$left" = "0" ] || { echo "FAIL: $left claude-config hook entries left after uninstall"; exit 1; }
+          [ ! -e ~/.claude/claude-config-hooks ] || { echo "FAIL: claude-config-hooks symlink not removed"; exit 1; }
+          echo "OK: global hooks cleaned on uninstall"

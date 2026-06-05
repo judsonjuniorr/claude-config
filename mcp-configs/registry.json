@@ -1,0 +1,25 @@
+{
+  "_comment": "Curated MCP server templates. install.sh reads this to print per-server config guidance (required env vars + where to get them). Opt-in only: install.sh NEVER writes secrets and NEVER auto-installs a server. Copy the template into a project .mcp.json or ~/.claude.json yourself.",
+  "servers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {},
+      "note": "Live library docs. No key required."
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {},
+      "note": "Browser automation. No key required. First run downloads browsers."
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "GitHub PAT — create at https://github.com/settings/tokens (repo scope). Or reuse `gh auth token`."
+      },
+      "note": "GitHub repo/PR/issue access."
+    }
+  }
+}

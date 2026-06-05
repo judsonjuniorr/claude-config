@@ -1,0 +1,41 @@
+{
+  "_comment": "Install profiles for install.sh --profile <name>. Each entry is a list of 'type/name' asset identifiers matching install.sh discovery (types: commands, commands-ns, skills, agents). Validated against disk at install time and in CI. Global hooks + common rules are installed by the profile flow regardless; they are not per-asset entries here.",
+  "profiles": {
+    "minimal": [
+      "skills/github-ops",
+      "agents/code-reviewer",
+      "agents/debugger"
+    ],
+    "dev": [
+      "skills/github-ops",
+      "skills/error-handling",
+      "agents/backend-architect",
+      "agents/code-reviewer",
+      "agents/debugger",
+      "agents/fullstack-developer",
+      "agents/python-pro",
+      "agents/mobile-developer",
+      "agents/search-specialist",
+      "agents/silent-failure-hunter",
+      "agents/ui-ux-designer",
+      "commands/create-prd",
+      "commands/file-organizer",
+      "commands/fix-conflicts",
+      "commands/generate-tests",
+      "commands/graphify-install",
+      "commands/refactor-code",
+      "commands/release-notes",
+      "commands/validate-ui"
+    ],
+    "seo": [
+      "commands-ns/seo",
+      "agents/content-engineer",
+      "agents/seo-strategist",
+      "agents/technical-seo-auditor"
+    ],
+    "finance": [
+      "commands-ns/finance",
+      "agents/financial-analyst"
+    ]
+  }
+}

@@ -1,12 +1,12 @@
 # claude-config
 
-Personal Claude Code configuration hub: custom slash commands and skills that travel with me across machines and projects.
+Personal Claude Code configuration hub: slash commands, skills, agents, global guardrail
+hooks, system-wide rules, and profile-based install — travels with me across machines and projects.
 
 ## Structure
 
 ```
 claude-config/
-├── CLAUDE.md                    # global instructions Claude Code loads at session start
 ├── commands/                    # slash commands
 │   ├── finance/                 → see commands/finance/README.md
 │   │   ├── organizze.md         → /finance:organizze command file
@@ -20,25 +20,47 @@ claude-config/
 │   ├── seo/                     → see commands/seo/README.md (11 /seo:* commands)
 │   └── validate-ui/             → see commands/validate-ui/README.md
 ├── skills/                      # skills
-│   └── github-ops/              → see skills/github-ops/README.md
-└── agents/                      # subagents
-    ├── backend-architect.md     → /agent backend-architect
-    ├── code-reviewer.md         → /agent code-reviewer
-    ├── content-engineer.md      → /agent content-engineer
-    ├── debugger.md              → /agent debugger
-    ├── financial-analyst/       → see agents/financial-analyst/README.md
-    ├── fullstack-developer.md   → /agent fullstack-developer
-    ├── mobile-developer.md      → /agent mobile-developer
-    ├── python-pro.md            → /agent python-pro
-    ├── search-specialist.md     → /agent search-specialist
-    ├── seo-strategist.md        → /agent seo-strategist
-    ├── technical-seo-auditor.md → /agent technical-seo-auditor
-    └── ui-ux-designer.md        → /agent ui-ux-designer
+│   ├── github-ops/              → see skills/github-ops/README.md
+│   └── error-handling/          → typed errors, Result pattern, retries (TS + Python)
+├── agents/                      # subagents
+│   ├── backend-architect.md     → /agent backend-architect
+│   ├── code-reviewer.md         → /agent code-reviewer
+│   ├── content-engineer.md      → /agent content-engineer
+│   ├── debugger.md              → /agent debugger
+│   ├── financial-analyst/       → see agents/financial-analyst/README.md
+│   ├── fullstack-developer.md   → /agent fullstack-developer
+│   ├── mobile-developer.md      → /agent mobile-developer
+│   ├── python-pro.md            → /agent python-pro
+│   ├── search-specialist.md     → /agent search-specialist
+│   ├── seo-strategist.md        → /agent seo-strategist
+│   ├── silent-failure-hunter.md → /agent silent-failure-hunter
+│   ├── technical-seo-auditor.md → /agent technical-seo-auditor
+│   └── ui-ux-designer.md        → /agent ui-ux-designer
+├── rules/                       # auto-loaded global guidance + per-language library
+│   ├── common/                  → symlinked into ~/.claude/rules/ (loaded everywhere)
+│   ├── typescript/              → applied per-project by the Claude session
+│   └── python/                  → applied per-project by the Claude session
+├── hooks/                       # global PreToolUse guardrails (merged into settings.json)
+│   ├── hooks.json
+│   ├── doc-file-warning.sh      → warns on stray .md doc creation
+│   └── config-protection.sh     → warns on linter/formatter config edits
+├── manifests/
+│   └── profiles.json            → install bundles (minimal / dev / seo / finance)
+└── mcp-configs/                 # opt-in MCP server templates + config guidance
+    ├── registry.json
+    └── mcp.template.json
 ```
 
-## CLAUDE.md
+## Rules (auto-loaded, replaces the old CLAUDE.md)
 
-[`CLAUDE.md`](./CLAUDE.md) holds the global instructions Claude Code reads at the start of every session — communication style, output hygiene, and the four working principles (think before coding, simplicity first, surgical changes, goal-driven execution).
+`rules/common/*.md` are symlinked into `~/.claude/rules/`, which Claude Code **auto-loads
+globally** at the start of every session — communication style, output hygiene, and the four
+working principles (think before coding, simplicity first, surgical changes, goal-driven
+execution). This replaces the former monolithic `CLAUDE.md`.
+
+Per-language rules under `rules/typescript/` and `rules/python/` are **not** installed globally
+(they would add noise to unrelated projects). A pointer rule in `common/` tells the Claude
+session to read and apply them when you are working in a project of that language.
 
 ## Contents
 
@@ -54,6 +76,7 @@ claude-config/
 | Command | [`/seo:*`](./commands/seo/README.md)                         | SEO/GEO growth suite — 11 `/seo:*` commands encoding the Agensi playbook with skeptic corrections (CTR & conversion over impressions, indexation gate, GEO weighting, backlinks-are-human, information-gain bar, cost tiering). Standalone + optional `toprank`; every command ends at a human gate. |
 | Command | [`/validate-ui`](./commands/validate-ui/README.md)           | Audit UI/UX against a consolidated ruleset (Vercel Web Interface Guidelines + 3 design skills + Context7 lib docs), static plus opportunistic live validation. Read-only. |
 | Skill   | [`github-ops`](./skills/github-ops/README.md)                | Token-efficient GitHub/GitLab ops via `gh`/`glab`. Conventional Commits, pre-commit checks, split detection, PR/issue/CI management. |
+| Skill   | [`error-handling`](./skills/error-handling/SKILL.md)         | Typed error hierarchies, the `Result<T,E>` pattern, API error envelopes, React error boundaries, and retry-with-backoff for TypeScript and Python. |
 | Agent   | [`backend-architect`](./agents/backend-architect.md)         | Produces architecture documents: OpenAPI specs, database schemas, event schemas, diagrams, and trade-off analyses. Design only — not implementation. |
 | Agent   | [`code-reviewer`](./agents/code-reviewer.md)                 | Senior code reviewer focused on security, correctness, and performance. Detects the project's package manager automatically. |
 | Agent   | [`content-engineer`](./agents/content-engineer.md)           | SEO/GEO content engineer — drafts articles, FAQ schema, quick-answers, internal links, with a hard information-gain gate. Part of the `/seo:*` suite. |
@@ -63,6 +86,7 @@ claude-config/
 | Agent   | [`mobile-developer`](./agents/mobile-developer.md)           | Cross-platform mobile with React Native 0.82+, Expo SDK, iOS 18, and Android 15. Performance-first. |
 | Agent   | [`python-pro`](./agents/python-pro.md)                       | Expert Python 3.12+ developer: FastAPI, Polars, uv, ruff, mypy strict, full type coverage. |
 | Agent   | [`search-specialist`](./agents/search-specialist.md)         | Web research with rigorous source evaluation, contradiction handling, and structured findings reports. |
+| Agent   | [`silent-failure-hunter`](./agents/silent-failure-hunter.md) | Single-purpose reviewer for swallowed errors, dangerous fallbacks (`.catch(() => [])`), lost stack traces, and missing error propagation. |
 | Agent   | [`seo-strategist`](./agents/seo-strategist.md)               | Senior SEO/GEO strategist (Opus, no Write) — analyzes GSC exports, makes the call on what to build. Part of the `/seo:*` suite. |
 | Agent   | [`technical-seo-auditor`](./agents/technical-seo-auditor.md) | Parses GSC exports → prioritized fix list + indexation coverage + CTR diagnostics. Part of the `/seo:*` suite. |
 | Agent   | [`ui-ux-designer`](./agents/ui-ux-designer.md)               | Research-driven senior UI/UX designer. Evidence-backed critique, WCAG 2.2 AA, anti-generic aesthetics. |
@@ -73,26 +97,52 @@ Each command, skill and agent has its own README with the full reference, exampl
 
 ```bash
 git clone https://github.com/judsonjuniorr/claude-config ~/sources/personal/claude-config
-~/sources/personal/claude-config/install.sh
+cd ~/sources/personal/claude-config
+
+./install.sh --profile dev   # install a coherent bundle
+./install.sh --doctor        # verify everything is wired
 ```
 
-`install.sh` discovers all commands, skills, and agents and lets you pick what to install. Symlinks are the default — edits in the repo reflect immediately in Claude Code without reinstalling.
+Every install also registers the global guardrail hooks and symlinks the common rules into
+`~/.claude/rules/` (auto-loaded). Symlinks are the default — edits in the repo reflect
+immediately without reinstalling.
+
+Run with no flags for the interactive flow: it offers a **profile** first, or `custom` to pick
+individual assets (fzf multi-select, or a numbered menu without fzf).
+
+### Profiles
+
+`--profile <name>` installs a bundle declared in `manifests/profiles.json`:
+
+| Profile | Contents |
+|---------|----------|
+| `minimal` | `github-ops`, `code-reviewer`, `debugger` |
+| `dev` | full dev toolkit — `github-ops`, `error-handling`, the engineering agents (incl. `silent-failure-hunter`), and the standalone dev commands |
+| `seo` | `/seo:*` commands + `content-engineer`, `seo-strategist`, `technical-seo-auditor` |
+| `finance` | `/finance:*` commands + `financial-analyst` |
+
+`--list-profiles` prints each profile's assets. A profile referencing a missing asset fails the
+preflight validation (also enforced in CI) rather than half-installing.
 
 ### Options
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Install everything without prompting (useful on a new machine) |
+| `--profile NAME` | Install a named bundle (+ global hooks + common rules) |
+| `--list-profiles` | List profiles and their assets |
+| `--mcp` | Print MCP server config guidance (env vars; opt-in, writes nothing) |
+| `--doctor` | Diagnose the install (symlinks, hooks, rules pointer, manifest ↔ disk) |
+| `--all` | Install everything without prompting |
 | `--replace` | Overwrite existing files instead of creating `.bak` backups |
 | `--help` | Show usage |
-| `uninstall` | Interactively remove installed assets |
+| `uninstall` | Interactively remove installed assets (a full uninstall also clears the global hooks + common rules) |
 
-### Selection UI
+### MCP servers
 
-- **With [fzf](https://github.com/junegunn/fzf):** multi-select list (Space to mark, Enter to confirm)
-- **Without fzf / bash < 4:** numbered menu, enter space-separated numbers or `all`
-
-Assets already installed are shown as `[installed]`. Symlinks point to the cloned repo — don't move it after installing.
+`--mcp` reads `mcp-configs/registry.json` and prints, per curated server (context7, playwright,
+github), the command and any required env vars with where to get them. It never writes secrets
+and never auto-installs — copy the servers you want from `mcp-configs/mcp.template.json` into a
+project `.mcp.json` or `~/.claude.json`.
 
 ### What gets installed where
 
@@ -102,5 +152,9 @@ Assets already installed are shown as `[installed]`. Symlinks point to the clone
 | Namespaced commands (e.g. `/finance:*`) | `~/.claude/commands/{namespace}/` (real dir, symlinked files inside) |
 | Skills | `~/.claude/skills/{name}/` (directory symlink) |
 | Agents | `~/.claude/agents/{name}.md` |
+| Common rules | `~/.claude/rules/{name}.md` (symlink; pointer rule is a generated file) |
+| Global hooks | merged into `~/.claude/settings.json`; scripts via `~/.claude/claude-config-hooks` → `hooks/` |
 
-`README.md` files are never copied to `~/.claude/`.
+`README.md` files are never copied to `~/.claude/`. The language rules (`rules/typescript/`,
+`rules/python/`) are intentionally **not** installed globally — the Claude session applies them
+per-project.

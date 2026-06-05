@@ -1,0 +1,16 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Write",
+      "hooks": [
+        { "type": "command", "command": "bash {{HOOKS_DIR}}/doc-file-warning.sh" }
+      ]
+    },
+    {
+      "matcher": "Edit|Write",
+      "hooks": [
+        { "type": "command", "command": "bash {{HOOKS_DIR}}/config-protection.sh" }
+      ]
+    }
+  ]
+}
