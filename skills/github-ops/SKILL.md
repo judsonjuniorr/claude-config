@@ -35,7 +35,7 @@ User says: commit, push, create PR/MR, list PRs, merge, checks, CI status, open 
 | Stage + emit diff for message synthesis | `bash github-ops/scripts/ship.sh` |
 | Commit + push with crafted message | `bash github-ops/scripts/ship.sh --message "feat(x): y"` |
 | Just suggest a message (heuristic) | `bash github-ops/scripts/commit-msg.sh` |
-| Create PR | `bash github-ops/scripts/pr.sh create [--draft] [--title T] [--body B\|--body-file F]` |
+| Create PR | `bash github-ops/scripts/pr.sh create [--draft] [--title T] [--body B\|--body-file F] [--base B]` |
 | Edit PR | `bash github-ops/scripts/pr.sh edit <num> [--title T] [--body B\|--body-file F] [--add-label L] [--remove-label L]` |
 | List PRs | `bash github-ops/scripts/pr.sh list [--state open\|closed\|all] [--mine]` |
 | View PR | `bash github-ops/scripts/pr.sh view <num>` |
