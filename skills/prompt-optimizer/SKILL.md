@@ -394,4 +394,4 @@ Recommended: Opus 4.6 for blueprint planning, Sonnet 4.6 for phase execution.
 | `deep-research` | Research phase in optimized prompts |
 | `exa-search` | Fast current-web discovery |
 | `/code:review` | Review-oriented prompts |
-| `generate-tests` | Test-generation prompts |
+| `/code:generate-tests` | Test-generation prompts |

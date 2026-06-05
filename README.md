@@ -15,10 +15,9 @@ displaying help text if needed.
 ```
 claude-config/
 ├── commands/                    # slash commands (namespaced)
-│   ├── code/                    → /code:review, /code:refactor-code
+│   ├── code/                    → /code:review, /code:refactor, /code:generate-tests
 │   ├── finance/                 → /finance:organizze (+ context/goal/profile helpers)
 │   ├── file-organizer/          → /file-organizer
-│   ├── generate-tests/          → /generate-tests
 │   ├── git/                     → /git:fix-conflicts, /git:pr, /git:release-notes
 │   ├── graphify-install/        → /graphify-install
 │   ├── create-prd/              → /create-prd
@@ -102,13 +101,13 @@ tells the Claude session to read and apply them when you are working in a projec
 | Type    | Name                                                         | One-liner                                                                   |
 |---------|--------------------------------------------------------------|-----------------------------------------------------------------------------|
 | Command | `/code:review`                                               | Multi-agent code review — dispatches 7 specialist reviewers, dedupes, ranks by severity. Local or PR mode. |
-| Command | `/code:refactor-code`                                        | Safely refactor a file or function with tests-first, incremental changes, and static analysis verification. |
+| Command | `/code:refactor`                                        | Safely refactor a file or function with tests-first, incremental changes, and static analysis verification. |
 | Command | `/finance:organizze`                                         | Pull personal finance data from Organizze via REST API, build a snapshot, delegate to the `financial-analyst` subagent for a prioritized action plan. |
 | Command | `/file-organizer`                                            | Analyze a directory, find duplicates, propose a tidy structure, and reorganize files only after explicit approval. |
 | Command | `/git:fix-conflicts`                                         | Resolve merge conflicts on a PR or branch, grounding each decision in the commit history of both sides. |
 | Command | `/git:pr`                                                    | Create a GitHub PR — discovers templates, analyzes commits, pushes, creates with CI status check. |
 | Command | `/git:release-notes`                                         | Generate a user-friendly changelog (pt-br/en) from commits since the last tag, inline in the chat. |
-| Command | `/generate-tests`                                            | Generate a comprehensive test suite for a file or function, auto-detecting the project's testing framework. |
+| Command | `/code:generate-tests`                                            | Generate a comprehensive test suite for a file or function, auto-detecting the project's testing framework. |
 | Command | `/graphify-install`                                          | Bootstrap [graphify](https://github.com/safishamsi/graphify) inside any git repo end-to-end. |
 | Command | `/python:review`                                             | Comprehensive Python code review for PEP 8, type hints, security, and Pythonic idioms. |
 | Command | `/python:fastapi-review`                                     | FastAPI architecture, async correctness, DI, Pydantic, security, and production readiness review. |
