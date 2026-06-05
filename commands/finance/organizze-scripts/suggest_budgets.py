@@ -84,6 +84,13 @@ def main() -> int:
     cur_key = today.strftime("%Y-%m")
 
     cats = {c.get("id"): c.get("name") for c in (snap.get("categories") or [])}
+    # parent_id maps each category to its parent; a null parent_id marks a
+    # main/top-level category. Budgets are suggested ONLY for sub-categories
+    # (parent_id is not null) — never for main categories.
+    parent_of = {c.get("id"): c.get("parent_id") for c in (snap.get("categories") or [])}
+
+    def is_subcategory(cid: int) -> bool:
+        return parent_of.get(cid) is not None
 
     # spending by (month, category) — paid expenses only
     by_mc: dict[tuple[str, int], int] = defaultdict(int)
@@ -132,6 +139,8 @@ def main() -> int:
 
     rows = []
     all_cids = set(current_budget) | {cid for (_, cid) in by_mc}
+    # restrict to sub-categories — never suggest a limit for a main category
+    all_cids = {cid for cid in all_cids if is_subcategory(cid)}
     for cid in all_cids:
         h3 = [by_mc.get((mk, cid), 0) for mk in last_3]
         h6 = [by_mc.get((mk, cid), 0) for mk in last_6]
