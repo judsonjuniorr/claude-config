@@ -261,12 +261,14 @@ for tx in snap.get("transactions_past", []) + snap.get("transactions_future", []
 for m in sorted(months):
     slices.append(f"tx {m}")
 
-# invoices: one per (card_id, month) pair
+# invoices: one per (card_id, month) pair. The invoice id (the seq in the
+# fatura URL /faturas/<card_id>,<invoice_id>) is required to open the page.
 for inv in snap.get("invoices", []):
     cid = inv.get("_credit_card_id") or inv.get("credit_card_id")
     month = (inv.get("date") or "")[:7]
-    if cid and month:
-        slices.append(f"invoice {cid} {month}")
+    inv_id = inv.get("id")
+    if cid and month and inv_id:
+        slices.append(f"invoice {cid} {month} {inv_id}")
 
 print("\n".join(slices))
 PY
@@ -308,7 +310,7 @@ For each slice, call `Agent` with:
   Where <SLICE ARGS> is:
   - For "dashboard": `dashboard`
   - For "tx YYYY-MM": `tx YYYY-MM`
-  - For "invoice <id> YYYY-MM": `invoice <id> YYYY-MM`
+  - For "invoice <card_id> YYYY-MM <invoice_id>": `invoice <card_id> YYYY-MM <invoice_id>` (pass all 3 args verbatim)
   
   If the command returns `ok|scraped|...`, respond only with the output line.
   

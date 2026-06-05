@@ -33,7 +33,7 @@ commands/finance/
     ├── suggest_budgets.py       # budget suggestions for current + next month
     ├── analyze.py               # snapshot + memory + plans + framework → subagent prompt
     ├── organizze_login.py       # Playwright headless login → .session (storageState)
-    ├── scrape_slice.py          # scraper for 1 slice (dashboard|tx YYYY-MM|invoice id YYYY-MM)
+    ├── scrape_slice.py          # scraper for 1 slice (dashboard|tx YYYY-MM|invoice card_id YYYY-MM invoice_id)
     ├── apply_scrape.py          # consolidates scrape/*.json into the snapshot (surgical override)
     └── tests/
         └── test_apply_scrape.py # 13 merge/match/idempotency tests
