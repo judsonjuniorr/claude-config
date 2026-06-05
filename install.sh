@@ -4,18 +4,36 @@ set -euo pipefail
 REPO_DIR=$(cd "$(dirname "$0")" && pwd)
 CLAUDE_DIR="$HOME/.claude"
 
+# ── claude-config additions: paths ──────────────────────────────────────────────
+MANIFEST="$REPO_DIR/manifests/profiles.json"
+MCP_REGISTRY="$REPO_DIR/mcp-configs/registry.json"
+RULES_COMMON_DIR="$REPO_DIR/rules/common"
+GLOBAL_HOOKS_SRC="$REPO_DIR/hooks/hooks.json"
+GLOBAL_HOOKS_LINK="$CLAUDE_DIR/claude-config-hooks"  # symlink → $REPO_DIR/hooks (stable path baked into settings.json)
+GLOBAL_HOOKS_MARKER="claude-config-hooks/"           # identifies our hook entries in settings.json
+POINTER_RULE="language-rules-pointer.md"             # templated real file, not a symlink
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS] [COMMAND]
 
 Commands:
-  (none)      Interactive install — select assets to install
-  uninstall   Interactive uninstall — select installed assets to remove
+  (none)            Interactive install — select assets to install
+  uninstall         Interactive uninstall — select installed assets to remove
 
 Options:
-  --all       Install all assets without prompting
-  --replace   Overwrite existing files/symlinks (default: backup as .bak)
-  --help      Show this help and exit
+  --profile NAME    Install a named bundle from manifests/profiles.json
+                    (also installs global hooks + common rules)
+  --list-profiles   List available profiles and their assets
+  --mcp             Print MCP server config guidance (env vars, opt-in; writes nothing)
+  --doctor          Diagnose the installation (symlinks, hooks, rules, manifest)
+  --all             Install all assets without prompting
+  --replace         Overwrite existing files/symlinks (default: backup as .bak)
+  --help            Show this help and exit
+
+Profiles, global hooks (doc-file-warning, config-protection), and common rules
+(auto-loaded from ~/.claude/rules/) are claude-config extensions. Language rules
+under rules/<lang>/ are applied per-project by the Claude session, not installed.
 EOF
   exit 0
 }
@@ -24,15 +42,22 @@ EOF
 MODE="install"
 OPT_ALL=false
 OPT_REPLACE=false
+OPT_PROFILE=""
 
-for arg in "$@"; do
-  case "$arg" in
-    uninstall) MODE="uninstall" ;;
-    --all)     OPT_ALL=true ;;
-    --replace) OPT_REPLACE=true ;;
-    --help|-h) usage ;;
-    *) echo "Unknown option: $arg"; usage ;;
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    uninstall)       MODE="uninstall" ;;
+    --all)           OPT_ALL=true ;;
+    --replace)       OPT_REPLACE=true ;;
+    --profile)       shift; OPT_PROFILE="${1:-}"; [ -n "$OPT_PROFILE" ] || { echo "ERROR: --profile requires a name"; usage; } ;;
+    --profile=*)     OPT_PROFILE="${1#*=}" ;;
+    --list-profiles) MODE="list-profiles" ;;
+    --mcp)           MODE="mcp" ;;
+    --doctor)        MODE="doctor" ;;
+    --help|-h)       usage ;;
+    *) echo "Unknown option: $1"; usage ;;
   esac
+  shift
 done
 
 # ── Capability detection ──────────────────────────────────────────────────────
@@ -417,26 +442,34 @@ uninstall_mode() {
   if contains_github_ops "${removed_names[@]}"; then
     remove_github_ops_hooks
   fi
+  # Full uninstall (every installed asset selected): also clear the global footprint
+  # (guardrail hooks + common rules) so nothing is left pointing at the repo.
+  if [ "${#selected_indices[@]}" -eq "${#inst_names[@]}" ]; then
+    remove_global_hooks
+    remove_common_rules
+  fi
   echo
   echo "Done."
 }
 
-# ── github-ops hooks (settings.json) ───────────────────────────────────────────
-# The github-ops skill ships a PreToolUse hook (git-guard).
-# These are registered in ~/.claude/settings.json rather than symlinked, so they
-# need an explicit merge/remove pass tagged by the "github-ops/hooks/" marker.
+# ── Hooks (settings.json) ───────────────────────────────────────────────────────
+# Hooks are registered in ~/.claude/settings.json (not symlinked), tagged by a
+# marker substring so each source's entries can be merged/removed idempotently
+# without touching another source's. Two callers: github-ops (skill) and the
+# global claude-config guardrails. The merge is replace-by-marker, so re-running
+# never duplicates entries.
 GHO_HOOKS_SRC="$REPO_DIR/skills/github-ops/hooks/hooks.json"
+GHO_HOOKS_MARKER="github-ops/hooks/"
 
-merge_github_ops_hooks() {
+# merge_hooks <src_hooks_json> <hooks_dir> <marker> <label>
+merge_hooks() {
+  local src="$1" hooks_dir="$2" marker="$3" label="$4"
   local settings="$CLAUDE_DIR/settings.json"
-  local hooks_dir="$CLAUDE_DIR/skills/github-ops/hooks"
-  [ -f "$GHO_HOOKS_SRC" ] || return 0
-
-  chmod +x "$REPO_DIR"/skills/github-ops/hooks/*.sh 2>/dev/null || true
+  [ -f "$src" ] || return 0
 
   if ! command -v jq >/dev/null 2>&1; then
-    echo "  ↳ hooks: jq not found — add these to $settings manually:"
-    sed "s#{{HOOKS_DIR}}#$hooks_dir#g" "$GHO_HOOKS_SRC" | sed 's/^/      /'
+    echo "  ↳ hooks ($label): jq not found — add these to $settings manually:"
+    sed "s#{{HOOKS_DIR}}#$hooks_dir#g" "$src" | sed 's/^/      /'
     return 0
   fi
 
@@ -445,43 +478,68 @@ merge_github_ops_hooks() {
 
   local tmp_hooks
   tmp_hooks="$(mktemp)"
-  sed "s#{{HOOKS_DIR}}#$hooks_dir#g" "$GHO_HOOKS_SRC" > "$tmp_hooks"
+  sed "s#{{HOOKS_DIR}}#$hooks_dir#g" "$src" > "$tmp_hooks"
 
-  if jq --slurpfile add "$tmp_hooks" '
+  if jq --arg m "$marker" --slurpfile add "$tmp_hooks" '
         .hooks //= {}
         | .hooks |= (to_entries
-            | map(.value |= [ .[] | select(([..|strings] | any(test("github-ops/hooks/"))) | not) ])
+            | map(.value |= [ .[] | select(([..|strings] | any(contains($m))) | not) ])
             | from_entries)
         | reduce ($add[0]|to_entries[]) as $e (.;
             .hooks[$e.key] = ((.hooks[$e.key] // []) + $e.value))
       ' "$settings" > "$settings.tmp"; then
     mv "$settings.tmp" "$settings"
-    echo "  ↳ hooks registered in settings.json (git-guard)"
+    echo "  ↳ hooks registered in settings.json ($label)"
   else
     rm -f "$settings.tmp"
-    echo "  ↳ hooks: merge failed — settings.json left unchanged (backup at settings.json.bak)"
+    echo "  ↳ hooks ($label): merge failed — settings.json left unchanged (backup at settings.json.bak)"
   fi
   rm -f "$tmp_hooks"
 }
 
-remove_github_ops_hooks() {
+# remove_hooks <marker> <label>
+remove_hooks() {
+  local marker="$1" label="$2"
   local settings="$CLAUDE_DIR/settings.json"
   [ -f "$settings" ] || return 0
-  command -v jq >/dev/null 2>&1 || { echo "  ↳ hooks: jq not found — remove github-ops entries from $settings manually."; return 0; }
+  command -v jq >/dev/null 2>&1 || { echo "  ↳ hooks ($label): jq not found — remove entries from $settings manually."; return 0; }
   cp "$settings" "$settings.bak"
-  if jq '
+  if jq --arg m "$marker" '
         if .hooks then
           .hooks |= (to_entries
-            | map(.value |= [ .[] | select(([..|strings] | any(test("github-ops/hooks/"))) | not) ]
+            | map(.value |= [ .[] | select(([..|strings] | any(contains($m))) | not) ]
                   | select(.value | length > 0))
             | from_entries)
         else . end
       ' "$settings" > "$settings.tmp"; then
     mv "$settings.tmp" "$settings"
-    echo "  ↳ hooks removed from settings.json"
+    echo "  ↳ hooks removed from settings.json ($label)"
   else
     rm -f "$settings.tmp"
   fi
+}
+
+merge_github_ops_hooks() {
+  [ -f "$GHO_HOOKS_SRC" ] || return 0
+  chmod +x "$REPO_DIR"/skills/github-ops/hooks/*.sh 2>/dev/null || true
+  merge_hooks "$GHO_HOOKS_SRC" "$CLAUDE_DIR/skills/github-ops/hooks" "$GHO_HOOKS_MARKER" "git-guard"
+}
+remove_github_ops_hooks() { remove_hooks "$GHO_HOOKS_MARKER" "git-guard"; }
+
+# Global guardrails: symlink the repo hooks dir to a stable path so settings.json
+# never bakes in the repo location, then merge under the claude-config marker.
+merge_global_hooks() {
+  [ -f "$GLOBAL_HOOKS_SRC" ] || return 0
+  chmod +x "$REPO_DIR"/hooks/*.sh 2>/dev/null || true
+  if [ ! -L "$GLOBAL_HOOKS_LINK" ] || [ "$(readlink "$GLOBAL_HOOKS_LINK")" != "$REPO_DIR/hooks" ]; then
+    rm -rf "$GLOBAL_HOOKS_LINK"
+    ln -s "$REPO_DIR/hooks" "$GLOBAL_HOOKS_LINK"
+  fi
+  merge_hooks "$GLOBAL_HOOKS_SRC" "$GLOBAL_HOOKS_LINK" "$GLOBAL_HOOKS_MARKER" "doc-file-warning, config-protection"
+}
+remove_global_hooks() {
+  remove_hooks "$GLOBAL_HOOKS_MARKER" "claude-config guardrails"
+  [ -L "$GLOBAL_HOOKS_LINK" ] && rm -f "$GLOBAL_HOOKS_LINK"
 }
 
 # Returns 0 if "github-ops" is among the given asset name args.
@@ -491,15 +549,248 @@ contains_github_ops() {
   return 1
 }
 
+# ── Common rules (auto-loaded from ~/.claude/rules/) ──────────────────────────────
+# common/*.md are symlinked in (global, auto-loaded). The pointer rule is templated
+# (real file, $REPO_DIR substituted). Foreign files in ~/.claude/rules/ are preserved.
+install_common_rules() {
+  [ -d "$RULES_COMMON_DIR" ] || return 0
+  local dest_dir="$CLAUDE_DIR/rules"
+  mkdir -p "$dest_dir"
+  local f base dest
+  for f in "$RULES_COMMON_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    dest="$dest_dir/$base"
+    if [ "$base" = "$POINTER_RULE" ]; then
+      # Templated real file (not a symlink): substitute the repo path.
+      if [ -L "$dest" ]; then rm -f "$dest"; fi
+      sed "s#{{REPO_DIR}}#$REPO_DIR#g" "$f" > "$dest"
+      echo "  ✓ rules/$base (generated)"
+      continue
+    fi
+    if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$f" ]; then
+      continue
+    fi
+    if [ -e "$dest" ] || [ -L "$dest" ]; then
+      $OPT_REPLACE && rm -rf "$dest" || { mv "$dest" "${dest}.bak"; echo "  (backed up existing to rules/$base.bak)"; }
+    fi
+    ln -s "$f" "$dest"
+    echo "  ✓ rules/$base"
+  done
+}
+remove_common_rules() {
+  [ -d "$RULES_COMMON_DIR" ] || return 0
+  local dest_dir="$CLAUDE_DIR/rules"
+  local f base dest
+  for f in "$RULES_COMMON_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    dest="$dest_dir/$base"
+    if [ "$base" = "$POINTER_RULE" ]; then
+      # Only remove if it's our generated pointer (don't nuke a user file).
+      [ -f "$dest" ] && grep -q "Language-specific rules" "$dest" 2>/dev/null && { rm -f "$dest"; echo "  ↳ rules/$base removed"; }
+      continue
+    fi
+    if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$f" ]; then
+      rm -f "$dest"; echo "  ↳ rules/$base removed"
+    fi
+  done
+}
+
+# ── Profiles / manifest ───────────────────────────────────────────────────────
+require_jq() {
+  command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required for $1. Install jq or use interactive per-asset selection."; exit 1; }
+}
+
+# index_of <type> <name> → prints index into ASSET arrays, or empty if not found
+index_of() {
+  local want_type="$1" want_name="$2" i=0
+  while [ "$i" -lt "${#ASSET_NAMES[@]}" ]; do
+    if [ "${ASSET_TYPES[$i]}" = "$want_type" ] && [ "${ASSET_NAMES[$i]}" = "$want_name" ]; then
+      echo "$i"; return 0
+    fi
+    i=$((i+1))
+  done
+  return 1
+}
+
+list_profiles() {
+  require_jq "--list-profiles"
+  [ -f "$MANIFEST" ] || { echo "No manifest at $MANIFEST"; exit 1; }
+  local p
+  for p in $(jq -r '.profiles | keys[]' "$MANIFEST"); do
+    echo "Profile: $p"
+    jq -r --arg p "$p" '.profiles[$p][]' "$MANIFEST" | sed 's/^/  - /'
+    echo
+  done
+}
+
+# Populate global `selected_indices` from a profile name. Aborts on unknown
+# profile or any manifest↔disk inconsistency (preflight validation).
+resolve_profile_indices() {
+  local profile="$1"
+  require_jq "--profile"
+  [ -f "$MANIFEST" ] || { echo "ERROR: no manifest at $MANIFEST"; exit 1; }
+  if ! jq -e --arg p "$profile" '.profiles | has($p)' "$MANIFEST" >/dev/null; then
+    echo "ERROR: unknown profile '$profile'. Available:"
+    jq -r '.profiles | keys[] | "  - " + .' "$MANIFEST"
+    exit 1
+  fi
+  echo "Validating manifest…"
+  if ! validate_manifest; then
+    echo "ERROR: manifest references assets not on disk — aborting (fix manifests/profiles.json)."
+    exit 1
+  fi
+  local entry type name idx
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    type="${entry%%/*}"; name="${entry#*/}"
+    idx=$(index_of "$type" "$name") || { echo "ERROR: profile asset not found: $entry"; exit 1; }
+    selected_indices+=("$idx")
+  done < <(jq -r --arg p "$profile" '.profiles[$p][]' "$MANIFEST")
+}
+
+# Interactive: offer profiles first, "custom" falls through to per-asset selection.
+# Prints the chosen profile name, or "custom".
+interactive_profile_pick() {
+  command -v jq >/dev/null 2>&1 || { echo "custom"; return; }
+  [ -f "$MANIFEST" ] || { echo "custom"; return; }
+  local profs=() p
+  while IFS= read -r p; do profs+=("$p"); done < <(jq -r '.profiles | keys[]' "$MANIFEST")
+  [ "${#profs[@]}" -gt 0 ] || { echo "custom"; return; }
+  echo "Install a profile, or pick assets manually?" >&2
+  local i=0
+  while [ "$i" -lt "${#profs[@]}" ]; do
+    printf '  %d) %s\n' $((i+1)) "${profs[$i]}" >&2
+    i=$((i+1))
+  done
+  printf '  %d) custom (choose individual assets)\n' $((i+1)) >&2
+  printf "Choice [%d]: " $((i+1)) >&2
+  local choice; read -r choice </dev/tty
+  [ -z "$choice" ] && { echo "custom"; return; }
+  if [ "$choice" -ge 1 ] 2>/dev/null && [ "$choice" -le "${#profs[@]}" ] 2>/dev/null; then
+    echo "${profs[$((choice-1))]}"
+  else
+    echo "custom"
+  fi
+}
+
+# Validate every profile asset exists on disk, and registry servers are well-formed.
+# Prints problems; returns non-zero if any.
+validate_manifest() {
+  local problems=0 entry type name
+  if [ -f "$MANIFEST" ] && command -v jq >/dev/null 2>&1; then
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      type="${entry%%/*}"; name="${entry#*/}"
+      if ! index_of "$type" "$name" >/dev/null; then
+        echo "  ✗ profile asset not found on disk: $entry"
+        problems=$((problems+1))
+      fi
+    done < <(jq -r '.profiles | to_entries[] | .value[]' "$MANIFEST")
+  fi
+  if [ -f "$MCP_REGISTRY" ] && command -v jq >/dev/null 2>&1; then
+    local bad
+    bad=$(jq -r '[.servers | to_entries[] | select((.value.command|type) != "string" or (.value.args|type) != "array") | .key] | join(", ")' "$MCP_REGISTRY")
+    if [ -n "$bad" ]; then
+      echo "  ✗ malformed MCP registry entries: $bad"
+      problems=$((problems+1))
+    fi
+  fi
+  [ "$problems" -eq 0 ]
+}
+
+# ── MCP guidance (opt-in; writes nothing) ─────────────────────────────────────────
+mcp_guidance() {
+  [ -f "$MCP_REGISTRY" ] || { echo "No MCP registry at $MCP_REGISTRY"; return 0; }
+  require_jq "--mcp"
+  echo "MCP server config guidance (opt-in — nothing is written for you):"
+  echo
+  local name
+  for name in $(jq -r '.servers | keys[]' "$MCP_REGISTRY"); do
+    echo "  • $name"
+    local cmd args note
+    cmd=$(jq -r --arg n "$name" '.servers[$n].command' "$MCP_REGISTRY")
+    args=$(jq -r --arg n "$name" '.servers[$n].args | join(" ")' "$MCP_REGISTRY")
+    note=$(jq -r --arg n "$name" '.servers[$n].note // ""' "$MCP_REGISTRY")
+    echo "      run: $cmd $args"
+    [ -n "$note" ] && echo "      note: $note"
+    # env vars + how-to
+    jq -r --arg n "$name" '.servers[$n].env // {} | to_entries[] | "      env: \(.key) — \(.value)"' "$MCP_REGISTRY"
+    local envcount
+    envcount=$(jq -r --arg n "$name" '.servers[$n].env // {} | length' "$MCP_REGISTRY")
+    [ "$envcount" = "0" ] && echo "      env: none required"
+    echo
+  done
+  echo "Template to copy from: $REPO_DIR/mcp-configs/mcp.template.json"
+  echo "Paste the servers you want into a project .mcp.json or ~/.claude.json (mcpServers)."
+}
+
+# ── Doctor ──────────────────────────────────────────────────────────────────────
+doctor() {
+  local problems=0
+  echo "claude-config doctor"
+
+  # 1. symlink health
+  local broken_links
+  broken_links=$(find "$CLAUDE_DIR" -maxdepth 3 -type l ! -exec test -e {} \; -print 2>/dev/null || true)
+  if [ -z "$broken_links" ]; then
+    echo "  ✓ symlinks healthy"
+  else
+    echo "  ✗ broken symlinks:"; echo "$broken_links" | sed 's/^/      /'; problems=$((problems+1))
+  fi
+
+  # 2. global hooks block present
+  local settings="$CLAUDE_DIR/settings.json"
+  if [ -f "$settings" ] && command -v jq >/dev/null 2>&1 && \
+     jq -e --arg m "$GLOBAL_HOOKS_MARKER" '[(.hooks // {}) | .. | strings] | any(contains($m))' "$settings" >/dev/null 2>&1; then
+    echo "  ✓ global hooks present in settings.json"
+  else
+    echo "  ✗ global hooks block missing (run install to register guardrails)"; problems=$((problems+1))
+  fi
+
+  # 3. language-rules pointer installed
+  if [ -f "$CLAUDE_DIR/rules/$POINTER_RULE" ]; then
+    echo "  ✓ language-rules pointer installed"
+  else
+    echo "  ✗ language-rules pointer missing in ~/.claude/rules/"; problems=$((problems+1))
+  fi
+
+  # 4. manifest ↔ disk consistency
+  if validate_manifest >/tmp/.cc-doctor-validate 2>&1; then
+    echo "  ✓ manifest ↔ disk consistent"
+  else
+    echo "  ✗ manifest inconsistencies:"; sed 's/^/    /' /tmp/.cc-doctor-validate; problems=$((problems+1))
+  fi
+  rm -f /tmp/.cc-doctor-validate 2>/dev/null || true
+
+  echo
+  if [ "$problems" -eq 0 ]; then
+    echo "All checks passed."
+    exit 0
+  else
+    echo "$problems problem(s) found."
+    exit 1
+  fi
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 if [ "$MODE" = "uninstall" ]; then
   uninstall_mode
   exit 0
+elif [ "$MODE" = "list-profiles" ]; then
+  list_profiles
+  exit 0
+elif [ "$MODE" = "mcp" ]; then
+  mcp_guidance
+  exit 0
+elif [ "$MODE" = "doctor" ]; then
+  doctor   # exits with status
 fi
 
-# Ask symlink vs copy (skip in --all mode, default to symlink)
+# Ask symlink vs copy (skip in --all/--profile mode, default to symlink)
 USE_SYMLINK=true
-if ! $OPT_ALL; then
+if ! $OPT_ALL && [ -z "$OPT_PROFILE" ]; then
   echo "Install mode:"
   echo "  1) Symlink (recommended — changes in repo reflect immediately)"
   echo "  2) Copy (robust, but requires re-running install after changes)"
@@ -511,19 +802,29 @@ fi
 
 # Select assets
 selected_indices=()
-if $OPT_ALL; then
+USED_PROFILE=""
+if [ -n "$OPT_PROFILE" ]; then
+  resolve_profile_indices "$OPT_PROFILE"
+  USED_PROFILE="$OPT_PROFILE"
+elif $OPT_ALL; then
   i=0
   while [ "$i" -lt "${#ASSET_NAMES[@]}" ]; do
     selected_indices+=("$i"); i=$((i+1))
   done
-elif $USE_FZF; then
-  while IFS= read -r idx; do
-    selected_indices+=("$idx")
-  done < <(select_assets_fzf)
 else
-  while IFS= read -r idx; do
-    selected_indices+=("$idx")
-  done < <(select_assets_menu)
+  pick=$(interactive_profile_pick)
+  if [ -n "$pick" ] && [ "$pick" != "custom" ]; then
+    resolve_profile_indices "$pick"
+    USED_PROFILE="$pick"
+  elif $USE_FZF; then
+    while IFS= read -r idx; do
+      selected_indices+=("$idx")
+    done < <(select_assets_fzf)
+  else
+    while IFS= read -r idx; do
+      selected_indices+=("$idx")
+    done < <(select_assets_menu)
+  fi
 fi
 
 if [ "${#selected_indices[@]}" -eq 0 ]; then
@@ -547,14 +848,32 @@ if contains_github_ops "${installed_names[@]}"; then
   merge_github_ops_hooks
 fi
 
+# Global baseline: guardrail hooks + common (auto-loaded) rules.
+echo
+echo "Global guardrails + common rules:"
+install_common_rules
+merge_global_hooks
+
 # Summary
 echo
 echo "─────────────────────────────────────"
-echo "Installed ${#installed[@]} asset(s):"
+echo "Installed ${#installed[@]} asset(s)${USED_PROFILE:+ from profile '$USED_PROFILE'}:"
 for item in "${installed[@]}"; do echo "  • $item"; done
 echo
 echo "Open Claude Code and type /fix-conflicts (or the command you installed) to test."
+echo "Verify wiring anytime with: $(basename "$0") --doctor"
 if $USE_SYMLINK; then
   echo "Note: symlinks point to $REPO_DIR — don't move the repo."
 fi
 echo "─────────────────────────────────────"
+
+# MCP guidance: offer interactively, hint otherwise.
+if [ -f "$MCP_REGISTRY" ]; then
+  if ! $OPT_ALL && [ -z "$OPT_PROFILE" ]; then
+    printf "Show MCP server config guidance? [y/N]: "
+    read -r mcp_ans </dev/tty 2>/dev/null || mcp_ans=""
+    case "$mcp_ans" in [yY]*) echo; mcp_guidance ;; esac
+  else
+    echo "MCP setup guidance: $(basename "$0") --mcp"
+  fi
+fi

@@ -1,0 +1,20 @@
+{
+  "_comment": "Curated MCP server template. Copy the servers you want into a project's .mcp.json or into ~/.claude.json under mcpServers. Replace ${ENV_VAR} placeholders or export the vars in your shell. install.sh --mcp prints per-server config guidance; it never writes this file for you.",
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
