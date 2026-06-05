@@ -15,6 +15,21 @@ case "$FILE" in
   *) exit 0 ;;
 esac
 
+# Resolve to an absolute path so we can tell repo-internal from external writes.
+case "$FILE" in
+  /*) abs="$FILE" ;;
+  *)  abs="$PWD/$FILE" ;;
+esac
+
+# Only guard files inside the current repo. Plugins (gstack, etc.) writing plans
+# to ~/.gstack, ~/.claude, or anywhere outside the repo are allowed silently.
+repo_root="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$repo_root" ] || exit 0
+case "$abs" in
+  "$repo_root"/*) ;;   # inside the repo — keep checking
+  *) exit 0 ;;         # outside the repo — allow
+esac
+
 # Allow conventional repo docs that are expected to exist.
 base="$(basename "$FILE")"
 shopt -s nocasematch 2>/dev/null || true
