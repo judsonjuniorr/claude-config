@@ -12,5 +12,12 @@
         { "type": "command", "command": "bash {{HOOKS_DIR}}/config-protection.sh" }
       ]
     }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        { "type": "command", "command": "bash {{HOOKS_DIR}}/stop-guard.sh" }
+      ]
+    }
   ]
 }

@@ -40,10 +40,11 @@ claude-config/
 │   ├── common/                  → symlinked into ~/.claude/rules/ (loaded everywhere)
 │   ├── typescript/              → applied per-project by the Claude session
 │   └── python/                  → applied per-project by the Claude session
-├── hooks/                       # global PreToolUse guardrails (merged into settings.json)
+├── hooks/                       # global guardrails (merged into settings.json)
 │   ├── hooks.json
 │   ├── doc-file-warning.sh      → warns on stray .md doc creation
-│   └── config-protection.sh     → warns on linter/formatter config edits
+│   ├── config-protection.sh     → warns on linter/formatter config edits
+│   └── stop-guard.sh            → Stop hook: nudges a premature stop to finish the task
 ├── manifests/
 │   └── profiles.json            → install bundles (minimal / dev / seo / finance)
 └── mcp-configs/                 # opt-in MCP server templates + config guidance
@@ -54,9 +55,11 @@ claude-config/
 ## Rules (auto-loaded, replaces the old CLAUDE.md)
 
 `rules/common/*.md` are symlinked into `~/.claude/rules/`, which Claude Code **auto-loads
-globally** at the start of every session — communication style, output hygiene, and the four
+globally** at the start of every session — communication style, output hygiene, the four
 working principles (think before coding, simplicity first, surgical changes, goal-driven
-execution). This replaces the former monolithic `CLAUDE.md`.
+execution), and "finish the task" (don't stop mid-task). This replaces the former monolithic
+`CLAUDE.md`. The "finish the task" rule is paired with the `stop-guard.sh` Stop hook, which
+bounces a premature stop back with a reminder to continue.
 
 Per-language rules under `rules/typescript/` and `rules/python/` are **not** installed globally
 (they would add noise to unrelated projects). A pointer rule in `common/` tells the Claude
