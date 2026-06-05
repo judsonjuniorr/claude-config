@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+---
+
 # Design System Rules
 
 Patterns for generating and auditing design systems.

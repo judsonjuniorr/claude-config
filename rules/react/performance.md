@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+---
+
 # React Performance Rules
 
 Performance optimization patterns for React 18/19 and Next.js.
