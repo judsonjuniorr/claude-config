@@ -9,21 +9,22 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 require_repo
 CLI="$(pick_cli)"
 SUB="${1:-}"
-[ -n "$SUB" ] || die "usage" "pr.sh create|edit|list|view|merge|checks|diff"
+[ -n "$SUB" ] || die "usage" "pr.sh create [--base B]|edit|list|view|merge|checks|diff"
 shift || true
 
 cmd_create() {
-  local draft=0 title="" body_file="" body=""
+  local draft=0 title="" body_file="" body="" base=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --draft) draft=1; shift ;;
       --title) title="$2"; shift 2 ;;
       --body) body="$2"; shift 2 ;;
       --body-file) body_file="$2"; shift 2 ;;
+      --base) base="$2"; shift 2 ;;
       *) die "bad-arg" "$1" ;;
     esac
   done
-  local base; base="$(default_branch)"
+  [ -n "$base" ] || base="$(default_branch)"
   local head; head="$(current_branch)"
   [ "$head" != "$base" ] || die "same-branch" "on $base; switch first"
 
