@@ -88,8 +88,10 @@ function maybeRunQualityGate(filePath) {
 
   filePath = path.resolve(filePath);
   const ext = path.extname(filePath).toLowerCase();
-  const fix = String(process.env.HEROW_QUALITY_GATE_FIX || '').toLowerCase() === 'true';
-  const strict = String(process.env.HEROW_QUALITY_GATE_STRICT || '').toLowerCase() === 'true';
+  // Both default to true; disable per-run via script args `--no-fix` / `--no-strict`.
+  const argv = process.argv.slice(2);
+  const fix = !argv.includes('--no-fix');
+  const strict = !argv.includes('--no-strict');
 
   if (['.ts', '.tsx', '.js', '.jsx', '.json', '.md'].includes(ext)) {
     const projectRoot = findProjectRoot(path.dirname(filePath));
