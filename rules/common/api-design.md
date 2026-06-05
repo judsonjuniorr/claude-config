@@ -4,9 +4,9 @@ Conventions for designing consistent, developer-friendly REST APIs.
 
 ## URL Structure
 
-- Resources are nouns, plural, kebab-case: `/api/v1/team-members`
-- Sub-resources for ownership: `/api/v1/users/:id/orders`
-- Verbs only for non-CRUD actions: `POST /api/v1/orders/:id/cancel`
+- Resources are nouns, plural, kebab-case: `/api/team-members`
+- Sub-resources for ownership: `/api/users/:id/orders`
+- Verbs only for non-CRUD actions: `POST /api/orders/:id/cancel`
 - Query params for filtering/sorting/pagination: `?status=active&sort=created&limit=20&cursor=<token>`
 - Never put verbs in resource URLs: `/getUsers` is wrong
 
@@ -57,7 +57,7 @@ Always return structured errors:
 Prefer cursor-based for large/real-time datasets:
 
 ```
-GET /api/v1/items?limit=20&cursor=<opaque-token>
+GET /api/items?limit=20&cursor=<opaque-token>
 
 Response:
 {
@@ -73,10 +73,10 @@ Offset-based acceptable for small, static datasets only.
 
 ## Versioning
 
-- URL versioning: `/api/v1/`, `/api/v2/` — simple, cacheable
-- Maintain at least one previous version when breaking changes ship
-- Breaking changes: removing fields, changing types, changing semantics
-- Additive changes (new optional fields) are not breaking
+- Do NOT version API URLs (no `/api/v1/`, `/api/v2/`). Keep paths version-free: `/api/...`.
+- If versioning becomes unavoidable, negotiate it out of the path — use a header (`Accept: application/vnd.api+json; version=2` or `X-API-Version`).
+- Prefer evolving without breaking: additive changes (new optional fields) are safe and need no version bump.
+- Breaking changes: removing fields, changing types, changing semantics — avoid them; coordinate via header negotiation, never a new URL path.
 
 ## Validation
 
