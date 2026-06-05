@@ -29,7 +29,7 @@
     },
     "omega-memory": {
       "command": "uvx",
-      "args": ["omega-memory", "serve"]
+      "args": ["--from", "omega-memory[server]", "omega", "serve"]
     },
     "shadcn": {
       "command": "npx",

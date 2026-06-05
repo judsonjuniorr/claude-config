@@ -29,6 +29,7 @@ Options:
   --doctor          Diagnose the installation (symlinks, hooks, rules, manifest)
   --all             Install all assets without prompting
   --replace         Overwrite existing files/symlinks (default: backup as .bak)
+  --no-omega        Skip the omega-memory auto-install (binary + MCP + model + hooks)
   --help            Show this help and exit
 
 Profiles, global hooks (doc-file-warning, config-protection), and common rules
@@ -43,12 +44,14 @@ MODE="install"
 OPT_ALL=false
 OPT_REPLACE=false
 OPT_PROFILE=""
+OPT_NO_OMEGA=false
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     uninstall)       MODE="uninstall" ;;
     --all)           OPT_ALL=true ;;
     --replace)       OPT_REPLACE=true ;;
+    --no-omega)      OPT_NO_OMEGA=true ;;
     --profile)       shift; OPT_PROFILE="${1:-}"; [ -n "$OPT_PROFILE" ] || { echo "ERROR: --profile requires a name"; usage; } ;;
     --profile=*)     OPT_PROFILE="${1#*=}" ;;
     --list-profiles) MODE="list-profiles" ;;
@@ -71,15 +74,31 @@ if $HAS_FZF && [ "$BASH_MAJOR" -ge 4 ]; then USE_FZF=true; fi
 mkdir -p "$CLAUDE_DIR/commands" "$CLAUDE_DIR/skills" "$CLAUDE_DIR/agents"
 
 # ── Broken symlink check ──────────────────────────────────────────────────────
+# Stale links pointing back into this repo (an asset renamed or moved into a
+# namespace) are pruned during install, so re-running recreates them at the new
+# path. Diagnostic modes (doctor/mcp/list) only report — they never mutate.
+# maxdepth 3 to also catch orphans inside namespace dirs (commands/<ns>/<name>.md).
+pruned=()
 broken=()
 while IFS= read -r link; do
-  broken+=("$link")
-done < <(find "$CLAUDE_DIR" -maxdepth 2 -type l ! -exec test -e {} \; -print 2>/dev/null || true)
+  case "$(readlink "$link")" in
+    "$REPO_DIR"/*)
+      if [ "$MODE" = "install" ]; then rm -f "$link"; pruned+=("$link"); else broken+=("$link"); fi
+      ;;
+    *) broken+=("$link") ;;
+  esac
+done < <(find "$CLAUDE_DIR" -maxdepth 3 -type l ! -exec test -e {} \; -print 2>/dev/null || true)
 
+if [ "${#pruned[@]}" -gt 0 ]; then
+  echo "Pruned ${#pruned[@]} stale symlink(s) from renamed/moved assets:"
+  for b in "${pruned[@]}"; do echo "  ✓ removed $b"; done
+  echo
+fi
 if [ "${#broken[@]}" -gt 0 ]; then
   echo "WARNING: broken symlinks found in $CLAUDE_DIR:"
   for b in "${broken[@]}"; do echo "  $b"; done
-  echo "  (repo may have moved — re-run install.sh to fix)"
+  [ "$MODE" = "install" ] && echo "  (not managed by this repo — left untouched)" \
+                          || echo "  (repo-owned links prune on the next plain install.sh run)"
   echo
 fi
 
@@ -447,6 +466,7 @@ uninstall_mode() {
   if [ "${#selected_indices[@]}" -eq "${#inst_names[@]}" ]; then
     remove_global_hooks
     remove_common_rules
+    remove_omega
   fi
   echo
   echo "Done."
@@ -540,6 +560,63 @@ merge_global_hooks() {
 remove_global_hooks() {
   remove_hooks "$GLOBAL_HOOKS_MARKER" "claude-config guardrails"
   [ -L "$GLOBAL_HOOKS_LINK" ] && rm -f "$GLOBAL_HOOKS_LINK"
+}
+
+# ── OMEGA persistent memory (auto-installed) ──────────────────────────────────────
+# Full auto: a persistent `uv tool` install (cache-eviction-proof, unlike the uvx
+# cache that `uv cache clean` can evict — the original failure mode) + MCP at user
+# scope pointing to that stable bin + model/hooks via `omega setup`. Opt out with
+# --no-omega. The package executable is `omega` and the server lives behind the
+# [server] extra, so `uvx omega-memory serve` does NOT work.
+OMEGA_BIN="$HOME/.local/share/uv/tools/omega-memory/bin/omega"
+install_omega() {
+  if $OPT_NO_OMEGA; then echo "  ↳ omega-memory: skipped (--no-omega)"; return 0; fi
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "  ⚠ omega-memory: skipped — uv not found (install: https://docs.astral.sh/uv/)"
+    return 0
+  fi
+
+  # Resolve the tool venv from uv itself so UV_TOOL_DIR / XDG_DATA_HOME are honored
+  # (the $HOME default above only holds when neither is set).
+  local _tooldir
+  _tooldir=$(uv tool dir 2>/dev/null) && [ -n "$_tooldir" ] && OMEGA_BIN="$_tooldir/omega-memory/bin/omega"
+
+  # 1. Persistent install at a stable path (hooks below reference its interpreter).
+  if [ -x "$OMEGA_BIN" ]; then
+    echo "  ✓ omega-memory: already installed"
+  else
+    echo "  • omega-memory: installing 'omega-memory[server]' (uv tool)…"
+    if ! uv tool install "omega-memory[server]" >/dev/null 2>&1; then
+      echo "  ✗ omega-memory: 'uv tool install' failed — skipping"; return 0
+    fi
+    echo "  ✓ omega-memory installed"
+  fi
+
+  # 2. Model + hooks + CLAUDE.md block. Run via the stable bin so the hook paths
+  #    omega bakes into settings.json point at the tool venv, not a volatile cache.
+  echo "  • omega-memory: running setup (model + hooks)…"
+  "$OMEGA_BIN" setup --download-model >/dev/null 2>&1 \
+    && echo "  ✓ omega-memory setup complete" \
+    || echo "  ⚠ omega-memory: setup reported issues (diagnose: $OMEGA_BIN doctor)"
+
+  # 3. Register MCP at user scope with the stable command, overriding whatever
+  #    setup may have registered (remove-then-add keeps it idempotent).
+  if command -v claude >/dev/null 2>&1; then
+    claude mcp remove omega-memory -s user >/dev/null 2>&1 || true
+    if claude mcp add omega-memory -s user "$OMEGA_BIN" -- serve >/dev/null 2>&1; then
+      echo "  ✓ omega-memory MCP registered (user scope)"
+    else
+      echo "  ⚠ omega-memory: MCP registration failed — run: claude mcp add omega-memory -s user $OMEGA_BIN -- serve"
+    fi
+  else
+    echo "  ⚠ omega-memory: 'claude' CLI not found — register manually: claude mcp add omega-memory -s user $OMEGA_BIN -- serve"
+  fi
+}
+remove_omega() {
+  if command -v claude >/dev/null 2>&1 && claude mcp remove omega-memory -s user >/dev/null 2>&1; then
+    echo "  ↳ omega-memory MCP deregistered (user scope)"
+  fi
+  echo "  ↳ omega-memory binary/model/hooks left intact — remove fully with: uv tool uninstall omega-memory"
 }
 
 # Returns 0 if "github-ops" is among the given asset name args.
@@ -853,6 +930,10 @@ echo
 echo "Global guardrails + common rules:"
 install_common_rules
 merge_global_hooks
+
+echo
+echo "OMEGA persistent memory:"
+install_omega
 
 # Summary
 echo
