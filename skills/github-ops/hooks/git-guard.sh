@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # github-ops PreToolUse/Bash guard.
-# Nudges raw PR/issue/release commands (gh|glab pr/issue/release/ci) toward the
-# github-ops scripts. Raw git commit/push are left alone (handled by normal
-# permission rules); read-only git (status/diff/log) is RTK's own hook — so this
-# guard does not overlap.
-#
-# Severity: "ask" — surfaces the suggested script in a permission prompt; the
-# user can approve the raw command or let Claude re-issue via the script.
+# Read-only gh/glab commands (view/list/diff/status/checks/...) are ALLOWED
+# outright — no permission prompt. Only write/mutating PR/issue/release/CI
+# commands surface a confirmation ("ask") that nudges toward the github-ops
+# scripts. Raw git commit/push are left alone (normal permission rules);
+# read-only git (status/diff/log) is RTK's own hook — so no overlap.
 # Never blocks hard, never errors.
 
 CMD="$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))" 2>/dev/null || true)"
@@ -30,6 +28,31 @@ case "$CMD" in
   *github-ops/scripts/*) exit 0 ;;
 esac
 
+# Read-only gh/glab commands → allow without a prompt. Listed before the broad
+# write patterns below so e.g. `gh pr view` resolves here, not to the pr.sh nudge.
+case "$CMD" in
+  # Never fast-allow a command that chains, redirects, pipes, or substitutes —
+  # even if it starts with a read-only verb (e.g. `gh pr view 1 && rm -rf x` or
+  # `gh pr view$(...)`). Let those fall through to the write-nudge / normal flow.
+  *'&'*|*';'*|*'|'*|*'<'*|*'>'*|*'$('*|*'`'*|*$'\n'*) : ;;
+  gh\ pr\ view*|gh\ pr\ list*|gh\ pr\ diff*|gh\ pr\ checks*|gh\ pr\ status*|\
+  glab\ mr\ view*|glab\ mr\ list*|glab\ mr\ diff*|\
+  gh\ issue\ view*|gh\ issue\ list*|gh\ issue\ status*|\
+  glab\ issue\ view*|glab\ issue\ list*|\
+  gh\ release\ view*|gh\ release\ list*|gh\ release\ download*|\
+  glab\ release\ view*|glab\ release\ list*|\
+  gh\ run\ view*|gh\ run\ list*|gh\ run\ watch*|gh\ run\ download*|\
+  gh\ workflow\ view*|gh\ workflow\ list*|\
+  glab\ ci\ view*|glab\ ci\ list*|glab\ ci\ status*|glab\ ci\ trace*|\
+  gh\ repo\ view*|glab\ repo\ view*|\
+  gh\ auth\ status*|glab\ auth\ status*|\
+  gh\ search\ *)
+    python3 -c "import json; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'allow','permissionDecisionReason':'github-ops: read-only command — no confirmation needed.'}}))"
+    exit 0
+    ;;
+esac
+
+# Write/mutating PR/issue/release/CI commands → ask, nudging toward the script.
 suggest=""
 case "$CMD" in
   gh\ pr\ *|glab\ mr\ *)                          suggest="pr.sh" ;;
