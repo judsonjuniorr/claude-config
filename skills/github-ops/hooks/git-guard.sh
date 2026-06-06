@@ -28,6 +28,17 @@ case "$CMD" in
   *github-ops/scripts/*) exit 0 ;;
 esac
 
+# Strip benign trailing redirects (stderr/stdout merges and /dev/null discards)
+# so a read-only command like `gh pr diff 21 2>&1` still fast-allows. These tokens
+# never write to a real file, so removing them is safe for classification — while
+# pipes, chains, substitutions and real file redirects still fall through below.
+# Loops to peel stacked forms like `>/dev/null 2>&1`.
+while :; do
+  trimmed="$(printf '%s' "$CMD" | sed -E 's/[[:space:]]*(2>&1|>&2|&>\/dev\/null|2>\/dev\/null|1?>\/dev\/null)[[:space:]]*$//')"
+  [ "$trimmed" = "$CMD" ] && break
+  CMD="$trimmed"
+done
+
 # Read-only gh/glab commands → allow without a prompt. Listed before the broad
 # write patterns below so e.g. `gh pr view` resolves here, not to the pr.sh nudge.
 case "$CMD" in
