@@ -28,23 +28,20 @@ case "$CMD" in
   *github-ops/scripts/*) exit 0 ;;
 esac
 
-# Strip benign trailing redirects (stderr/stdout merges and /dev/null discards)
-# so a read-only command like `gh pr diff 21 2>&1` still fast-allows. These tokens
-# never write to a real file, so removing them is safe for classification — while
-# pipes, chains, substitutions and real file redirects still fall through below.
-# Loops to peel stacked forms like `>/dev/null 2>&1`.
-while :; do
-  trimmed="$(printf '%s' "$CMD" | sed -E 's/[[:space:]]*(2>&1|>&2|&>\/dev\/null|2>\/dev\/null|1?>\/dev\/null)[[:space:]]*$//')"
-  [ "$trimmed" = "$CMD" ] && break
-  CMD="$trimmed"
-done
+# Strip benign redirections from a check-copy: fd duplications (2>&1, >&2) and
+# redirects to/from /dev/null (2>/dev/null, &>/dev/null). These don't introduce a
+# second command, so they must not defeat the read-only fast-allow below. A
+# redirect to a real file (> out.txt) is left intact — it can clobber, so it stays
+# flagged.
+CHK="$(printf '%s' "$CMD" | sed -E -e 's/[0-9]*>>?&[0-9]+//g' -e 's/(&|[0-9]*)>>?[[:space:]]*\/dev\/[a-z]+//g')"
 
 # Read-only gh/glab commands → allow without a prompt. Listed before the broad
 # write patterns below so e.g. `gh pr view` resolves here, not to the pr.sh nudge.
-case "$CMD" in
-  # Never fast-allow a command that chains, redirects, pipes, or substitutes —
-  # even if it starts with a read-only verb (e.g. `gh pr view 1 && rm -rf x` or
-  # `gh pr view$(...)`). Let those fall through to the write-nudge / normal flow.
+case "$CHK" in
+  # Never fast-allow a command that chains, pipes, backgrounds, redirects to a
+  # file, or substitutes — even if it starts with a read-only verb (e.g.
+  # `gh pr view 1 && rm -rf x` or `gh pr view$(...)`). Let those fall through to
+  # the write-nudge / normal flow.
   *'&'*|*';'*|*'|'*|*'<'*|*'>'*|*'$('*|*'`'*|*$'\n'*) : ;;
   gh\ pr\ view*|gh\ pr\ list*|gh\ pr\ diff*|gh\ pr\ checks*|gh\ pr\ status*|\
   glab\ mr\ view*|glab\ mr\ list*|glab\ mr\ diff*|\
