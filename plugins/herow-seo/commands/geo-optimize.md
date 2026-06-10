@@ -15,7 +15,7 @@ Pillar 2 of the corrected Agensi playbook: make content **citable by AI search e
 ## GSC data contract (shared across the suite)
 
 `$ARGUMENTS` accepts one of:
-- `gsc-export-path` — path to a **GSC Performance export** (CSV/XLSX: `Queries`/`Pages`/`Dates` with `Clicks, Impressions, CTR, Position`) or a **Bulk Data Export** (`searchdata_url_impression` / `searchdata_site_impression` rows). This is the canonical contract; the full column spec lives in [`commands/seo/README.md`](./README.md).
+- `gsc-export-path` — path to a **GSC Performance export** (CSV/XLSX: `Queries`/`Pages`/`Dates` with `Clicks, Impressions, CTR, Position`) or a **Bulk Data Export** (`searchdata_url_impression` / `searchdata_site_impression` rows). This is the canonical contract; the full column spec lives in `${CLAUDE_PLUGIN_ROOT}/reference/gsc-data-contract.md`.
 - `--since N` — analyze the last N days (used with toprank's GSC integration, if present).
 - `--site URL` — the property to analyze.
 

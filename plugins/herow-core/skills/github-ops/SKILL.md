@@ -196,7 +196,7 @@ Do not split automatically. Always ask.
 
 ## Installed hooks
 
-Installing this skill via `install.sh` also registers one hook in `~/.claude/settings.json` (idempotent; the uninstall flow removes it). It is optional — the scripts work without it.
+The herow-core plugin registers one hook automatically (`hooks/hooks.json`). It is optional — the scripts work without it.
 
 - **`git-guard`** (`PreToolUse` / `Bash`, severity `ask`) — when a raw **mutation/PR** command is about to run (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`), it surfaces a permission prompt suggesting the matching script (`ship.sh`/`pr.sh`/`issue.sh`/`repo.sh`). Read-only `git status`/`diff`/`log` are left untouched, so it does not overlap RTK's git proxy. Commands that already invoke `${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/` are allowed silently.
 
@@ -208,6 +208,6 @@ Installing this skill via `install.sh` also registers one hook in `~/.claude/set
 
 ## Recommended subagents
 
-These subagents from this repo (`agents/`) sharpen the workflow when installed. The skill works without them — install selectively via `install.sh`.
+These subagents ship with the herow plugins and sharpen the workflow when installed. The skill works without them.
 
 - **[`code-reviewer`](../../agents/code-reviewer.md)** — between `ship.sh`'s staged-diff emit and the final `--message` call, or before `pr.sh create`. Reviews the staged diff for security vulnerabilities, correctness bugs, and performance regressions. Auto-detects the project's package manager. Skip when the diff is trivial (typo, docstring, formatting-only).

@@ -8,7 +8,7 @@ argument-hint: "[<free text> | --history-days N | --future-days N | --no-analyze
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text. Applies to all steps below.
 
-> **Recommended subagent (when installed):** Step 6 delegates analysis to the `financial-analyst` subagent via the `Agent` tool. If the file `~/.claude/agents/financial-analyst.md` does not exist, the step automatically falls back to `general-purpose` — the command continues to work. To install the dedicated subagent, run `install.sh` in this repo and select `financial-analyst`.
+> **Recommended subagent (when installed):** Step 6 delegates analysis to the `financial-analyst` subagent via the `Agent` tool. The agent ships with this plugin (herow-finance); if it is unavailable the step automatically falls back to `general-purpose` — the command continues to work.
 
 When the user invokes `/finance:organizze`, follow these steps **exactly**. Skip none. Do not pre-inspect (do not run `git status`, do not list directories, do not check versions — go straight to the scripts; they are self-contained and handle legacy migration automatically).
 
@@ -18,11 +18,11 @@ Optional arguments (parse from `$ARGUMENTS`):
 - `--no-analyze` → only pull and save the snapshot, do not call the subagent
 
 **Absolute paths**:
-- Global scripts (provider-agnostic): `/Users/judson/sources/personal/claude-config/commands/finance/scripts/`
-- Organizze scripts: `/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/`
+- Global scripts (provider-agnostic): `${CLAUDE_PLUGIN_ROOT}/scripts/finance/`
+- Organizze scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/organizze/`
 - Global storage: `~/finance/` (`memory.md`, `plans.md`, `profile.md`)
 - Organizze storage: `~/finance/organizze/` (`snapshots/`, `reports/`, `budget-suggestions/`, `.auth`, `.config`, `balances.json`)
-- System prompt (read by `analyze.py`): `/Users/judson/sources/personal/claude-config/agents/financial-analyst/financial-analyst.md`
+- System prompt (read by `analyze.py`): `${CLAUDE_PLUGIN_ROOT}/agents/financial-analyst.md`
 
 ---
 
@@ -70,7 +70,7 @@ ls ~/finance/organizze/.auth 2>/dev/null
 
 4. Save the credentials by running the script (email+token → `.auth`; password → Keychain; installs Playwright):
    ```bash
-   printf '%s\n%s\n%s\n' "$EMAIL" "$TOKEN" "$PASSWORD" | bash /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/setup_auth.sh
+   printf '%s\n%s\n%s\n' "$EMAIL" "$TOKEN" "$PASSWORD" | bash ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/setup_auth.sh
    ```
    Replace `$EMAIL`, `$TOKEN` and `$PASSWORD` with the real values (do not expose token/password in history — pass via heredoc).
 
@@ -93,7 +93,7 @@ After the first `pull.py`, if `~/finance/organizze/balances.json` does not yet e
 
 3. Call:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/reconcile.py --snapshot "$SNAP" <id>=<cents> [<id>=<cents> ...]
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/reconcile.py --snapshot "$SNAP" <id>=<cents> [<id>=<cents> ...]
    ```
    E.g.: `1234567=80174 7654321=194746` (R$ 801.74 and R$ 1,947.46 — illustrative IDs).
 
@@ -110,7 +110,7 @@ The per-account cash flow projection (Step 5+) needs to know **which account pay
 After the first `pull.py` (Step 3), run:
 
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/config.py cards-missing --snapshot "$SNAP"
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/config.py cards-missing --snapshot "$SNAP"
 ```
 
 Output: `<card_id>|<card_name>` line by line — only cards without a mapping. If empty, skip this step.
@@ -126,12 +126,12 @@ For each line:
 
 3. Save:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/config.py card-account <card_id> <account_id>
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/config.py card-account <card_id> <account_id>
    ```
 
 Optional — alert threshold for critical days (default R$ 0, no margin):
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/config.py set CASHFLOW_THRESHOLD_CENTS 20000
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/config.py set CASHFLOW_THRESHOLD_CENTS 20000
 ```
 (`20000` = R$ 200 margin; projected balance below this becomes a "critical day".)
 
@@ -143,14 +143,14 @@ Recommendation personalization depends on the profile in `~/finance/profile.md` 
 
 1. Check whether to ask now:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py should-ask
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py should-ask
    ```
    - Exit code 1 → profile is complete OR silenced (`last_skip` < 7d). Skip to Step 3.
    - Exit code 0 → there are missing fields and it's not silenced. Continue.
 
 2. List missing fields:
    ```bash
-   MISSING=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py missing)
+   MISSING=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py missing)
    ```
 
 3. For each field in `$MISSING` (limit **6 questions per run** — the rest will be asked next time):
@@ -167,12 +167,12 @@ Recommendation personalization depends on the profile in `~/finance/profile.md` 
      - `tolerancia_risco`: options `conservador / moderado / agressivo` + Skip. Include a short description of each.
    - For each valid answer (not "Skip"), save immediately:
      ```bash
-     python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py set <key> "<value>"
+     python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py set <key> "<value>"
      ```
 
 4. If the user skipped **all** the fields asked, save a 7-day silence:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py mark-skip
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py mark-skip
    ```
 
 5. Proceed to Step 3 (Pull). The updated profile will be included in the Step 5 prompt.
@@ -181,7 +181,7 @@ Recommendation personalization depends on the profile in `~/finance/profile.md` 
 
 ```bash
 SNAP=~/finance/organizze/snapshots/$(date +%F-%H%M).json
-python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/pull.py \
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/pull.py \
   --out "$SNAP" \
   --history-days <N or 180> \
   --future-days <N or 90>
@@ -209,7 +209,7 @@ Error handling:
 **IMPORTANT**: scraping setup is independent of the API `.auth`. Users who already had `.auth` (created before this feature) do NOT have Playwright installed nor the web password in Keychain — this step covers that case. Do not skip assuming "it's already configured".
 
 ```bash
-SCRIPTS=/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts
+SCRIPTS=${CLAUDE_PLUGIN_ROOT}/scripts/organizze
 bash "$SCRIPTS/setup_scrape.sh" </dev/null
 ```
 
@@ -304,7 +304,7 @@ For each slice, call `Agent` with:
   
   Run:
   ```bash
-  python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/scrape_slice.py <SLICE ARGS>
+  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/scrape_slice.py <SLICE ARGS>
   ```
   
   Where <SLICE ARGS> is:
@@ -335,7 +335,7 @@ After **all** subagents return, check the results:
 If at least `dashboard` returned `ok|scraped|...`, consolidate (resolve `SNAP` in the same block):
 
 ```bash
-SCRIPTS=/Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts
+SCRIPTS=${CLAUDE_PLUGIN_ROOT}/scripts/organizze
 SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
 python3 "$SCRIPTS/apply_scrape.py" --snapshot "$SNAP"
 ```
@@ -379,7 +379,7 @@ Before firing a new agent, **check the cache** (default TTL 14 days): if a recen
 
 1. List the target categories + city from the profile (pipe-delimited output):
    ```bash
-   TARGETS=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py --snapshot "$SNAP" --list-targets)
+   TARGETS=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/analyze.py --snapshot "$SNAP" --list-targets)
    echo "$TARGETS"
    ```
    Expected format, 1 record per line:
@@ -393,7 +393,7 @@ Before firing a new agent, **check the cache** (default TTL 14 days): if a recen
 3. **For each target, check the cache first** (TTL 14d configurable). Split into two groups: `CACHED` and `MISSING`:
    ```bash
    for cat in <list of names>; do
-     CACHED_PATH=$(python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py \
+     CACHED_PATH=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/analyze.py \
        --research-cache-lookup "$cat" --max-age-days 14)
      if [ -n "$CACHED_PATH" ]; then
        cp "$CACHED_PATH" "$RESEARCH_DIR/$cat.md"
@@ -448,7 +448,7 @@ Before firing a new agent, **check the cache** (default TTL 14 days): if a recen
 
 7. Now render the prompt **with** the `--research-dir`:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/analyze.py \
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/analyze.py \
      --snapshot "$SNAP" --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"
    ```
 
@@ -481,7 +481,7 @@ PY
      echo "Use as the basis for the **Transfer and savings plan**: for each date, compare the **Forecast (Organizze)** column across main accounts. Where an account has a negative forecast (or below CASHFLOW_THRESHOLD_CENTS), propose moving the slack from another MAIN account with a positive forecast on the same date — stating origin → destination, amount and date. Caixinhas/reserves are the LAST resort: only suggest using them when NO main account has enough slack to cover the shortfall; when doing so, explicitly label it 'emergency use of reserve' and quantify how much of the reserve would be consumed. Use **Forecast with overdue** to see the real impact of past-due transactions. If not even reserves can cover it, flag the shortfall and suggest adjustments (defer/cut an unpaid expense, accelerate income)."
      for D in $DATES; do
        echo
-       python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/balance_on.py \
+       python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/balance_on.py \
          --snapshot "$SNAP" --date "$D"
      done
    } >> "$PROMPT_FILE"
@@ -509,7 +509,7 @@ After analysis, offer to register new context/goals. Each block is independent; 
 If there is a response, save:
 
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py add "<user text>" [--tag <optional>]
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py add "<user text>" [--tag <optional>]
 ```
 
 (Or tell the user they can run `/finance:context` later.)
@@ -529,7 +529,7 @@ If there is a response, ask short follow-up questions in sequence (each with "Sk
 Save:
 
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py add "<text>" \
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py add "<text>" \
   --target-cents <N> \
   [--deadline <YYYY-MM-DD>] \
   [--account "<name>"] \
@@ -558,7 +558,7 @@ The subagent emits up to 3 questions at the end of the report, in the exact form
 
 4. For each valid response (not "Skip"), save to memory:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py add "<question + condensed answer>" --tag <derived tag>
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py add "<question + condensed answer>" --tag <derived tag>
    ```
    - Example tags: `subscription`, `debt`, `home`, `transport`, `goal`.
 
@@ -569,7 +569,7 @@ The subagent emits up to 3 questions at the end of the report, in the exact form
 After the subagent analysis, run:
 
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/organizze-scripts/suggest_budgets.py \
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/suggest_budgets.py \
   --snapshot "$SNAP" --top 20
 ```
 
@@ -634,4 +634,4 @@ All three are provider-agnostic: any future provider consumes the same storage.
 
 Subagent from this repo (`agents/`) that improves results when installed. The command works without it — Step 6 automatically falls back to `general-purpose`.
 
-- **[`financial-analyst`](../../../agents/financial-analyst/)** — personalized personal financial analysis (consumes Organizze snapshots, respects user memories, generates a prioritized action plan). Install via `install.sh` selecting `financial-analyst`.
+- **`financial-analyst`** — personalized personal financial analysis (consumes Organizze snapshots, respects user memories, generates a prioritized action plan). Ships with this plugin (`agents/financial-analyst.md`).

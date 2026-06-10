@@ -68,7 +68,7 @@ Report to the user: file written, framework used, number of tests generated, est
 
 ## Recommended subagents
 
-These subagents from this repo (`agents/`) sharpen the output when installed. The command works without them — install selectively via `install.sh`.
+These subagents ship with the herow-dev plugin and sharpen the output when installed. The command works without them.
 
 - **[`fullstack-developer`](../../agents/fullstack-developer.md)** — when the target is TypeScript/JavaScript (Vitest, Jest, Testing Library). Best for React/Next.js components, tRPC procedures, or Drizzle queries.
 - **[`python-pro`](../../agents/python-pro.md)** — when the target is Python (pytest, pytest-mock). Brings ruff/mypy strict discipline to the generated suite.

@@ -65,11 +65,11 @@ commands/seo/
 
 ## Install
 
-`install.sh` auto-discovers the `seo/` namespace and the three agents — no manual wiring:
+Install via the herow plugin marketplace — no manual wiring:
 
 ```bash
-./install.sh        # select "commands/seo" + the three agents
-./install.sh --all  # everything
+/plugin marketplace add judsonjuniorr/claude-config
+/plugin install herow-seo@herow
 ```
 
 ## Prerequisites

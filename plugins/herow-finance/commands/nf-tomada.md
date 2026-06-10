@@ -14,16 +14,9 @@ Registra uma NF tomada (nota fiscal de serviço recebida) no Contabilizei a part
 
 Resolve `$ARGUMENTS` como caminho do arquivo. Se vazio ou não informado, use `AskUserQuestion` para pedir o caminho.
 
-> `$0` **não** resolve a pasta do comando neste harness (o bloco roda fora dela). Descubra `SCRIPT_DIR` procurando nas localizações conhecidas:
-
 ```bash
-for d in \
-  "$HOME/.claude/commands/contabilizei/contabilizei-scripts" \
-  "$HOME/sources/personal/claude-config/commands/contabilizei/contabilizei-scripts" \
-  "$(dirname "$0")/contabilizei-scripts"; do
-  [ -f "$d/extract_nf.py" ] && SCRIPT_DIR="$d" && break
-done
-[ -z "${SCRIPT_DIR:-}" ] && { echo "err|scripts-not-found|contabilizei-scripts" >&2; exit 1; }
+SCRIPT_DIR="${CLAUDE_PLUGIN_ROOT}/scripts/contabilizei"
+[ -f "$SCRIPT_DIR/extract_nf.py" ] || { echo "err|scripts-not-found|$SCRIPT_DIR" >&2; exit 1; }
 bash "$SCRIPT_DIR/setup.sh" >&2
 python3 "$SCRIPT_DIR/extract_nf.py" "<caminho>"
 ```

@@ -48,12 +48,12 @@ github-ops/
 │   └── repo.sh           # info | releases | runs | workflow-run
 └── hooks/
     ├── git-guard.sh      # PreToolUse/Bash — nudge raw mutations → scripts
-    └── hooks.json        # entries install.sh merges into settings.json
+    └── git-guard.sh      # (registered via the herow-core plugin hooks.json)
 ```
 
-### Hooks (registered by `install.sh`)
+### Hooks (registered by the herow-core plugin)
 
-Installing the skill also merges one hook into `~/.claude/settings.json` (idempotent; uninstall removes it, tagged by the `github-ops/hooks/` marker). jq is required for the merge; without it `install.sh` prints the snippet to add manually. It is optional.
+The herow-core plugin registers the git-guard hook automatically when enabled (see `plugins/herow-core/hooks/hooks.json`). It is optional — the scripts work without it.
 
 - **`git-guard`** (`PreToolUse`/`Bash`, severity `ask`) — intercepts raw **mutation/PR** commands (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`) and prompts with the matching script. Read-only `git status`/`diff`/`log` are left to RTK's proxy (no overlap); calls that already run `github-ops/scripts/` pass through silently.
 

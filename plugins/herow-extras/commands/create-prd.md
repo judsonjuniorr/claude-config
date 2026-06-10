@@ -102,6 +102,6 @@ Ask with `AskUserQuestion` whether to write the PRD to a file or keep it chat-on
 
 ## Recommended subagents
 
-This subagent from this repo (`agents/`) sharpens the output when installed. The command works without it — install selectively via `install.sh`.
+This subagent ships with the herow-dev plugin and sharpens the output when installed. The command works without it.
 
 - **[`backend-architect`](../../agents/backend-architect.md)** — for the **Technical considerations** section: surfaces dependencies, integration points, and build/buy or stack trade-offs at PRD altitude (no implementation). Optional; if absent, the command fills the section inline.

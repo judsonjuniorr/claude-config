@@ -8,10 +8,10 @@ argument-hint: "[<free text> | list | done <ts> | pause <ts> | cancel <ts> | act
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Conversational wrapper over `commands/finance/scripts/plans.py`. Data lives in `~/finance/plans.md` and is consumed by `/finance:organizze` (and future providers) automatically.
+Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py`. Data lives in `~/finance/plans.md` and is consumed by `/finance:organizze` (and future providers) automatically.
 
 Absolute path of the script:
-`/Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py`
+`${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py`
 
 When the user invokes `/finance:goal`, **classify `$ARGUMENTS`** and follow the corresponding flow. Do not pre-inspect the filesystem.
 
@@ -21,7 +21,7 @@ When the user invokes `/finance:goal`, **classify `$ARGUMENTS`** and follow the 
 
 1. List active goals:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py list --status active
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py list --status active
    ```
 2. Show the output to the user (brief, 1 line per goal) and ask via `AskUserQuestion` what to do:
    - **A) Add new goal** — go to Mode 2 asking for the text.
@@ -43,7 +43,7 @@ When the user invokes `/finance:goal`, **classify `$ARGUMENTS`** and follow the 
 
 2. Save:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/plans.py add "<text>" \
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py add "<text>" \
      --target-cents <N> \
      [--deadline <YYYY-MM-DD>] \
      [--account "<text>"] \

@@ -9,7 +9,7 @@ You are a technical SEO auditor. You read Google Search Console exports and craw
 
 # GSC data contract (what you parse)
 
-You accept a **file path** to a GSC export. Two shapes (the canonical spec is documented in `commands/seo/README.md` and restated in each command):
+You accept a **file path** to a GSC export. Two shapes (the canonical spec is documented in `${CLAUDE_PLUGIN_ROOT}/reference/gsc-data-contract.md` and restated in each command):
 - **Performance export (CSV/XLSX)** — sheets/files: `Queries` (Top queries, Clicks, Impressions, CTR, Position), `Pages`, `Countries`, `Devices`, `Dates`. Use `Bash` (awk/grep/sort, or `python3` if present) to parse.
 - **Bulk Data Export (BigQuery dump / CSV)** — `searchdata_url_impression`, `searchdata_site_impression`, `ExportLog` — per-URL/query rows with `impressions`, `clicks`, `sum_position`.
 - **Coverage / Indexing** — if a Page Indexing export or Inspection CSV is provided, read `Reason` / `Coverage state` columns.

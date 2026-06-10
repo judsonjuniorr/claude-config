@@ -77,7 +77,7 @@ Report:
 
 ## Recommended subagents
 
-These subagents from this repo (`agents/`) sharpen the output when installed. The command works without them — install selectively via `install.sh`.
+These subagents ship with the herow-dev plugin and sharpen the output when installed. The command works without them.
 
 - **[`fullstack-developer`](../../agents/fullstack-developer.md)** — when refactoring TypeScript/JavaScript (React, Next.js, tRPC, Drizzle). Knows the modern stack idioms to refactor *toward*, not away from.
 - **[`python-pro`](../../agents/python-pro.md)** — when refactoring Python 3.12+. Brings full type coverage, ruff, and mypy strict discipline.

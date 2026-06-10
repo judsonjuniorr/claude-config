@@ -168,7 +168,7 @@ Once every file is `add`ed:
 
 ## Recommended subagents
 
-These subagents from this repo (`agents/`) sharpen the output when installed. The command works without them — install selectively via `install.sh`.
+These subagents ship with the herow-dev plugin and sharpen the output when installed. The command works without them.
 
 - **[`code-reviewer`](../../agents/code-reviewer.md)** — after every conflict file is resolved, before commit. Audits whether the union/picked-side preserved each side's intent, flags accidental semantic loss, and verifies no marker leaked.
 - **[`debugger`](../../agents/debugger.md)** — if tests fail after merge or the resolved code misbehaves at runtime. Runs root-cause analysis grounded in the merge history (not a fix-first reflex).

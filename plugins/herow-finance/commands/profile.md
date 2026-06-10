@@ -8,10 +8,10 @@ argument-hint: "[<free text> | init | list | get <key> | set <key> <value> | ski
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Conversational wrapper over `commands/finance/scripts/profile.py`. Data lives in `~/finance/profile.md` (format `key: value`, hand-editable) and is injected into **every analysis** (`/finance:organizze` and future providers) as personal context — to calibrate recommendations by age, income, dependents, housing, city, risk tolerance.
+Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`. Data lives in `~/finance/profile.md` (format `key: value`, hand-editable) and is injected into **every analysis** (`/finance:organizze` and future providers) as personal context — to calibrate recommendations by age, income, dependents, housing, city, risk tolerance.
 
 Absolute path of the script:
-`/Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py`
+`${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`
 
 When the user invokes `/finance:profile`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
 
@@ -39,12 +39,12 @@ When the user invokes `/finance:profile`, classify `$ARGUMENTS` and follow the f
 
 1. Show the current profile:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py get
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py get
    ```
 
 2. List missing fields:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py missing
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py missing
    ```
 
 3. Ask via `AskUserQuestion` what to do:
@@ -91,7 +91,7 @@ For each key to ask (all in `init`; only the ones from `missing` when called by 
 
 For each valid answer, save immediately:
 ```bash
-python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/profile.py set <key> "<value>"
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py set <key> "<value>"
 ```
 
 If the user skips **all** fields, run `profile.py mark-skip` (silences for 7 days).

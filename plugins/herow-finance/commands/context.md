@@ -8,10 +8,10 @@ argument-hint: "[<free text> | list | prune]"
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Conversational wrapper over `commands/finance/scripts/memory.py`. Data lives in `~/finance/memory.md` and is injected into any analysis (Organizze and future providers) as directives that **the AI cannot contradict**.
+Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py`. Data lives in `~/finance/memory.md` and is injected into any analysis (Organizze and future providers) as directives that **the AI cannot contradict**.
 
 Absolute path of the script:
-`/Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py`
+`${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py`
 
 When the user invokes `/finance:context`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
 
@@ -21,7 +21,7 @@ When the user invokes `/finance:context`, classify `$ARGUMENTS` and follow the f
 
 1. List the 20 most recent:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py list --recent 20
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py list --recent 20
    ```
 
 2. Show to the user and ask via `AskUserQuestion`:
@@ -38,7 +38,7 @@ When the user invokes `/finance:context`, classify `$ARGUMENTS` and follow the f
 
 2. Save:
    ```bash
-   python3 /Users/judson/sources/personal/claude-config/commands/finance/scripts/memory.py add "<text>" [--tag <optional>]
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py add "<text>" [--tag <optional>]
    ```
 
 3. Confirm in 1 line: what was saved and where (`~/finance/memory.md`). Say: "Next `/finance:organizze` will take this into account."
