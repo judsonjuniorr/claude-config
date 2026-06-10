@@ -9,6 +9,7 @@ that injects the snapshot summary + the system prompt extracted from the
 framework markdown. The caller (slash command) delegates this prompt to
 the financial-analyst subagent.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,7 +25,12 @@ from _paths import migrate_legacy  # noqa: E402
 
 migrate_legacy()
 
-DEFAULT_FRAMEWORK = pathlib.Path(__file__).resolve().parents[3] / "agents" / "financial-analyst" / "financial-analyst.md"
+DEFAULT_FRAMEWORK = (
+    pathlib.Path(__file__).resolve().parents[3]
+    / "agents"
+    / "financial-analyst"
+    / "financial-analyst.md"
+)
 
 
 def cents_to_brl(c: int | float | None) -> str:
@@ -43,7 +49,7 @@ def extract_system_prompt(framework_md: str) -> str:
         end = 1
         while end < len(lines) and lines[end].strip() != "---":
             end += 1
-        lines = lines[end + 1:]
+        lines = lines[end + 1 :]
     return "\n".join(lines).strip() or "You are a senior personal financial analyst."
 
 
@@ -69,7 +75,9 @@ def _is_invoice_category_name(name: str | None) -> bool:
     return bool(_INVOICE_NAME_RE.search(name))
 
 
-def top_categories(snapshot: dict, month: dt.date | None = None) -> list[tuple[str, int]]:
+def top_categories(
+    snapshot: dict, month: dt.date | None = None
+) -> list[tuple[str, int]]:
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     totals: dict[str, int] = defaultdict(int)
     target_month = (month or dt.date.today()).strftime("%Y-%m")
@@ -84,8 +92,9 @@ def top_categories(snapshot: dict, month: dt.date | None = None) -> list[tuple[s
     return sorted(totals.items(), key=lambda x: -x[1])[:10]
 
 
-def top_categories_effective(snapshot: dict, month: dt.date | None = None,
-                              limit: int = 3) -> list[tuple[str, int]]:
+def top_categories_effective(
+    snapshot: dict, month: dt.date | None = None, limit: int = 3
+) -> list[tuple[str, int]]:
     """Top N effective spending categories for the month, EXCLUDING categories
     whose name contains 'fatura'/'cartão'/'invoice' (invoice payments, which
     are not new spending)."""
@@ -105,9 +114,9 @@ def top_categories_effective(snapshot: dict, month: dt.date | None = None,
     return sorted(totals.items(), key=lambda x: -x[1])[:limit]
 
 
-def top_transactions_of_category(snapshot: dict, cat_name: str,
-                                  month: dt.date | None = None,
-                                  limit: int = 5) -> list[dict]:
+def top_transactions_of_category(
+    snapshot: dict, cat_name: str, month: dt.date | None = None, limit: int = 5
+) -> list[dict]:
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     target_month = (month or dt.date.today()).strftime("%Y-%m")
     rows: list[dict] = []
@@ -156,8 +165,9 @@ def category_median_6m(snapshot: dict, cat_name: str) -> int:
     return vals[n // 2] if n % 2 else (vals[n // 2 - 1] + vals[n // 2]) // 2
 
 
-def top_transactions_of_month(snapshot: dict, month: dt.date | None = None,
-                               limit: int = 20) -> list[dict]:
+def top_transactions_of_month(
+    snapshot: dict, month: dt.date | None = None, limit: int = 20
+) -> list[dict]:
     """Top N expenses of the month ordered by absolute value, excluding invoice
     payment categories (which duplicate card spending)."""
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
@@ -181,7 +191,7 @@ def category_delta(snapshot: dict) -> list[tuple[str, int, int, float]]:
     """(category, current_month_cents, previous_month_cents, change_pct)"""
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     today = dt.date.today()
-    prev = (today.replace(day=1) - dt.timedelta(days=1))
+    prev = today.replace(day=1) - dt.timedelta(days=1)
     cur_key = today.strftime("%Y-%m")
     prev_key = prev.strftime("%Y-%m")
     cur: dict[str, int] = defaultdict(int)
@@ -215,7 +225,9 @@ def summarize(snapshot: dict) -> str:
 
     out: list[str] = []
     out.append(f"# Organizze Snapshot — {m.get('pulled_at', '')}")
-    out.append(f"Period: {m.get('periodo', {}).get('history_start')} → {m.get('periodo', {}).get('future_end')}")
+    out.append(
+        f"Period: {m.get('periodo', {}).get('history_start')} → {m.get('periodo', {}).get('future_end')}"
+    )
     out.append("")
     out.append("## Consolidated balance and projection")
     out.append(f"- Current balance: **{cents_to_brl(t.get('saldo_cents'))}**")
@@ -223,9 +235,13 @@ def summarize(snapshot: dict) -> str:
     out.append(f"- Projection +30d: {cents_to_brl(t.get('saldo_proj_30d_cents'))}")
     out.append(f"- Projection +90d: {cents_to_brl(t.get('saldo_proj_90d_cents'))}")
     out.append("")
+
     def is_principal(a):
-        return (not a.get("archived")
-                and a.get("type") in ("checking", "savings", "other"))
+        return not a.get("archived") and a.get("type") in (
+            "checking",
+            "savings",
+            "other",
+        )
 
     out.append("## Balance by main account (included in consolidated)")
     for a in accounts:
@@ -235,7 +251,9 @@ def summarize(snapshot: dict) -> str:
         out.append(f"- {a.get('name')} ({a.get('type')}): {cents_to_brl(bal)}")
 
     out.append("")
-    out.append("## Other accounts (not included in consolidated: savings pots, auxiliary accounts)")
+    out.append(
+        "## Other accounts (not included in consolidated: savings pots, auxiliary accounts)"
+    )
     for a in accounts:
         if a.get("archived") or is_principal(a):
             continue
@@ -248,6 +266,7 @@ def summarize(snapshot: dict) -> str:
     try:
         sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
         from config import card_to_account_map  # type: ignore
+
         _card_map = card_to_account_map()
     except Exception:
         _card_map = {}
@@ -268,7 +287,9 @@ def summarize(snapshot: dict) -> str:
         if amt == 0:
             continue
         if today <= due <= today + dt.timedelta(days=7):
-            out.append(f"- {inv.get('_credit_card_name')} · due {d} · {cents_to_brl(amt)}")
+            out.append(
+                f"- {inv.get('_credit_card_name')} · due {d} · {cents_to_brl(amt)}"
+            )
             n += 1
     if n == 0:
         out.append("- (none)")
@@ -279,9 +300,11 @@ def summarize(snapshot: dict) -> str:
     # forces the analyst to size transfers accounting for them even when the
     # post-invoice balance remains positive.
     out.append("## Invoices due on the horizon (8–90 days)")
-    out.append("_Already embedded in the projected balance of the paying account. Do not duplicate as an extra debit when recommending transfers — but consider as the LARGEST debit of the month when sizing the paying account's cash._")
+    out.append(
+        "_Already embedded in the projected balance of the paying account. Do not duplicate as an extra debit when recommending transfers — but consider as the LARGEST debit of the month when sizing the paying account's cash._"
+    )
     n = 0
-    for inv in sorted(invoices, key=lambda x: (x.get("date") or "")):
+    for inv in sorted(invoices, key=lambda x: x.get("date") or ""):
         d = (inv.get("date") or "")[:10]
         try:
             due = dt.date.fromisoformat(d)
@@ -293,8 +316,14 @@ def summarize(snapshot: dict) -> str:
         if today + dt.timedelta(days=8) <= due <= today + dt.timedelta(days=90):
             cid = inv.get("credit_card_id") or inv.get("_credit_card_id")
             pay_acc_id = _card_map.get(cid) if cid is not None else None
-            pay_acc = _acc_name_by_id.get(pay_acc_id, "⚠️ no paying account mapped") if pay_acc_id else "⚠️ no paying account mapped"
-            out.append(f"- {inv.get('_credit_card_name')} · due {d} · {cents_to_brl(amt)} · debits from **{pay_acc}**")
+            pay_acc = (
+                _acc_name_by_id.get(pay_acc_id, "⚠️ no paying account mapped")
+                if pay_acc_id
+                else "⚠️ no paying account mapped"
+            )
+            out.append(
+                f"- {inv.get('_credit_card_name')} · due {d} · {cents_to_brl(amt)} · debits from **{pay_acc}**"
+            )
             n += 1
     if n == 0:
         out.append("- (none)")
@@ -312,11 +341,15 @@ def summarize(snapshot: dict) -> str:
     out.append("## Category change — current vs. previous month")
     for name, c, p, delta in category_delta(snapshot):
         sign = "+" if delta >= 0 else ""
-        out.append(f"- {name}: {cents_to_brl(c)} (previous {cents_to_brl(p)}, {sign}{delta:.1f}%)")
+        out.append(
+            f"- {name}: {cents_to_brl(c)} (previous {cents_to_brl(p)}, {sign}{delta:.1f}%)"
+        )
     out.append("")
 
     out.append("## Detected recurring transactions")
-    rec = [t for t in (snapshot.get("transactions_past") or []) if t.get("is_recurring")]
+    rec = [
+        t for t in (snapshot.get("transactions_past") or []) if t.get("is_recurring")
+    ]
     by_payee: dict[str, tuple[int, int]] = {}  # payee -> (count, sum)
     for t in rec:
         p = t.get("description") or "?"
@@ -330,9 +363,12 @@ def summarize(snapshot: dict) -> str:
 
     # === Past transactions NOT PAID (overdue) ===
     out.append("## ⚠️ Overdue transactions (past, NOT paid)")
-    overdue = [t for t in (snapshot.get("transactions_past") or [])
-               if not t.get("paid") and t.get("credit_card_id") is None]
-    overdue.sort(key=lambda x: (x.get("date") or ""))
+    overdue = [
+        t
+        for t in (snapshot.get("transactions_past") or [])
+        if not t.get("paid") and t.get("credit_card_id") is None
+    ]
+    overdue.sort(key=lambda x: x.get("date") or "")
     if not overdue:
         out.append("- (none)")
     else:
@@ -340,11 +376,13 @@ def summarize(snapshot: dict) -> str:
             d = (t.get("date") or "")[:10]
             amt = int(t.get("amount_cents") or 0)
             tag = "OVERDUE INCOME" if amt > 0 else "OVERDUE EXPENSE"
-            out.append(f"- {d} · {tag} · {t.get('description') or '?'} · {cents_to_brl(amt)}")
+            out.append(
+                f"- {d} · {tag} · {t.get('description') or '?'} · {cents_to_brl(amt)}"
+            )
         tot = snapshot.get("meta", {}).get("totais", {})
         out.append(
-            f"\nSummary: {tot.get('n_atrasadas_despesa',0)} expenses (total {cents_to_brl(-tot.get('soma_atrasadas_despesa_cents',0))}), "
-            f"{tot.get('n_atrasadas_receita',0)} income (total {cents_to_brl(tot.get('soma_atrasadas_receita_cents',0))}) — should be paid/collected as soon as possible."
+            f"\nSummary: {tot.get('n_atrasadas_despesa', 0)} expenses (total {cents_to_brl(-tot.get('soma_atrasadas_despesa_cents', 0))}), "
+            f"{tot.get('n_atrasadas_receita', 0)} income (total {cents_to_brl(tot.get('soma_atrasadas_receita_cents', 0))}) — should be paid/collected as soon as possible."
         )
     out.append("")
 
@@ -354,7 +392,9 @@ def summarize(snapshot: dict) -> str:
     if not insts:
         out.append("- (none)")
     else:
-        out.append("| Description | Progress | Avg installment | Remaining | Amount left | Expected end | Status |")
+        out.append(
+            "| Description | Progress | Avg installment | Remaining | Amount left | Expected end | Status |"
+        )
         out.append("|---|:---:|---:|:---:|---:|:---:|:---|")
         for r in insts[:25]:
             status_parts = []
@@ -383,7 +423,9 @@ def summarize(snapshot: dict) -> str:
         except ValueError:
             continue
         if today < td <= today + dt.timedelta(days=30):
-            out.append(f"- {d}: {t.get('description') or '?'} · {cents_to_brl(t.get('amount_cents'))}")
+            out.append(
+                f"- {d}: {t.get('description') or '?'} · {cents_to_brl(t.get('amount_cents'))}"
+            )
             n += 1
     if n == 0:
         out.append("- (none)")
@@ -396,21 +438,31 @@ def summarize(snapshot: dict) -> str:
         out.append("")
 
     # === Top 20 transactions of the month (effective spending, ex-card invoices) ===
-    out.append("## Top 20 transactions of the current month (expenses, ex-invoice payments)")
+    out.append(
+        "## Top 20 transactions of the current month (expenses, ex-invoice payments)"
+    )
     out.append("")
-    out.append("Use this table to suggest merchant-level cuts/substitutions "
-               "(non-negotiable rule `[CUT]`). Each line is a real expense of the month "
-               "— card purchases appear here (categories labelled "
-               "'Invoice/Card' have been filtered to avoid duplication).")
+    out.append(
+        "Use this table to suggest merchant-level cuts/substitutions "
+        "(non-negotiable rule `[CUT]`). Each line is a real expense of the month "
+        "— card purchases appear here (categories labelled "
+        "'Invoice/Card' have been filtered to avoid duplication)."
+    )
     out.append("")
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
-    accounts_by_id = {a.get("id"): a.get("name") for a in snapshot.get("accounts") or []}
-    cards_by_id = {c.get("id"): c.get("name") for c in snapshot.get("credit_cards") or []}
+    accounts_by_id = {
+        a.get("id"): a.get("name") for a in snapshot.get("accounts") or []
+    }
+    cards_by_id = {
+        c.get("id"): c.get("name") for c in snapshot.get("credit_cards") or []
+    }
     top_tx = top_transactions_of_month(snapshot)
     if not top_tx:
         out.append("- (no expenses in the current month)")
     else:
-        out.append("| Date | Description | Category | Source | Amount | Paid? | Recurring? |")
+        out.append(
+            "| Date | Description | Category | Source | Amount | Paid? | Recurring? |"
+        )
         out.append("|---|---|---|---|---:|:---:|:---:|")
         for t in top_tx:
             d = (t.get("date") or "")[:10]
@@ -423,19 +475,23 @@ def summarize(snapshot: dict) -> str:
             amt = cents_to_brl(t.get("amount_cents"))
             paid = "✓" if t.get("paid") else "✗"
             rec = "✓" if t.get("is_recurring") else ""
-            out.append(f"| {d} | {desc} | {cat_name} | {origin} | {amt} | {paid} | {rec} |")
+            out.append(
+                f"| {d} | {desc} | {cat_name} | {origin} | {amt} | {paid} | {rec} |"
+            )
     out.append("")
 
     # === Target categories for market research (top 3 ex-invoices) ===
     out.append("## Target categories for market research (TARGET-WEBSEARCH)")
     out.append("")
-    out.append("Top 3 effective spending categories of the month (excluding invoice "
-               "payments). **For each one, you MUST run 1 `WebSearch` "
-               "looking for cheaper alternatives considering the `cidade` from "
-               "the user profile** (non-negotiable rule 14). Present the result "
-               "in the 'Market alternatives' section of the report with URL + price "
-               "found. If no reasonable alternative exists, mark "
-               "`(no alternative found)`.")
+    out.append(
+        "Top 3 effective spending categories of the month (excluding invoice "
+        "payments). **For each one, you MUST run 1 `WebSearch` "
+        "looking for cheaper alternatives considering the `cidade` from "
+        "the user profile** (non-negotiable rule 14). Present the result "
+        "in the 'Market alternatives' section of the report with URL + price "
+        "found. If no reasonable alternative exists, mark "
+        "`(no alternative found)`."
+    )
     out.append("")
     targets = top_categories_effective(snapshot, limit=3)
     if not targets:
@@ -444,15 +500,19 @@ def summarize(snapshot: dict) -> str:
         for cat_name, total in targets:
             median = category_median_6m(snapshot, cat_name)
             out.append(f"### TARGET-WEBSEARCH: {cat_name}")
-            out.append(f"- Month total: **{cents_to_brl(total)}** · "
-                       f"6m median: {cents_to_brl(median)}")
+            out.append(
+                f"- Month total: **{cents_to_brl(total)}** · "
+                f"6m median: {cents_to_brl(median)}"
+            )
             top5 = top_transactions_of_category(snapshot, cat_name, limit=5)
             if top5:
                 out.append("- Top 5 transactions in this category this month:")
                 for t in top5:
                     d = (t.get("date") or "")[:10]
                     desc = (t.get("description") or "?")[:60]
-                    out.append(f"  - {d} · {desc} · {cents_to_brl(t.get('amount_cents'))}")
+                    out.append(
+                        f"  - {d} · {desc} · {cents_to_brl(t.get('amount_cents'))}"
+                    )
             out.append("")
     out.append("")
 
@@ -461,7 +521,7 @@ def summarize(snapshot: dict) -> str:
     cur_key_m = today.month
     cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
     rows = []
-    for b in (snapshot.get("budgets") or []):
+    for b in snapshot.get("budgets") or []:
         if b.get("_year") != cur_key_y or b.get("_month") != cur_key_m:
             continue
         name = cats.get(b.get("category_id")) or b.get("name") or "?"
@@ -472,7 +532,9 @@ def summarize(snapshot: dict) -> str:
         pct = (spent / budget * 100.0) if budget else 0.0
         rows.append((name, spent, budget, pct))
     for name, spent, budget, pct in sorted(rows, key=lambda x: -x[3])[:15]:
-        out.append(f"- {name}: {cents_to_brl(spent)} / {cents_to_brl(budget)} ({pct:.0f}%)")
+        out.append(
+            f"- {name}: {cents_to_brl(spent)} / {cents_to_brl(budget)} ({pct:.0f}%)"
+        )
     if not rows:
         out.append("- (no budget targets defined)")
 
@@ -488,11 +550,14 @@ def load_memory_block() -> str:
     if not mem_path.exists():
         return ""
     import subprocess
+
     script = _SHARED_SCRIPTS / "memory.py"
     try:
         r = subprocess.run(
             ["python3", str(script), "render"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return r.stdout.strip()
     except Exception:
@@ -506,11 +571,14 @@ def load_profile_block() -> str:
     all fields marked (no data) — this signals the subagent to emit [QUESTION]
     in the final report."""
     import subprocess
+
     script = _SHARED_SCRIPTS / "profile.py"
     try:
         r = subprocess.run(
             ["python3", str(script), "render"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return r.stdout.strip()
     except Exception:
@@ -523,11 +591,14 @@ def load_plans_block() -> str:
     if not plans_path.exists():
         return ""
     import subprocess
+
     script = _SHARED_SCRIPTS / "plans.py"
     try:
         r = subprocess.run(
             ["python3", str(script), "render"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return r.stdout.strip()
     except Exception:
@@ -543,28 +614,35 @@ def list_research_targets(snapshot: dict, limit: int = 3) -> list[dict]:
     out: list[dict] = []
     for name, total in targets:
         top5 = top_transactions_of_category(snapshot, name, limit=5)
-        out.append({
-            "name": name,
-            "total_cents": total,
-            "median_6m_cents": category_median_6m(snapshot, name),
-            "top_txs": [
-                {"date": (t.get("date") or "")[:10],
-                 "description": t.get("description") or "?",
-                 "amount_cents": int(t.get("amount_cents") or 0)}
-                for t in top5
-            ],
-        })
+        out.append(
+            {
+                "name": name,
+                "total_cents": total,
+                "median_6m_cents": category_median_6m(snapshot, name),
+                "top_txs": [
+                    {
+                        "date": (t.get("date") or "")[:10],
+                        "description": t.get("description") or "?",
+                        "amount_cents": int(t.get("amount_cents") or 0),
+                    }
+                    for t in top5
+                ],
+            }
+        )
     return out
 
 
 def _profile_city() -> str:
     """Read cidade from profile; '(no data)' if empty."""
     import subprocess
+
     script = _SHARED_SCRIPTS / "profile.py"
     try:
         r = subprocess.run(
             ["python3", str(script), "get", "cidade"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         v = (r.stdout or "").strip()
         return v if v else "(no data)"
@@ -605,11 +683,13 @@ def load_research_block(research_dir: pathlib.Path | None) -> str:
     out: list[str] = []
     out.append("# Market research (PRE-COLLECTED — DO NOT REDO WebSearch)")
     out.append("")
-    out.append("Each category below was researched by a dedicated "
-               "`search-specialist` agent, BEFORE this analysis. Recent searches "
-               "are reused from cache (TTL ~14 days) — the collection date "
-               "is in the header of each block. **Consume these "
-               "results** in the 'Market alternatives' section of the report.")
+    out.append(
+        "Each category below was researched by a dedicated "
+        "`search-specialist` agent, BEFORE this analysis. Recent searches "
+        "are reused from cache (TTL ~14 days) — the collection date "
+        "is in the header of each block. **Consume these "
+        "results** in the 'Market alternatives' section of the report."
+    )
     out.append("")
     for f in files:
         try:
@@ -663,14 +743,18 @@ def render_cashflow_block(snapshot: dict) -> str:
         sys.path.insert(0, str(pathlib.Path(__file__).parent))
         from cashflow import per_account_projection, render_markdown
         from config import threshold_cents
-        proj = per_account_projection(snapshot, threshold_cents=threshold_cents(), horizon_days=90)
+
+        proj = per_account_projection(
+            snapshot, threshold_cents=threshold_cents(), horizon_days=90
+        )
         return render_markdown(proj).strip()
     except Exception as e:
         return f"## Cash flow per account\n_(error computing projection: {e})_"
 
 
-def render_prompt(snapshot: dict, framework_md: str,
-                   research_dir: pathlib.Path | None = None) -> str:
+def render_prompt(
+    snapshot: dict, framework_md: str, research_dir: pathlib.Path | None = None
+) -> str:
     system = extract_system_prompt(framework_md)
     summary = summarize(snapshot)
     profile_block = load_profile_block()
@@ -683,8 +767,11 @@ def render_prompt(snapshot: dict, framework_md: str,
     research_section = f"\n---\n\n{research_block}\n" if research_block else ""
 
     # List of existing account names (for transfer guardrail)
-    existing_accounts = [a.get("name") for a in (snapshot.get("accounts") or [])
-                         if not a.get("archived") and a.get("type")]
+    existing_accounts = [
+        a.get("name")
+        for a in (snapshot.get("accounts") or [])
+        if not a.get("archived") and a.get("type")
+    ]
     accounts_hint = ", ".join(f"`{n}`" for n in existing_accounts if n) or "(none)"
 
     return f"""{system}
@@ -815,20 +902,33 @@ End with the disclaimer: "This is not licensed financial advice."
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--snapshot", required=False,
-                    help="required except when using --research-cache-lookup")
+    ap.add_argument(
+        "--snapshot",
+        required=False,
+        help="required except when using --research-cache-lookup",
+    )
     ap.add_argument("--framework", default=str(DEFAULT_FRAMEWORK))
     ap.add_argument("--out", default=None)
-    ap.add_argument("--research-dir", default=None,
-                    help="dir with pre-collected research reports (1 .md per category)")
-    ap.add_argument("--list-targets", action="store_true",
-                    help="only prints the 3 target categories (pipe-delimited) and exits — "
-                         "consumed by organizze.md to dispatch agents in parallel")
-    ap.add_argument("--research-cache-lookup", metavar="CATEGORY",
-                    help="searches for a recent report for the category in historical research dirs; "
-                         "prints path if hit, empty if miss. Does not need --snapshot.")
-    ap.add_argument("--max-age-days", type=int, default=14,
-                    help="research cache TTL (default 14)")
+    ap.add_argument(
+        "--research-dir",
+        default=None,
+        help="dir with pre-collected research reports (1 .md per category)",
+    )
+    ap.add_argument(
+        "--list-targets",
+        action="store_true",
+        help="only prints the 3 target categories (pipe-delimited) and exits — "
+        "consumed by organizze.md to dispatch agents in parallel",
+    )
+    ap.add_argument(
+        "--research-cache-lookup",
+        metavar="CATEGORY",
+        help="searches for a recent report for the category in historical research dirs; "
+        "prints path if hit, empty if miss. Does not need --snapshot.",
+    )
+    ap.add_argument(
+        "--max-age-days", type=int, default=14, help="research cache TTL (default 14)"
+    )
     ap.add_argument("--dry-run", action="store_true", help="only prints the prompt")
     args = ap.parse_args()
 
@@ -839,8 +939,10 @@ def main() -> int:
         return 0
 
     if not args.snapshot:
-        print("err|missing-arg|--snapshot is required (except --research-cache-lookup)",
-              file=sys.stderr)
+        print(
+            "err|missing-arg|--snapshot is required (except --research-cache-lookup)",
+            file=sys.stderr,
+        )
         return 2
 
     snap = json.loads(pathlib.Path(args.snapshot).read_text())
@@ -849,7 +951,11 @@ def main() -> int:
         sys.stdout.write(render_list_targets(snap) + "\n")
         return 0
 
-    fw = pathlib.Path(args.framework).read_text() if pathlib.Path(args.framework).exists() else ""
+    fw = (
+        pathlib.Path(args.framework).read_text()
+        if pathlib.Path(args.framework).exists()
+        else ""
+    )
     research_dir = pathlib.Path(args.research_dir) if args.research_dir else None
     prompt = render_prompt(snap, fw, research_dir=research_dir)
 

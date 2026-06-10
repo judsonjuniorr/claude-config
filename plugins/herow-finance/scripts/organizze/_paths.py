@@ -7,6 +7,7 @@ This module is the single source of truth for organizze-scripts/*.py paths.
 It also re-exports migrate_legacy() from the shared scripts/_storage module,
 so any organizze script's first run auto-migrates the pre-refactor layout.
 """
+
 from __future__ import annotations
 
 import os
@@ -30,6 +31,7 @@ REPORTS = HOME / "reports"
 BUDGET_SUGGESTIONS = HOME / "budget-suggestions"
 CACHE = HOME / "cache"
 
+
 def chromium_executable_path() -> str | None:
     """Locate a Chromium already installed by the Claude Code MCP playwright.
 
@@ -44,7 +46,9 @@ def chromium_executable_path() -> str | None:
     if not cache.is_dir():
         return None
     candidates = []
-    for d in cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"):
+    for d in cache.glob(
+        "chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+    ):
         try:
             rev = int(d.parts[-6].split("-")[-1])  # chromium-<rev>
         except (ValueError, IndexError):
