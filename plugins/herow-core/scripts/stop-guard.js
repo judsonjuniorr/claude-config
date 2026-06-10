@@ -12,6 +12,13 @@
  *   - hard per-session cap (MAX) so it can never loop forever
  *   - conservative: only fires on clear incompleteness signals (unbalanced code
  *     fence, or a trailing "I'll now…"-style lead-in with nothing after it)
+ *   - terminal-only: ignores assistant text that is followed by tool activity.
+ *     When the Stop hook runs, the turn's final assistant message may not be
+ *     flushed to the transcript yet, so a naive "last text block" read returns
+ *     the PREVIOUS turn's pre-tool lead-in (e.g. "Cleaning up the worktree:") —
+ *     which always ends in a colon/lead-in and accounted for ~90% of historical
+ *     false positives. We only evaluate text that is the last meaningful event
+ *     (no tool_use / tool_result after it).
  * Never errors; defaults to allowing the stop.
  */
 
@@ -29,28 +36,42 @@ const LEAD_IN_SIGNALS = [
   'hold on', 'proceeding to', 'let me continue', 'let me now',
 ];
 
-function lastAssistantText(transcriptPath) {
+// The assistant text of the turn that just ended — but only if it is the last
+// meaningful event in the transcript. If a tool_use (assistant) or tool_result
+// (user) appears after the most recent assistant text, that text was a pre-tool
+// lead-in and the turn continued past it; we return '' so the stop is allowed.
+// This is what makes the guard robust to the transcript-flush race (see header).
+function terminalAssistantText(transcriptPath) {
   let raw;
   try { raw = fs.readFileSync(transcriptPath, 'utf8'); } catch { return ''; }
-  let last = '';
+  let lastText = '';
+  let lastEventIsText = false;
   for (const line of raw.split('\n')) {
     let obj;
     try { obj = JSON.parse(line); } catch { continue; }
     const msg = obj.message || obj;
     const role = msg.role || obj.type;
-    if (role !== 'assistant') continue;
+    const content = msg.content;
+    let hasTool = false;
     let txt = '';
-    if (Array.isArray(msg.content)) {
-      txt = msg.content
-        .filter(p => p && typeof p === 'object' && p.type === 'text')
-        .map(p => p.text || '')
-        .join('');
-    } else if (typeof msg.content === 'string') {
-      txt = msg.content;
+    if (Array.isArray(content)) {
+      for (const p of content) {
+        if (!p || typeof p !== 'object') continue;
+        if (p.type === 'tool_use' || p.type === 'tool_result') hasTool = true;
+        else if (p.type === 'text') txt += p.text || '';
+      }
+    } else if (typeof content === 'string' && role === 'assistant') {
+      txt = content;
     }
-    if (txt.trim()) last = txt.trim();
+    // Update text first, then let tool activity override: a single message
+    // carrying [text, tool_use] is a pre-tool lead-in, not a terminal stop.
+    if (role === 'assistant' && txt.trim()) {
+      lastText = txt.trim();
+      lastEventIsText = true;
+    }
+    if (hasTool) lastEventIsText = false;
   }
-  return last;
+  return lastEventIsText ? lastText : '';
 }
 
 function main(rawInput) {
@@ -72,7 +93,7 @@ function main(rawInput) {
     return;
   }
 
-  const last = d.transcript_path ? lastAssistantText(d.transcript_path) : '';
+  const last = d.transcript_path ? terminalAssistantText(d.transcript_path) : '';
   if (!last) return;
 
   let incomplete = false;
