@@ -21,7 +21,8 @@ const os = require('os');
 const path = require('path');
 
 const MAX_STDIN = 1024 * 1024;
-const TOTAL_BUDGET_MS = 270_000;
+// Must finish inside the hook's 120s timeout (hooks.json) with headroom.
+const TOTAL_BUDGET_MS = 100_000;
 
 // ── Inlined formatter detection ─────────────────────────────────────
 
@@ -88,12 +89,16 @@ function parseAccumulator(raw) {
 // ── Formatting batch ─────────────────────────────────────────────────
 
 const UNSAFE_PATH_CHARS = /[&|<>^%!\s()]/;
+// Biome can't format markdown; Prettier handles everything we accumulate.
+const BIOME_FORMAT_EXT = /\.(ts|tsx|js|jsx|json|jsonc)$/;
+const PRETTIER_FORMAT_EXT = /\.(ts|tsx|js|jsx|json|jsonc|md)$/;
 
 function formatBatch(projectRoot, files, timeoutMs) {
   const formatter = detectFormatter(projectRoot);
   if (!formatter) return;
   const resolved = resolveFormatterBin(projectRoot, formatter);
-  const existingFiles = files.filter(f => fs.existsSync(f));
+  const extFilter = formatter === 'biome' ? BIOME_FORMAT_EXT : PRETTIER_FORMAT_EXT;
+  const existingFiles = files.filter(f => extFilter.test(f) && fs.existsSync(f));
   if (existingFiles.length === 0) return;
 
   const fileArgs =
@@ -115,6 +120,24 @@ function formatBatch(projectRoot, files, timeoutMs) {
   } catch {
     // Formatter not installed or failed — non-blocking
   }
+}
+
+// ── Python / Go format batches (parity with the removed per-edit gate) ──
+
+function formatPython(files, timeoutMs) {
+  const existing = files.filter(f => fs.existsSync(f));
+  if (existing.length === 0) return;
+  try {
+    execFileSync('ruff', ['format', ...existing], { stdio: ['pipe', 'pipe', 'pipe'], timeout: timeoutMs });
+  } catch { /* ruff missing or failed — non-blocking */ }
+}
+
+function formatGo(files, timeoutMs) {
+  const existing = files.filter(f => fs.existsSync(f));
+  if (existing.length === 0) return;
+  try {
+    execFileSync('gofmt', ['-w', ...existing], { stdio: ['pipe', 'pipe', 'pipe'], timeout: timeoutMs });
+  } catch { /* gofmt missing or failed — non-blocking */ }
 }
 
 // ── Typecheck batch ──────────────────────────────────────────────────
@@ -184,10 +207,14 @@ function main() {
   if (files.length === 0) return;
 
   const byProjectRoot = new Map();
+  const pyFiles = [];
+  const goFiles = [];
   for (const filePath of files) {
-    if (!/\.(ts|tsx|js|jsx)$/.test(filePath)) continue;
     const resolved = path.resolve(filePath);
     if (!fs.existsSync(resolved)) continue;
+    if (/\.py$/.test(resolved)) { pyFiles.push(resolved); continue; }
+    if (/\.go$/.test(resolved)) { goFiles.push(resolved); continue; }
+    if (!/\.(ts|tsx|js|jsx|json|jsonc|md)$/.test(resolved)) continue;
     const root = findProjectRoot(path.dirname(resolved));
     if (!byProjectRoot.has(root)) byProjectRoot.set(root, []);
     byProjectRoot.get(root).push(resolved);
@@ -204,10 +231,13 @@ function main() {
     byTsConfigDir.get(tsDir).push(resolved);
   }
 
-  const totalBatches = byProjectRoot.size + byTsConfigDir.size;
+  const totalBatches =
+    byProjectRoot.size + byTsConfigDir.size + (pyFiles.length ? 1 : 0) + (goFiles.length ? 1 : 0);
   const perBatchMs = totalBatches > 0 ? Math.floor(TOTAL_BUDGET_MS / totalBatches) : 60_000;
 
   for (const [root, batch] of byProjectRoot) formatBatch(root, batch, perBatchMs);
+  formatPython(pyFiles, perBatchMs);
+  formatGo(goFiles, perBatchMs);
   for (const [tsDir, batch] of byTsConfigDir) typecheckBatch(tsDir, batch, perBatchMs);
 }
 

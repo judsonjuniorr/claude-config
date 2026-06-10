@@ -1,0 +1,8 @@
+{
+  "name": "herow-core",
+  "description": "Quality hooks (format/typecheck/stop-guard), always-on coding rules, github-ops skill, code-reviewer + debugger agents, and the herow auto-update check",
+  "author": { "name": "Judson Junior", "email": "judsonjuniorr@gmail.com" },
+  "repository": "https://github.com/judsonjuniorr/claude-config",
+  "license": "MIT",
+  "keywords": ["hooks", "rules", "github", "code-review"]
+}

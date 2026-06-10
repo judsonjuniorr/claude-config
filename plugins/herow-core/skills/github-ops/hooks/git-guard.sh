@@ -70,6 +70,7 @@ esac
 
 [ -n "$suggest" ] || exit 0
 
-reason="github-ops: prefer \`bash github-ops/scripts/${suggest}\` over running raw \`${CMD}\` (pipe-delimited output, fewer tokens)."
+SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/}github-ops/scripts"
+reason="github-ops: prefer \`bash \"${SCRIPTS_DIR}/${suggest}\"\` over running raw \`${CMD}\` (pipe-delimited output, fewer tokens)."
 python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'ask','permissionDecisionReason':sys.argv[1]}}))" "$reason"
 exit 0

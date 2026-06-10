@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * PostToolUse Hook: Accumulate edited JS/TS file paths for batch processing
+ * PostToolUse Hook: Accumulate edited file paths for batch processing
  *
  * Cross-platform (Windows, macOS, Linux)
  *
- * Records each edited JS/TS path to a session-scoped temp file (one path per
- * line). stop-format-typecheck.js reads this list at Stop time and runs format
- * + typecheck once across all edited files, eliminating per-edit latency.
+ * Records each edited formattable path (JS/TS/JSON/MD/PY/GO) to a
+ * session-scoped temp file (one path per line). stop-format-typecheck.js reads
+ * this list at Stop time and runs format + typecheck once across all edited
+ * files, eliminating per-edit latency.
  *
  * appendFileSync is used so concurrent hook processes write atomically
  * without overwriting each other. Deduplication is deferred to the Stop hook.
@@ -35,10 +36,10 @@ function getAccumFile() {
  * @param {string} rawInput - Raw JSON string from stdin
  * @returns {string} The original input (pass-through)
  */
-const JS_TS_EXT = /\.(ts|tsx|js|jsx)$/;
+const ACCUM_EXT = /\.(ts|tsx|js|jsx|json|jsonc|md|py|go)$/;
 
 function appendPath(filePath) {
-  if (filePath && JS_TS_EXT.test(filePath)) {
+  if (filePath && ACCUM_EXT.test(filePath)) {
     fs.appendFileSync(getAccumFile(), filePath + '\n', 'utf8');
   }
 }

@@ -31,27 +31,27 @@ User says: commit, push, create PR/MR, list PRs, merge, checks, CI status, open 
 
 | Intent | Command |
 |---|---|
-| Inspect tree (status+diff+log in one call) | `bash github-ops/scripts/inspect.sh [--diff] [--log N]` |
-| Stage + emit diff for message synthesis | `bash github-ops/scripts/ship.sh` |
-| Commit + push with crafted message | `bash github-ops/scripts/ship.sh --message "feat(x): y"` |
-| Just suggest a message (heuristic) | `bash github-ops/scripts/commit-msg.sh` |
-| Create PR | `bash github-ops/scripts/pr.sh create [--draft] [--title T] [--body B\|--body-file F] [--base B]` |
-| Edit PR | `bash github-ops/scripts/pr.sh edit <num> [--title T] [--body B\|--body-file F] [--add-label L] [--remove-label L]` |
-| List PRs | `bash github-ops/scripts/pr.sh list [--state open\|closed\|all] [--mine]` |
-| View PR | `bash github-ops/scripts/pr.sh view <num>` |
-| PR checks | `bash github-ops/scripts/pr.sh checks <num>` |
-| PR diff | `bash github-ops/scripts/pr.sh diff <num>` |
-| Merge PR | `bash github-ops/scripts/pr.sh merge <num> [--squash\|--merge\|--rebase]` |
-| Create issue | `bash github-ops/scripts/issue.sh create --title T [--body B\|--body-file F] [--label l1,l2]` |
-| List issues | `bash github-ops/scripts/issue.sh list [--state open\|closed\|all] [--label L]` |
-| View issue | `bash github-ops/scripts/issue.sh view <num>` |
-| Close issue | `bash github-ops/scripts/issue.sh close <num>` |
-| Comment issue | `bash github-ops/scripts/issue.sh comment <num> --body "..."` |
-| Repo info | `bash github-ops/scripts/repo.sh info` |
-| Releases | `bash github-ops/scripts/repo.sh releases [--limit N]` |
-| CI runs | `bash github-ops/scripts/repo.sh runs [--limit N] [--workflow W]` |
-| Failed steps of a run | `bash github-ops/scripts/repo.sh runs --log <id>` |
-| Dispatch workflow | `bash github-ops/scripts/repo.sh workflow-run <name> [--ref branch]` |
+| Inspect tree (status+diff+log in one call) | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/inspect.sh" [--diff] [--log N]` |
+| Stage + emit diff for message synthesis | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/ship.sh"` |
+| Commit + push with crafted message | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/ship.sh" --message "feat(x): y"` |
+| Just suggest a message (heuristic) | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/commit-msg.sh"` |
+| Create PR | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" create [--draft] [--title T] [--body B\|--body-file F] [--base B]` |
+| Edit PR | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" edit <num> [--title T] [--body B\|--body-file F] [--add-label L] [--remove-label L]` |
+| List PRs | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" list [--state open\|closed\|all] [--mine]` |
+| View PR | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" view <num>` |
+| PR checks | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" checks <num>` |
+| PR diff | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" diff <num>` |
+| Merge PR | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" merge <num> [--squash\|--merge\|--rebase]` |
+| Create issue | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/issue.sh" create --title T [--body B\|--body-file F] [--label l1,l2]` |
+| List issues | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/issue.sh" list [--state open\|closed\|all] [--label L]` |
+| View issue | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/issue.sh" view <num>` |
+| Close issue | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/issue.sh" close <num>` |
+| Comment issue | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/issue.sh" comment <num> --body "..."` |
+| Repo info | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/repo.sh" info` |
+| Releases | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/repo.sh" releases [--limit N]` |
+| CI runs | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/repo.sh" runs [--limit N] [--workflow W]` |
+| Failed steps of a run | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/repo.sh" runs --log <id>` |
+| Dispatch workflow | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/repo.sh" workflow-run <name> [--ref branch]` |
 
 ## Output format
 
@@ -198,7 +198,7 @@ Do not split automatically. Always ask.
 
 Installing this skill via `install.sh` also registers one hook in `~/.claude/settings.json` (idempotent; the uninstall flow removes it). It is optional — the scripts work without it.
 
-- **`git-guard`** (`PreToolUse` / `Bash`, severity `ask`) — when a raw **mutation/PR** command is about to run (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`), it surfaces a permission prompt suggesting the matching script (`ship.sh`/`pr.sh`/`issue.sh`/`repo.sh`). Read-only `git status`/`diff`/`log` are left untouched, so it does not overlap RTK's git proxy. Commands that already invoke `github-ops/scripts/` are allowed silently.
+- **`git-guard`** (`PreToolUse` / `Bash`, severity `ask`) — when a raw **mutation/PR** command is about to run (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`), it surfaces a permission prompt suggesting the matching script (`ship.sh`/`pr.sh`/`issue.sh`/`repo.sh`). Read-only `git status`/`diff`/`log` are left untouched, so it does not overlap RTK's git proxy. Commands that already invoke `${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/` are allowed silently.
 
 ## Platform support
 

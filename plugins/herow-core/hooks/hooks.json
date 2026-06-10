@@ -1,48 +1,56 @@
 {
-  "PreToolUse": [
-    {
-      "matcher": "Write",
-      "hooks": [
-        { "type": "command", "command": "bash {{HOOKS_DIR}}/doc-file-warning.sh" }
-      ]
-    },
-    {
-      "matcher": "Edit|Write",
-      "hooks": [
-        { "type": "command", "command": "bash {{HOOKS_DIR}}/config-protection.sh" }
-      ]
-    }
-  ],
-  "PostToolUse": [
-    {
-      "matcher": "Edit|Write|MultiEdit",
-      "hooks": [
-        { "type": "command", "command": "node {{HOOKS_DIR}}/post-edit-accumulator.js" },
-        { "type": "command", "command": "node {{HOOKS_DIR}}/quality-gate.js" }
-      ]
-    },
-    {
-      "matcher": "Edit",
-      "hooks": [
-        { "type": "command", "command": "node {{HOOKS_DIR}}/post-edit-console-warn.js" }
-      ]
-    }
-  ],
-  "Stop": [
-    {
-      "hooks": [
-        { "type": "command", "command": "bash {{HOOKS_DIR}}/stop-guard.sh" }
-      ]
-    },
-    {
-      "hooks": [
-        { "type": "command", "command": "node {{HOOKS_DIR}}/stop-format-typecheck.js" }
-      ]
-    },
-    {
-      "hooks": [
-        { "type": "command", "command": "node {{HOOKS_DIR}}/check-console-log.js" }
-      ]
-    }
-  ]
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/rules-inject.sh\"", "timeout": 10 },
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/update-check.sh\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/doc-file-warning.sh\"", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/config-protection.sh\"", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/github-ops/hooks/git-guard.sh\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/post-edit-accumulator.js\"", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/post-edit-console-warn.js\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-guard.sh\"", "timeout": 30 },
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-format-typecheck.js\"", "timeout": 120 },
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/check-console-log.js\"", "timeout": 30 }
+        ]
+      }
+    ]
+  }
 }
