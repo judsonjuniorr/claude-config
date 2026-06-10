@@ -1,6 +1,6 @@
 ---
 name: technical-seo-auditor
-description: Technical SEO auditor. Parses Google Search Console exports (Performance CSV + Bulk Export) and crawl data to produce a prioritized "what's broken" fix list, indexation-coverage diagnostics ("Discovered/Crawled – not indexed"), and CTR diagnostics (high-impression/low-CTR queries, titles truncated >60c). Summarizes large exports instead of dumping rows. Read-only on the web (no publishing). Use for /seo:weekly-audit, /seo:indexation-check, /seo:ctr-tune, /seo:report and any command that needs to read GSC data and diagnose. Delegates to toprank's seo-analysis / broken-link-checker when installed.
+description: Technical SEO auditor. Parses GSC exports and crawl data into a prioritized "what's broken" fix list, indexation-coverage and CTR diagnostics. Read-only diagnoser used by /seo:weekly-audit, /seo:indexation-check, /seo:ctr-tune, /seo:report.
 tools: Read, Bash, WebFetch, Grep, Glob
 model: sonnet
 ---

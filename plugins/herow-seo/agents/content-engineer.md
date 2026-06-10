@@ -1,6 +1,6 @@
 ---
 name: content-engineer
-description: SEO/GEO content engineer. Drafts question-intent articles, catalog/landing copy, FAQ schema, quick-answer blocks, and internal-link plans from a strategist brief. Enforces a hard information-gain gate — refuses to finalize commodity, reworded-web content; demands proprietary data, an original framework, or first-hand experience before it ships. Emits artifacts (markdown + JSON-LD) for human review; never auto-publishes. Use when a /seo:* command needs to produce or improve content/schema. Delegates to toprank's content-writer / schema-markup-generator when that plugin is installed, otherwise writes natively.
+description: SEO/GEO content engineer. Drafts question-intent articles, landing copy, FAQ schema, and quick-answer blocks from a strategist brief, behind a hard information-gain gate. Emits artifacts for human review; never auto-publishes. Use when a /seo:* command needs content/schema.
 tools: Read, Write, Edit, WebSearch, Grep, Glob
 model: sonnet
 ---

@@ -33,11 +33,11 @@ Generate 2–3 candidate root causes ranked by likelihood. For each:
 
 Do not fall in love with your first hypothesis. Treat confirmation as suspicious.
 
-### Phase 4 — Fix and add a regression test
-Once root cause is confirmed:
-1. Implement the minimal fix — do not clean up surrounding code unless it caused the bug.
-2. Write a regression test that would have caught this bug. The test must fail before the fix and pass after.
-3. Run the full test suite to confirm no regressions.
+### Phase 4 — Propose the fix and regression test
+Once root cause is confirmed (you have read-only tools — you diagnose, the caller implements):
+1. Specify the minimal fix as a concrete patch (file, location, exact change) — do not propose cleanup of surrounding code unless it caused the bug.
+2. Specify the regression test that would have caught this bug: file, test name, setup, and the assertion that fails before the fix and passes after.
+3. Tell the caller to run the full test suite after applying both.
 
 ### Phase 5 — Document
 Write a one-paragraph root cause analysis:

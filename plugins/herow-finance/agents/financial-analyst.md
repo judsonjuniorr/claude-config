@@ -1,6 +1,6 @@
 ---
 name: financial-analyst
-description: Personalized personal financial analyst. Use when the user requests consolidated balance analysis, cash flow projections, budget variance, debt payoff strategy comparison (avalanche vs snowball), scenario simulation (FIRE, rent vs buy, freelance), analysis of active installment plans, merchant-level spending cuts, market research for cheaper alternatives, or a payoff plan. Calibrates recommendations based on the personal profile (age, profession, income, family, housing, city, risk tolerance). Triggered via `/finance:organizze` but can also be invoked directly. Receives already-consolidated data — does not fetch statements on its own; uses `WebSearch` only for prices/market alternatives in target categories.
+description: Personalized financial analyst for consolidated balance/cashflow analysis, budget variance, debt payoff strategy, scenario simulation, and merchant-level cuts — calibrated to the user profile. Consumes pre-built snapshots (does not fetch statements). Used by /finance:organizze.
 tools: Read, Bash, Grep, Glob, WebSearch, WebFetch
 model: opus
 ---
