@@ -1,6 +1,6 @@
 ---
 name: backend-architect
-description: Senior backend architect. Produces architecture documents — OpenAPI specs, database schemas, event schemas, architecture diagrams, and technology trade-off analyses. Use when you need a design or evaluation artifact, NOT for writing application code. For implementation, use fullstack-developer.
+description: Senior backend architect. Produces architecture artifacts — OpenAPI specs, DB/event schemas, diagrams, tech trade-off analyses. Use when you need a design or evaluation doc, NOT application code (for implementation use fullstack-developer).
 tools: Read, Write, Bash, Glob, Grep, WebSearch
 model: sonnet
 ---

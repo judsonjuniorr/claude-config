@@ -2,9 +2,9 @@
 
 Supporting material for the pipeline in SKILL.md.
 
-> **Staleness caveat:** the component catalog below (commands/skills/agents) predates
-> the herow plugin restructure and may reference components that do not exist in the
-> current environment. Before recommending a component, verify it exists in the
+> **Catalog scope:** the tables below list **herow** plugin components. The installed
+> plugin set varies per user (core / dev / seo / finance / extras) and the environment
+> may add others (e.g. gstack). Before recommending a component, verify it exists in the
 > session's available skills/commands/agents; substitute the closest real equivalent.
 
 ## Phase 0 — Tech-stack detection signals
@@ -38,36 +38,40 @@ Supporting material for the pipeline in SKILL.md.
 
 ## Phase 3 — Component matching tables
 
+> All commands are namespaced by plugin (`/herow-dev:…`, `/herow-finance:…`, `/herow-seo:…`).
+> Names below assume herow-core + herow-dev are installed; validate against the live session.
+
 #### By Intent Type
 
 | Intent | Commands | Skills | Agents |
 |--------|----------|--------|--------|
-| New Feature | /plan, /tdd, /code-review, /verify | tdd-workflow, verification-loop | planner, tdd-guide, code-reviewer |
-| Bug Fix | /tdd, /build-fix, /verify | tdd-workflow | tdd-guide, build-error-resolver |
-| Refactor | /refactor-clean, /code-review, /verify | verification-loop | refactor-cleaner, code-reviewer |
-| Research | /plan | search-first, iterative-retrieval | — |
-| Testing | /tdd, /e2e, /test-coverage | tdd-workflow, e2e-testing | tdd-guide, e2e-runner |
-| Review | /code-review | security-review | code-reviewer, security-reviewer |
-| Documentation | /update-docs, /update-codemaps | — | doc-updater |
-| Infrastructure | /plan, /verify | docker-patterns, deployment-patterns, database-migrations | architect |
-| Design (MEDIUM-HIGH) | /plan | — | planner, architect |
-| Design (EPIC) | — | blueprint (invoke as skill) | planner, architect |
+| New Feature | `/herow-dev:code:generate-tests`, `/herow-dev:code:review` | — | fullstack-developer, backend-architect, tdd-guide |
+| Bug Fix | `/herow-dev:code:generate-tests`, `/herow-dev:code:review` | — | debugger, tdd-guide |
+| Refactor | `/herow-dev:code:refactor`, `/herow-dev:code:review` | — | code-simplifier, code-reviewer |
+| Research | — | deep-research, exa-search | search-specialist |
+| Testing | `/herow-dev:code:generate-tests`, `/herow-dev:react:test` | — | tdd-guide, pr-test-analyzer |
+| Review | `/herow-dev:code:review`, `/herow-dev:python:review`, `/herow-dev:react:review` | — | code-reviewer, security-reviewer, silent-failure-hunter, comment-analyzer, type-design-analyzer |
+| Documentation | `/herow-dev:git:release-notes` | — | comment-analyzer |
+| Infrastructure / API design | — | — | backend-architect |
+| Design (data model / API) | — | — | backend-architect |
+| Design (UI/UX) | `/herow-dev:react:validate-ui` | — | ui-ux-designer |
+| Requirements / PRD | `/herow-extras:create-prd` | — | — |
+| Git / PR ops | `/herow-dev:git:pr`, `/herow-dev:git:fix-conflicts` | github-ops | — |
+| Finance analysis | `/herow-finance:organizze` | — | financial-analyst |
+| SEO / GEO | `/herow-seo:weekly-audit`, `/herow-seo:ctr-tune`, `/herow-seo:content-sprint`, … | — | seo-strategist, content-engineer, technical-seo-auditor |
 
 #### By Tech Stack
 
-| Tech Stack | Skills to Add | Agent |
-|------------|--------------|-------|
-| Python / Django | django-patterns, django-tdd, django-security, django-verification, python-patterns, python-testing | python-reviewer |
-| Go | golang-patterns, golang-testing | go-reviewer, go-build-resolver |
-| Spring Boot / Java | springboot-patterns, springboot-tdd, springboot-security, springboot-verification, java-coding-standards, jpa-patterns | java-reviewer |
-| Quarkus / Java | quarkus-patterns, quarkus-tdd, quarkus-security, quarkus-verification, java-coding-standards, jpa-patterns | java-reviewer |
-| Kotlin / Android | kotlin-coroutines-flows, compose-multiplatform-patterns, android-clean-architecture | kotlin-reviewer |
-| TypeScript / React | frontend-patterns, backend-patterns, coding-standards | code-reviewer |
-| Swift / iOS | swiftui-patterns, swift-concurrency-6-2, swift-actor-persistence, swift-protocol-di-testing | code-reviewer |
-| PostgreSQL | postgres-patterns, database-migrations | database-reviewer |
-| Perl | perl-patterns, perl-testing, perl-security | code-reviewer |
-| C++ | cpp-coding-standards, cpp-testing | code-reviewer |
-| Other / Unlisted | coding-standards (universal) | code-reviewer |
+| Tech Stack | Commands / Skills | Agent |
+|------------|-------------------|-------|
+| TypeScript / JavaScript | `/herow-dev:code:review` | typescript-reviewer, code-reviewer |
+| React / Next.js | `/herow-dev:react:review`, `/herow-dev:react:test`, `/herow-dev:react:validate-ui` | react-reviewer, fullstack-developer, ui-ux-designer |
+| Python | `/herow-dev:python:review` | python-pro, python-reviewer |
+| Python / FastAPI | `/herow-dev:python:fastapi-review` | fastapi-reviewer |
+| Mobile (React Native / iOS / Android) | — | mobile-developer |
+| Backend / API (any language) | — | backend-architect |
+| Error handling (TS / Python) | error-handling skill | — |
+| Other / unlisted | `/herow-dev:code:review` | code-reviewer |
 
 ## Phase 5 — Model recommendation & multi-prompt splitting
 
@@ -75,18 +79,19 @@ Supporting material for the pipeline in SKILL.md.
 
 | Scope | Recommended Model | Rationale |
 |-------|------------------|-----------|
-| TRIVIAL-LOW | Sonnet | Fast, cost-efficient for simple tasks |
-| MEDIUM | Sonnet | Best coding model for standard work |
-| HIGH | Sonnet (main) + Opus (planning) | Opus for architecture, Sonnet for implementation |
-| EPIC | Opus (blueprint) + Sonnet (execution) | Deep reasoning for multi-session planning |
+| TRIVIAL | Haiku | Cheapest tier for mechanical, single-file edits |
+| LOW–MEDIUM | Sonnet | Best coding model for standard work |
+| HIGH | Sonnet (impl) + Opus (planning) | Opus for architecture, Sonnet for implementation |
+| EPIC | Opus (planning) + Sonnet (execution) | Deep reasoning for multi-session planning |
 
 **Multi-prompt splitting** (for HIGH/EPIC scope):
 
 For tasks that exceed a single session, split into sequential prompts:
-- Prompt 1: Research + Plan (use search-first skill, then /plan)
-- Prompt 2-N: Implement one phase per prompt (each ends with /verify)
-- Final Prompt: Integration test + /code-review across all phases
-- Use /save-session and /resume-session to preserve context between sessions
+- Prompt 1: Research + plan (use the `deep-research` skill for unknowns, then sketch phases)
+- Prompt 2–N: Implement one phase per prompt (each ends with `/herow-dev:code:review`)
+- Final Prompt: Integration test + review across all phases
+- If your environment provides a planning skill (e.g. `blueprint`), use it to persist the
+  phase plan and resume between sessions.
 
 ## Output Format (full spec)
 
@@ -107,9 +112,9 @@ If Phase 0 auto-detected the answer, state it instead of asking.
 
 | Type | Component | Purpose |
 |------|-----------|---------|
-| Command | /plan | Plan architecture before coding |
-| Skill | tdd-workflow | TDD methodology guidance |
-| Agent | code-reviewer | Post-implementation review |
+| Agent | fullstack-developer | Implement the feature end-to-end |
+| Command | /herow-dev:code:review | Post-implementation review |
+| Skill | deep-research | Research unknowns with cited sources |
 | Model | Sonnet | Recommended for this scope |
 
 ### Section 3: Optimized Prompt — Full Version
@@ -123,8 +128,8 @@ The prompt must be self-contained and ready to copy-paste. Include:
 - Verification steps
 - Scope boundaries (what NOT to do)
 
-For items that reference blueprint, write: "Use the blueprint skill to..."
-(not `/blueprint`, since blueprint is a skill, not a command).
+For multi-session work, write: "Use a planning skill (e.g. blueprint) to..." if one is
+available in the environment — do not assume a specific planning command exists.
 
 ### Section 4: Optimized Prompt — Quick Version
 
@@ -132,14 +137,15 @@ A compact version for experienced users. Vary by intent type:
 
 | Intent | Quick Pattern |
 |--------|--------------|
-| New Feature | `/plan [feature]. /tdd to implement. /code-review. /verify.` |
-| Bug Fix | `/tdd — write failing test for [bug]. Fix to green. /verify.` |
-| Refactor | `/refactor-clean [scope]. /code-review. /verify.` |
-| Research | `Use search-first skill for [topic]. /plan based on findings.` |
-| Testing | `/tdd [module]. /e2e for critical flows. /test-coverage.` |
-| Review | `/code-review. Then use security-reviewer agent.` |
-| Docs | `/update-docs. /update-codemaps.` |
-| EPIC | `Use blueprint skill for "[objective]". Execute phases with /verify gates.` |
+| New Feature | `Implement [feature]. Generate tests with /herow-dev:code:generate-tests. /herow-dev:code:review.` |
+| Bug Fix | `Use the debugger agent to root-cause [bug]. Add a failing test, fix to green, /herow-dev:code:review.` |
+| Refactor | `/herow-dev:code:refactor [scope]. /herow-dev:code:review.` |
+| Research | `Use the deep-research skill for [topic]; cite sources.` |
+| Testing | `/herow-dev:code:generate-tests for [module]` (React: `/herow-dev:react:test`). |
+| Review | `/herow-dev:code:review` (Python: `/herow-dev:python:review`; React: `/herow-dev:react:review`). |
+| Docs | `/herow-dev:git:release-notes since the last tag.` |
+| Git/PR | `/herow-dev:git:pr` (conflicts: `/herow-dev:git:fix-conflicts`). |
+| Planning (EPIC) | `Plan "[objective]" in phases with a review gate between each; use a planning skill if available.` |
 
 ### Section 5: Enhancement Rationale
 
@@ -167,11 +173,11 @@ A compact version for experienced users. Vary by intent type:
 Build a user login page
 ```
 
-**Phase 0 detects:** `package.json` with Next.js 15, TypeScript, Tailwind CSS
+**Phase 0 detects:** `package.json` with Next.js 16, TypeScript, Tailwind CSS
 
 **Optimized Prompt (Full):**
 ```
-Implement a user login page using the project's existing tech stack (Next.js 15 + TypeScript + Tailwind CSS).
+Implement a user login page using the project's existing tech stack (Next.js 16 + TypeScript + Tailwind CSS).
 
 Requirements:
 - Follow the project's existing component structure and routing conventions
@@ -180,11 +186,11 @@ Requirements:
 - Include: email/password login form, form validation, error messages, loading state, responsive layout
 
 Workflow:
-1. /plan the component structure and auth flow first, referencing existing page patterns
-2. /tdd test-first: write unit tests for the login form and integration tests for the auth flow
-3. Implement the login page and auth logic
-4. /code-review the implementation
-5. /verify all tests pass and the page renders correctly
+1. Sketch the component structure and auth flow first, referencing existing page patterns (delegate to the backend-architect agent if the auth/data model is non-trivial)
+2. Generate tests first with /herow-dev:code:generate-tests — unit tests for the login form, integration tests for the auth flow
+3. Implement the login page and auth logic (fullstack-developer agent)
+4. /herow-dev:react:review and /herow-dev:code:review
+5. Confirm all tests pass and the page renders correctly
 
 Security:
 - Never transmit passwords in plaintext
@@ -210,34 +216,34 @@ Do not:
 Add a REST API endpoint for user profile updates with validation
 ```
 
-**Phase 0 detects:** `go.mod` with Go 1.22, Chi router
+**Phase 0 detects:** `pyproject.toml` with FastAPI + SQLAlchemy
 
 **Optimized Prompt (Full):**
 ```
-Add a REST API endpoint for user profile updates (PATCH /api/users/:id).
+Add a REST API endpoint for user profile updates (PATCH /api/users/{id}).
 
-Tech stack: Go 1.22 + Chi router (detected from project)
+Tech stack: Python + FastAPI + SQLAlchemy (detected from project)
 
 Requirements:
-- PATCH /api/users/:id — partial update of user profile
-- Input validation for fields: name, email, avatar_url, bio
+- PATCH /api/users/{id} — partial update of user profile
+- Pydantic validation for fields: name, email, avatar_url, bio
 - Auth: require valid token, users can only update own profile
 - Return 200 with updated user on success
-- Return 400 with validation errors on invalid input
+- Return 422 with validation errors on invalid input
 - Return 401/403 for auth failures
-- Follow existing API patterns in the codebase
+- Follow existing router/dependency patterns in the codebase
 
 Workflow:
-1. /plan the endpoint structure, middleware chain, and validation logic
-2. /tdd — write table-driven tests for success, validation failure, auth failure, not-found
-3. Implement following existing handler patterns
-4. /go-review
-5. /verify — run full test suite, confirm no regressions
+1. Sketch the endpoint contract and dependency chain (backend-architect agent if the schema is non-trivial)
+2. Generate tests first with /herow-dev:code:generate-tests — success, validation failure, auth failure, not-found
+3. Implement following existing handler patterns (python-pro agent)
+4. /herow-dev:python:fastapi-review
+5. Run the full test suite, confirm no regressions
 
 Do not:
 - Modify existing endpoints
 - Change the database schema (use existing user table)
-- Add new dependencies without checking existing ones first (use search-first skill)
+- Add new dependencies before checking existing ones (use the exa-search or deep-research skill to confirm)
 ```
 
 ### Example 3: EPIC Project
@@ -249,28 +255,27 @@ Migrate our monolith to microservices
 
 **Optimized Prompt (Full):**
 ```
-Use the blueprint skill to plan: "Migrate monolith to microservices architecture"
+Plan: "Migrate monolith to microservices architecture" (use a planning skill such as blueprint if available in your environment).
 
-Before executing, answer these questions in the blueprint:
+Before executing, answer these questions in the plan:
 1. Which domain boundaries exist in the current monolith?
 2. Which service should be extracted first (lowest coupling)?
 3. Communication pattern: REST APIs, gRPC, or event-driven (Kafka/RabbitMQ)?
 4. Database strategy: shared DB initially or database-per-service from start?
 5. Deployment target: Kubernetes, Docker Compose, or serverless?
 
-The blueprint should produce phases like:
-- Phase 1: Identify service boundaries and create domain map
+Recommended phases:
+- Phase 1: Identify service boundaries and create a domain map (backend-architect agent)
 - Phase 2: Set up infrastructure (API gateway, service mesh, CI/CD per service)
 - Phase 3: Extract first service (strangler fig pattern)
 - Phase 4: Verify with integration tests, then extract next service
 - Phase N: Decommission monolith
 
-Each phase = 1 PR, with /verify gates between phases.
-Use /save-session between phases. Use /resume-session to continue.
+Each phase = 1 PR, with a /herow-dev:code:review gate between phases.
+Use the deep-research skill for unknowns (e.g. service-mesh choice).
 Use git worktrees for parallel service extraction when dependencies allow.
 
-Recommended: Opus for blueprint planning, Sonnet for phase execution.
+Recommended: Opus for planning, Sonnet for phase execution.
 ```
 
 ---
-

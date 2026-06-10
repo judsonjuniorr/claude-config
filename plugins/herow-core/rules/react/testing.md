@@ -1,15 +1,4 @@
----
-paths:
-  - "**/*.test.tsx"
-  - "**/*.test.jsx"
-  - "**/*.spec.tsx"
-  - "**/*.spec.jsx"
-  - "**/__tests__/**/*.ts"
-  - "**/__tests__/**/*.tsx"
----
 # React Testing
-
-> This file extends [typescript/testing.md](../typescript/testing.md) and [common/testing.md](../common/testing.md) with React specific content.
 
 ## Library Choice
 
@@ -202,7 +191,3 @@ For those, use Playwright Component Testing or end-to-end Playwright/Cypress run
 - Mocking React hooks (`jest.mock("react", ...)`) — refactor the component instead
 - Mocking child components by default — tests the integration, not the parent in isolation
 - Manual `act()` warnings ignored — they indicate real bugs
-
-## Skill Reference
-
-See `skills/react-testing/SKILL.md` for end-to-end test examples, MSW patterns, and accessibility test scaffolding.

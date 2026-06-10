@@ -1,11 +1,4 @@
----
-paths:
-  - "**/*.swift"
-  - "**/Package.swift"
----
 # Swift Coding Style
-
-> This file extends [common/coding-style.md](../common/coding-style.md) with Swift specific content.
 
 ## Formatting
 

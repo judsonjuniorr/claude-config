@@ -1,6 +1,6 @@
 ---
 name: exa-search
-description: (herow) Neural search via Exa MCP for web, code, and company research. Use when the user needs web search, code examples, company intel, people lookup, or AI-powered deep research with Exa's neural search engine.
+description: (herow) Reference for the Exa MCP tools (web_search_exa, get_code_context_exa) — parameters and query patterns. Use for quick web/code lookups via Exa. For multi-source cited reports, use the deep-research skill.
 ---
 
 # Exa Search
@@ -102,5 +102,4 @@ get_code_context_exa(query: "WebAssembly component model examples", tokensNum: 4
 
 ## Related Skills
 
-- `deep-research` — Full research workflow using firecrawl + exa together
-- `market-research` — Business-oriented research with decision frameworks
+- `deep-research` — Full multi-source research workflow with cited reports (uses these Exa tools)

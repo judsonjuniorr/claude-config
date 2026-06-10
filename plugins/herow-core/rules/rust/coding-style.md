@@ -1,10 +1,4 @@
----
-paths:
-  - "**/*.rs"
----
 # Rust Coding Style
-
-> This file extends [common/coding-style.md](../common/coding-style.md) with Rust-specific content.
 
 ## Formatting
 
