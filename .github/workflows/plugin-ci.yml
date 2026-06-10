@@ -1,0 +1,70 @@
+name: plugin-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — no user-specific or legacy template paths in plugins
+        run: |
+          set -e
+          if grep -rn "/Users/" plugins/ --include="*.md" --include="*.sh" --include="*.js" --include="*.json" --include="*.py"; then
+            echo "::error::hardcoded /Users/ path found under plugins/ (breaks plugin cache-copy)"; exit 1
+          fi
+          if grep -rn "{{HOOKS_DIR}}\|{{REPO_DIR}}" plugins/; then
+            echo "::error::legacy install.sh template marker found under plugins/"; exit 1
+          fi
+          echo "path guards OK"
+
+      - name: Guard — no README.md inside command dirs (would register as a command)
+        run: |
+          set -e
+          found=$(find plugins/*/commands -name "README.md" 2>/dev/null || true)
+          if [ -n "$found" ]; then
+            echo "::error::README.md inside a commands/ dir: $found"; exit 1
+          fi
+          echo "command dirs OK"
+
+      - name: Guard — hook scripts parse
+        run: |
+          set -e
+          for f in plugins/herow-core/scripts/*.sh plugins/herow-core/skills/github-ops/hooks/*.sh plugins/herow-core/skills/github-ops/scripts/*.sh migrate.sh; do
+            bash -n "$f"
+          done
+          for f in plugins/herow-core/scripts/*.js; do
+            node --check "$f"
+          done
+          echo "scripts OK"
+
+      - name: Guard — JSON manifests valid
+        run: |
+          set -e
+          for f in .claude-plugin/marketplace.json plugins/*/.claude-plugin/plugin.json plugins/herow-core/hooks/hooks.json docs/mcp/*.json; do
+            jq empty "$f"
+          done
+          echo "JSON OK"
+
+      - name: Guard — plugins must not pin a version (commit-SHA versioning = auto-update)
+        run: |
+          set -e
+          if grep -l '"version"' plugins/*/.claude-plugin/plugin.json; then
+            echo "::error::plugin.json pins a version — remove it so every push is a new version"; exit 1
+          fi
+          echo "versionless OK"
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Validate marketplace + plugins
+        run: |
+          set -e
+          claude plugin validate .
+          for p in plugins/*/; do
+            claude plugin validate "$p"
+          done
