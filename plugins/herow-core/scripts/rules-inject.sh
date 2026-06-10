@@ -31,6 +31,7 @@ writing code** and apply them for that session:
 - Rust → \`$ROOT/rules/rust/\`
 - Swift → \`$ROOT/rules/swift/\`
 - C# / .NET → \`$ROOT/rules/csharp/\`
+- Backend/API work (REST design, layered architecture, caching, background jobs) → \`$ROOT/rules/backend/\`
 
 Detect the primary language from the project (e.g. \`package.json\`/\`tsconfig.json\`
 → TypeScript, \`pyproject.toml\`/\`requirements.txt\` → Python). These rules are
