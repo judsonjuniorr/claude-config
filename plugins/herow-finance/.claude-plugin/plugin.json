@@ -1,0 +1,8 @@
+{
+  "name": "herow-finance",
+  "description": "Personal finance: Organizze API analysis (balance, cashflow, debt strategy) with financial-analyst agent, plus Contabilizei NF registration",
+  "author": { "name": "Judson Junior", "email": "judsonjuniorr@gmail.com" },
+  "repository": "https://github.com/judsonjuniorr/claude-config",
+  "license": "MIT",
+  "keywords": ["finance", "organizze", "contabilizei"]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "herow",
+  "owner": {
+    "name": "Judson Junior",
+    "email": "judsonjuniorr@gmail.com"
+  },
+  "description": "Judson's (herow) Claude Code toolkit: dev workflows, SEO suite, finance automation",
+  "plugins": [
+    {
+      "name": "herow-core",
+      "source": "./plugins/herow-core",
+      "category": "workflow",
+      "description": "Quality hooks, always-on rules, github-ops, core review agents, auto-update"
+    },
+    {
+      "name": "herow-dev",
+      "source": "./plugins/herow-dev",
+      "category": "development",
+      "description": "Code/git/react/python commands, dev agents and skills"
+    },
+    {
+      "name": "herow-seo",
+      "source": "./plugins/herow-seo",
+      "category": "seo",
+      "description": "SEO/GEO command suite with strategist/auditor/engineer agents"
+    },
+    {
+      "name": "herow-finance",
+      "source": "./plugins/herow-finance",
+      "category": "productivity",
+      "description": "Organizze finance analysis + Contabilizei NF automation"
+    },
+    {
+      "name": "herow-extras",
+      "source": "./plugins/herow-extras",
+      "category": "productivity",
+      "description": "PRD generator, file organizer, graphify bootstrap"
+    }
+  ]
+}
