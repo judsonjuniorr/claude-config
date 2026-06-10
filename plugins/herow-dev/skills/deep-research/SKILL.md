@@ -28,8 +28,7 @@ single quick lookup suffices — see Step 0.
 
 This repo's configured Exa server exposes:
 - **`web_search_exa`** — web/news discovery
-- **`web_fetch_exa`** — fetch a URL's full content
-- **`get_code_context_exa`** — code examples and docs from GitHub/SO/docs sites
+- **`web_fetch_exa`** — fetch a URL's full content (use on the best result URLs when snippets aren't enough, including code/docs pages)
 
 Any configured search/fetch MCP works as a substitute — **verify the exposed tool names
 first** (the `exa-search` skill documents the current Exa surface). Configure in
@@ -88,8 +87,7 @@ web_search_exa(query: "<sub-question keywords>", numResults: 8)
 For the most promising URLs, fetch full content — don't rely on snippets alone:
 
 ```
-web_fetch_exa(url: "<url>")
-get_code_context_exa(query: "<code/API topic>", tokensNum: 5000)   # for code/docs
+web_fetch_exa(url: "<url>")   # for any URL, including GitHub/SO/docs pages for code & API detail
 ```
 
 Read 3-5 key sources in full for depth.
