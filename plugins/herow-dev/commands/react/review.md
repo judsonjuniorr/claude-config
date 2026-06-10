@@ -157,14 +157,11 @@ Recommendation: FAIL: Block merge until CRITICAL issue is fixed
 
 ## Integration with Other Commands
 
-- Run `/react-build` first if the build is broken
-- Run `/react-test` to ensure component tests pass
-- Run `/react-review` before merging
-- Use `/code-review` for non-React-specific concerns on the same PR
+- Run `/herow-dev:react:test` to ensure component tests pass
+- Use `/herow-dev:code:review` for non-React-specific concerns on the same PR
 
 ## Related
 
-- Agent: `agents/react-reviewer.md`
-- Companion agent: `agents/typescript-reviewer.md` (run alongside for TSX/JSX PRs)
-- Skills: `skills/react-patterns/`, `skills/react-testing/`, `skills/accessibility/`
-- Rules: `rules/react/`
+- Agent: `react-reviewer` (ships with this plugin)
+- Companion agent: `typescript-reviewer` (run alongside for TSX/JSX PRs)
+- Rules: herow-core's `rules/react/` and `rules/web/` (the session-start rules pointer prints the resolved path)

@@ -35,20 +35,13 @@
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/post-edit-accumulator.js\"", "timeout": 10 }
         ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/post-edit-console-warn.js\"", "timeout": 10 }
-        ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-guard.sh\"", "timeout": 30 },
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-format-typecheck.js\"", "timeout": 120 },
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/check-console-log.js\"", "timeout": 30 }
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-guard.js\"", "timeout": 30 },
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-format-typecheck.js\"", "timeout": 120 }
         ]
       }
     ]

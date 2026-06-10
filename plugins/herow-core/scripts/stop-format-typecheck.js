@@ -122,6 +122,38 @@ function formatBatch(projectRoot, files, timeoutMs) {
   }
 }
 
+// ── console.log scan (folded from the removed standalone console hooks) ──
+
+// Files where console.log is expected and should not trigger warnings.
+const CONSOLE_EXCLUDED = [
+  /\.test\.[jt]sx?$/,
+  /\.spec\.[jt]sx?$/,
+  /\.config\.[jt]s$/,
+  /scripts\//,
+  /__tests__\//,
+  /__mocks__\//,
+];
+
+function warnConsoleLogs(files) {
+  let any = false;
+  for (const file of files) {
+    if (!/\.(ts|tsx|js|jsx)$/.test(file)) continue;
+    if (CONSOLE_EXCLUDED.some(p => p.test(file))) continue;
+    let content;
+    try { content = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    const hits = [];
+    content.split('\n').forEach((line, idx) => {
+      if (/console\.log/.test(line)) hits.push(`${idx + 1}: ${line.trim()}`);
+    });
+    if (hits.length > 0) {
+      any = true;
+      process.stderr.write(`[Hook] WARNING: console.log found in ${file}\n`);
+      hits.slice(0, 5).forEach(h => process.stderr.write(h + '\n'));
+    }
+  }
+  if (any) process.stderr.write('[Hook] Remove console.log statements before committing\n');
+}
+
 // ── Python / Go format batches (parity with the removed per-edit gate) ──
 
 function formatPython(files, timeoutMs) {
@@ -239,6 +271,7 @@ function main() {
   formatPython(pyFiles, perBatchMs);
   formatGo(goFiles, perBatchMs);
   for (const [tsDir, batch] of byTsConfigDir) typecheckBatch(tsDir, batch, perBatchMs);
+  warnConsoleLogs(files.map(f => path.resolve(f)).filter(f => fs.existsSync(f)));
 }
 
 function run(rawInput) {
