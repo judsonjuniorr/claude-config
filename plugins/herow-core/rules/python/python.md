@@ -21,6 +21,10 @@ Read before writing code.
 - No bare `except:` and no `except Exception:` that swallows — catch the narrowest type, log or reraise.
 - See the `error-handling` skill for retry / circuit-breaker / Result patterns.
 
+## Security
+- Secrets from the environment: `os.environ["KEY"]` (raises on missing — fail loud); `python-dotenv` to load a local `.env`, never commit it. No hardcoded secrets.
+- Static security analysis with **bandit**: `bandit -r src/`; treat findings as blockers.
+
 ## FastAPI / data
 - Pydantic models for request/response; validate at the boundary, pass typed objects inward.
 - Async endpoints for I/O-bound work; don't block the event loop with sync calls.
