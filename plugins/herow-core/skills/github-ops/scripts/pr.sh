@@ -137,7 +137,6 @@ cmd_list() {
     local extra=()
     [ "$mine" = "1" ] && extra+=(--mine)
     glab mr list --state "$state" "${extra[@]}" --output json \
-      | awk 'BEGIN{RS="},{"} 1' \
       | python3 -c '
 import json,sys
 data=json.loads(sys.stdin.read())

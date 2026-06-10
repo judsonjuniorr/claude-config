@@ -24,8 +24,8 @@ complete optimized prompt the user can paste and run.
 
 > Detection tables, component-matching tables, the full output-format spec, and worked
 > examples live in `reference.md` **in this skill's directory** — read it before
-> producing output. Its component catalog may be stale: verify a component exists in
-> the current session before recommending it.
+> producing output. It lists herow components; the installed plugin set varies, so
+> verify a component exists in the current session before recommending it.
 
 ## When to Use
 

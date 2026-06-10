@@ -1,15 +1,4 @@
----
-paths:
-  - "**/*.tsx"
-  - "**/*.jsx"
-  - "**/components/**/*.ts"
-  - "**/components/**/*.js"
-  - "**/hooks/**/*.ts"
-  - "**/hooks/**/*.js"
----
 # React Coding Style
-
-> This file extends [typescript/coding-style.md](../typescript/coding-style.md) and [common/coding-style.md](../common/coding-style.md) with React specific content.
 
 ## File Extensions
 
@@ -79,7 +68,7 @@ return <h1>{user.isAdmin ? "Welcome, admin" : `Hello ${user.name}`}</h1>;
 
 ## Hooks Discipline
 
-See [hooks.md](./hooks.md) for the full ruleset. Style highlights:
+Style highlights:
 
 - Custom hooks must start with `use` — enforced by `eslint-plugin-react-hooks`
 - Group all hook calls at the top of the component, before any conditional logic

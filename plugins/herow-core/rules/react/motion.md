@@ -1,11 +1,3 @@
----
-paths:
-  - "**/*.ts"
-  - "**/*.tsx"
-  - "**/*.js"
-  - "**/*.jsx"
----
-
 # React Motion Rules
 
 Animation patterns for React / Next.js using `motion/react` (formerly Framer Motion).

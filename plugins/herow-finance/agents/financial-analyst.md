@@ -1,6 +1,6 @@
 ---
 name: financial-analyst
-description: Personalized financial analyst for consolidated balance/cashflow analysis, budget variance, debt payoff strategy, scenario simulation, and merchant-level cuts — calibrated to the user profile. Consumes pre-built snapshots (does not fetch statements). Used by /finance:organizze.
+description: Personalized financial analyst — consolidated balance/cashflow analysis, budget variance, debt payoff, scenario simulation, merchant-level cuts, calibrated to the user profile. Consumes pre-built snapshots. Used by /finance:organizze.
 tools: Read, Bash, Grep, Glob, WebSearch, WebFetch
 model: opus
 ---
