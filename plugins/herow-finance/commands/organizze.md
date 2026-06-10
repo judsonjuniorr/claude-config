@@ -151,9 +151,30 @@ The script:
 - Prints a markdown table: Current | Realized | 3m Median | 6m p75 | **Suggested** | Δ | Confidence.
 - Saves JSON to `~/finance/organizze/budget-suggestions/YYYY-MM-DD-HHMM.json` with the payloads (current_month + next_month).
 
-Show the table to the user and say:
+Show the table to the user.
 
-> The Organizze REST API does not allow updating budgets via HTTP — apply manually at https://app.organizze.com.br/orcamento. JSON with the values is at `<path>` for reference.
+### Step 7.5 — Apply the budgets (Playwright via the scraping `.session`)
+
+The Organizze REST API can't write budgets ("limite de gastos"), but the web app can. `apply_budgets.py` reuses the same `.session` created for scraping (Step 3.5) to set each category's limit on `/<wsid>/limite-de-gastos`, matching by `category_id` (so duplicate category names are disambiguated). It defaults to **DRY-RUN**; `--apply` writes and verifies each value by reading it back. `Transferências` and `Pagamento de fatura` are skipped automatically (not real spending limits).
+
+Only run this when the scraping `.session` exists (it does whenever Step 3.5 did not degrade). If `~/finance/organizze/.session` is missing, **skip to the manual fallback** below.
+
+1. Dry-run and show the diff to the user:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/apply_budgets.py \
+     --suggestions "$(ls -t ~/finance/organizze/budget-suggestions/*.json | head -1)"
+   ```
+   Output: `dry|would-set|<cat>|R$ a -> R$ b` lines + `dry|summary|would-apply=N,already=M,unmatched=U,failed=0`.
+
+2. If `would-apply` > 0, **ask the user to confirm via `AskUserQuestion`** (single question, options "Apply / Skip") before writing — show the would-set diff in the question. Only on explicit confirmation, apply live:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/apply_budgets.py \
+     --suggestions "$(ls -t ~/finance/organizze/budget-suggestions/*.json | head -1)" --apply
+   ```
+   Report the `ok|summary|applied=N,already=M,unmatched=U,failed=F` line. If `unmatched` > 0 or `failed` > 0, list those categories so the user can set them manually.
+
+3. **Manual fallback** — if auto-apply was skipped (no `.session`), declined, or partially failed, tell the user:
+   > Apply the remaining budgets manually at https://app.organizze.com.br/orcamento. JSON with the values is at `<path>` for reference.
 
 If `--history-days` in Step 3 was less than 180, warn: "short history, low confidence — I suggest re-running `/finance:organizze` with `--history-days 180` for more robust suggestions".
 
