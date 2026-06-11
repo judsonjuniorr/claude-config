@@ -33,9 +33,10 @@ Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/ensure-deps.sh"`. Installs only w
 
 Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` (gstack clone+setup, rtk/graphify verify, headroom install). Report each `ok|…`/`err|…`.
 
-Then wire headroom — **ask the user the mode** with `AskUserQuestion`:
-- **MCP tools (Recommended, safe)**: registers headroom compress/retrieve/stats tools; does not touch API auth. → `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" mcp`
-- **Proxy wrap (max savings)**: routes the API through the local proxy; can break Pro/Max OAuth auth (config is backed up; rollback = `headroom unwrap claude`). → `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" wrap`
+Then wire headroom — **ask the user the mode** with `AskUserQuestion`. All modes force telemetry OFF:
+- **MCP tools (safe)**: registers headroom compress/retrieve/stats tools; does not touch API auth. → `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" mcp`
+- **Durable init (Recommended, max savings)**: `headroom init --global --memory claude` — durable hooks + provider routing (`ANTHROPIC_BASE_URL` → local proxy) with persistent memory; transparent compression of every tool output. Can break Pro/Max OAuth auth (config is backed up; rollback = `headroom unwrap claude`); requires a Claude Code restart to activate. → `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" init`
+- **Proxy wrap (legacy)**: older `headroom wrap claude` path; kept for back-compat. → `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" wrap`
 
 Report the active mode the script prints.
 
@@ -59,4 +60,4 @@ Summarize in a short block:
 - Installed / already-present: gstack, rtk, graphify, headroom (+ mode).
 - Removed (with Yes): OMEGA / loose dups / strays.
 - 3 commands now at `/herow-dev:blueprint|quick|execute`; output is **compressed by default** (`/herow-core:uncompress` for full prose).
-- **Manual follow-up:** restart the Claude session (or `/reload-plugins`) so the herow-dev hook and any removed OMEGA hooks take effect; if proxy-wrap was chosen, confirm the next API call works and `headroom unwrap claude` if auth fails.
+- **Manual follow-up:** restart the Claude session (or `/reload-plugins`) so the herow-dev hook and any removed OMEGA hooks take effect; if init or proxy-wrap was chosen, the restart also activates `ANTHROPIC_BASE_URL` routing — confirm the next API call works and `headroom unwrap claude` if auth fails. Track savings with `headroom perf` and the `headroom_stats` MCP tool.
