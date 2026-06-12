@@ -4,6 +4,31 @@ argument-hint: [caminho do plano — default .plans/latest]
 model: sonnet
 ---
 
+## Model check
+
+```bash
+python3 -c "
+import json, os, sys
+model = os.environ.get('CLAUDE_MODEL', '')
+if not model:
+    try:
+        s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
+        model = s.get('model', 'unknown')
+    except: model = 'unknown'
+print(model)
+" 2>/dev/null
+```
+
+Se o output **não contém** `sonnet`: avise em 1 linha e mostre o comando abaixo sem executar — o usuário pode copiar e iniciar uma sessão Sonnet diretamente:
+
+```
+claude --model claude-sonnet-4-6
+```
+
+> Não bloqueie a execução. Este comando já tem `model: sonnet` no frontmatter — a invocação atual roda em Sonnet. O aviso é sobre o custo da sessão pai (se for Opus, todos os outros turnos nela custam mais).
+
+---
+
 Você vai **executar** um plano já definido. Caminho:
 
 **${ARGUMENTS:-.plans/latest}**

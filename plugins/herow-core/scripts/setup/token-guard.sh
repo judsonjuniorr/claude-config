@@ -18,7 +18,7 @@ python3 - "$SETTINGS" <<'PY'
 import json, sys, os, tempfile
 
 TARGETS = {
-    "model": "opusplan",
+    "model": "sonnet",
     "advisorModel": "opus",
     "effortLevel": "high",
     "autoCompact": True,

@@ -53,8 +53,8 @@ import json,sys
 try: s=json.load(open(sys.argv[1]))
 except: s={}
 if not isinstance(s, dict): s={}
-if s.get("model") != "opusplan":
-    print("opt|model|not-opusplan|settings.json: model not set to opusplan")
+if "sonnet" not in s.get("model", ""):
+    print("opt|model|not-sonnet|settings.json: model not set to sonnet")
 if s.get("advisorModel") != "opus":
     print("opt|advisor-model|not-opus|settings.json: advisorModel not set to opus")
 if s.get("effortLevel") != "high":

@@ -29,8 +29,8 @@ ck loose-cmds '! [ -f "${LOOSE_CMD_DIR}/blueprint.md" ]' "loose blueprint remove
 
 # token optimizations
 ck model \
-  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if s.get(\"model\")==\"opusplan\" else 1)" 2>/dev/null' \
-  "model=opusplan" "model not set to opusplan in settings.json"
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if \"sonnet\" in s.get(\"model\",\"\") else 1)" 2>/dev/null' \
+  "model=sonnet" "model not set to sonnet in settings.json"
 ck effort \
   'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if s.get(\"effortLevel\")==\"high\" else 1)" 2>/dev/null' \
   "effortLevel=high" "effortLevel not set to high in settings.json"

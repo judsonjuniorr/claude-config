@@ -1,6 +1,32 @@
 ---
 description: (herow) Pipeline gstack ponta-a-ponta para mudança simples (worktree → autoplan → implementar → review → qa → ship)
 argument-hint: <descrição curta da mudança>
+model: sonnet
+---
+
+## Model check
+
+```bash
+python3 -c "
+import json, os, sys
+model = os.environ.get('CLAUDE_MODEL', '')
+if not model:
+    try:
+        s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
+        model = s.get('model', 'unknown')
+    except: model = 'unknown'
+print(model)
+" 2>/dev/null
+```
+
+Se o output **não contém** `sonnet`: avise em 1 linha e mostre o comando abaixo sem executar — o usuário pode copiar e iniciar uma sessão Sonnet diretamente:
+
+```
+claude --model claude-sonnet-4-6
+```
+
+> Não bloqueie a execução. Este comando já tem `model: sonnet` no frontmatter. O aviso é sobre o custo da sessão pai.
+
 ---
 
 Você vai executar uma mudança pequena/média de ponta a ponta usando o pipeline gstack. A descrição da mudança é:
