@@ -1,6 +1,34 @@
 ---
 description: (herow) Pipeline gstack ponta-a-ponta para mudança simples (worktree → autoplan → implementar → review → qa → ship)
 argument-hint: <descrição curta da mudança>
+model: sonnet
+---
+
+## Model check
+
+```bash
+python3 -c "
+import json, os
+model = os.environ.get('CLAUDE_MODEL', '')
+if not model:
+    try:
+        s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
+        model = s.get('model', 'unknown')
+    except: model = 'unknown'
+print(model)
+" 2>/dev/null
+```
+
+Se o output **não contém** `sonnet` e **não é** `opusplan`: avise em 1 linha que a sessão está em Opus e mostre o comando exato para reiniciar em Sonnet diretamente. Construa o comando substituindo `<descrição>` pelo argumento real desta invocação (já resolvido acima):
+
+```
+claude --model claude-sonnet-4-6 "/herow-dev:quick <descrição>"
+```
+
+O usuário copia, roda no terminal e o comando inicia uma nova sessão Sonnet já executando a tarefa.
+
+> Não bloqueie. Este comando tem `model: sonnet` no frontmatter — esta invocação roda em Sonnet independente. O aviso é custo da sessão pai.
+
 ---
 
 Você vai executar uma mudança pequena/média de ponta a ponta usando o pipeline gstack. A descrição da mudança é:

@@ -27,5 +27,22 @@ ck omega-md       '! { [ -f "$CLAUDE_MD" ] && grep -qi OMEGA "$CLAUDE_MD"; }' "n
 # loose duplicates gone
 ck loose-cmds '! [ -f "${LOOSE_CMD_DIR}/blueprint.md" ]' "loose blueprint removed" "loose blueprint.md still present"
 
+# token optimizations
+ck model \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if s.get(\"model\")==\"opusplan\" else 1)" 2>/dev/null' \
+  "model=opusplan" "model not set to opusplan in settings.json"
+ck effort \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if s.get(\"effortLevel\")==\"high\" else 1)" 2>/dev/null' \
+  "effortLevel=high" "effortLevel not set to high in settings.json"
+ck advisor-model \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if s.get(\"advisorModel\")==\"opus\" else 1)" 2>/dev/null' \
+  "advisorModel=opus" "advisorModel not set to opus in settings.json"
+ck autocompact \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if s.get(\"autoCompact\") is True else 1)" 2>/dev/null' \
+  "autoCompact enabled" "autoCompact not set in settings.json"
+ck subagent-model \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if \"sonnet\" in s.get(\"env\",{}).get(\"CLAUDE_CODE_SUBAGENT_MODEL\",\"\") else 1)" 2>/dev/null' \
+  "CLAUDE_CODE_SUBAGENT_MODEL=sonnet" "CLAUDE_CODE_SUBAGENT_MODEL not pinned to sonnet"
+
 emit summary "${PASS} passed / ${FAIL} failed" "$([ "$FAIL" -eq 0 ] && echo all-green || echo review-fails)"
 exit 0
