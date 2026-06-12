@@ -46,7 +46,7 @@ Report the active mode the script prints.
 Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/token-guard.sh"`. No user approval needed — these are safe defaults that don't remove anything. Report each `ok|…`/`err|…` result.
 
 Settings applied (idempotent):
-- `model: sonnet` — Sonnet as default; use `opusplan` explicitly when you need 1M plan-phase context
+- `model: opusplan` — Sonnet for all normal work; auto-switches to Opus with 1M context only when plan mode (`EnterPlanMode`) is active
 - `advisorModel: opus` — advisor review step uses Opus for quality
 - `effortLevel: high` — high reasoning effort by default
 - `autoCompact: true` — auto-compact at 80% of context window (160K on Sonnet)
@@ -71,6 +71,6 @@ Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/verify.sh"`. Show the `pass|…`/
 Summarize in a short block:
 - Installed / already-present: gstack, rtk, graphify, headroom (+ mode).
 - Removed (with Yes): OMEGA / loose dups / strays.
-- Token guard: model=sonnet, advisorModel=opus, effortLevel=high, autoCompact=true, CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-4-6.
+- Token guard: model=opusplan, advisorModel=opus, effortLevel=high, autoCompact=true, CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-4-6.
 - 3 commands now at `/herow-dev:blueprint|quick|execute`; output is **compressed by default** (`/herow-core:uncompress` for full prose).
 - **Manual follow-up:** restart the Claude session (or `/reload-plugins`) so the herow-dev hook and any removed OMEGA hooks take effect; if init or proxy-wrap was chosen, the restart also activates `ANTHROPIC_BASE_URL` routing — confirm the next API call works and `headroom unwrap claude` if auth fails. Track savings with `headroom perf` and the `headroom_stats` MCP tool.

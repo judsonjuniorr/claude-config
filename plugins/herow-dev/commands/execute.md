@@ -8,7 +8,7 @@ model: sonnet
 
 ```bash
 python3 -c "
-import json, os, sys
+import json, os
 model = os.environ.get('CLAUDE_MODEL', '')
 if not model:
     try:
@@ -19,13 +19,15 @@ print(model)
 " 2>/dev/null
 ```
 
-Se o output **não contém** `sonnet`: avise em 1 linha e mostre o comando abaixo sem executar — o usuário pode copiar e iniciar uma sessão Sonnet diretamente:
+Se o output **não contém** `sonnet` e **não é** `opusplan`: avise em 1 linha que a sessão está em Opus e mostre o comando exato para reiniciar em Sonnet diretamente. Construa o comando substituindo `<plano>` pelo argumento real desta invocação (já resolvido acima):
 
 ```
-claude --model claude-sonnet-4-6
+claude --model claude-sonnet-4-6 "/herow-dev:execute <plano>"
 ```
 
-> Não bloqueie a execução. Este comando já tem `model: sonnet` no frontmatter — a invocação atual roda em Sonnet. O aviso é sobre o custo da sessão pai (se for Opus, todos os outros turnos nela custam mais).
+O usuário copia, roda no terminal e o comando inicia uma nova sessão Sonnet já executando o plano.
+
+> Não bloqueie. Este comando tem `model: sonnet` no frontmatter — esta invocação roda em Sonnet independente. O aviso é custo da sessão pai.
 
 ---
 
