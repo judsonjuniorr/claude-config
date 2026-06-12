@@ -48,11 +48,11 @@ done
 [ -f "$SETTINGS" ] && grep -q 'blueprint-track.sh' "$SETTINGS" 2>/dev/null && emit remove loose settings-hook "$SETTINGS (blueprint-track.sh Skill hooks)"
 
 ## --- token optimizations (non-blocking, report only) ---
-if [ -f "$SETTINGS" ]; then
-  python3 - "$SETTINGS" <<'PY' 2>/dev/null || true
+python3 - "$SETTINGS" <<'PY' 2>/dev/null || true
 import json,sys
 try: s=json.load(open(sys.argv[1]))
-except: sys.exit(0)
+except: s={}
+if not isinstance(s, dict): s={}
 if s.get("model") != "opusplan":
     print("opt|model|not-opusplan|settings.json: model not set to opusplan")
 if s.get("advisorModel") != "opus":
@@ -61,10 +61,9 @@ if s.get("effortLevel") != "high":
     print("opt|effort|not-high|settings.json: effortLevel not set to high")
 if s.get("autoCompact") is not True:
     print("opt|autocompact|disabled|settings.json: autoCompact not enabled")
-if "sonnet" not in s.get("env",{}).get("CLAUDE_CODE_SUBAGENT_MODEL",""):
+if "sonnet" not in (s.get("env") or {}).get("CLAUDE_CODE_SUBAGENT_MODEL",""):
     print("opt|subagent-model|not-set|settings.json: CLAUDE_CODE_SUBAGENT_MODEL not pinned to sonnet")
 PY
-fi
 
 ## --- other stray memory/token MCP servers (excluding omega, already covered) ---
 if [ -f "$CLAUDE_JSON" ]; then
