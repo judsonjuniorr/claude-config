@@ -71,6 +71,25 @@ Avoid animating layout-bound properties:
 - `border`
 - `font-size`
 
+## Mobile Form Inputs — Prevent iOS Auto-Zoom
+
+iOS Safari/WebKit zooms into a focused `input`, `textarea`, or `select` whenever its
+computed `font-size` is **below 16px**. Keep form-control fonts at `16px` or larger:
+
+```css
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1rem);
+  }
+}
+```
+
+Do **not** fix this with `<meta name="viewport" content="...maximum-scale=1, user-scalable=no">`
+— it disables pinch-zoom for everyone and fails WCAG 1.4.4 (Resize Text). Raise the
+font-size instead.
+
 ## Semantic HTML First
 
 ```html
