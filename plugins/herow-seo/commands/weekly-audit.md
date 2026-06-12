@@ -2,6 +2,8 @@
 description: (herow) Weekly technical-SEO ritual — export GSC, hunt what's broken, get a prioritized ~10-fix list to action in one sitting. Gated on human approval.
 allowed-tools: Read, Write, Bash, WebFetch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
+model: sonnet
+effort: medium
 ---
 
 # /seo:weekly-audit — the weekly technical-SEO habit

@@ -1,5 +1,7 @@
 ---
 description: (herow) Comprehensive Python code review for PEP 8 compliance, type hints, security, and Pythonic idioms. Invokes the python-reviewer agent.
+model: sonnet
+effort: medium
 ---
 
 # Python Code Review

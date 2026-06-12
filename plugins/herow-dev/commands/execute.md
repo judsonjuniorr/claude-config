@@ -2,6 +2,7 @@
 description: (herow) Executa um plano de .plans/ em uma worktree isolada — implementa, revisa, testa, commita/pusha e abre o PR
 argument-hint: [caminho do plano — default .plans/latest]
 model: sonnet
+effort: medium
 ---
 
 ## Model check

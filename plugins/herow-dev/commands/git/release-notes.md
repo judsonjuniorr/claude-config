@@ -1,5 +1,7 @@
 ---
 description: (herow) Generate a user-friendly changelog from commits since the last tag/release.
+model: haiku
+effort: low
 ---
 
 # Release Notes — End-User Changelog

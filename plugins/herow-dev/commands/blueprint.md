@@ -1,6 +1,8 @@
 ---
 description: (herow) Fase de planejamento completa do gstack — persistência via hook, .plans/ local (não commitado)
 argument-hint: <descrição da feature/mudança>
+model: sonnet
+effort: medium
 ---
 
 Você está na fase de **PLANEJAMENTO PURO**. **NÃO escreva código de produção** e **NÃO crie worktree** — o blueprint roda no tree principal e gera apenas um plano em `.plans/` (pasta local, gitignored) que referencia os artefatos gerados pelas skills do gstack. O isolamento em worktree (`.claude/worktree`, base = branch atual) acontece depois, no `/herow-dev:execute`.

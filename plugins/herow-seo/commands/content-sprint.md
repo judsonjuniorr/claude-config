@@ -2,6 +2,8 @@
 description: (herow) Question-intent content pipeline — turn a GSC keyword gap into a drafted, schema-equipped article, gated on human approval.
 allowed-tools: Read, Write, Edit, Bash, WebFetch, WebSearch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
+model: sonnet
+effort: medium
 ---
 
 # /seo:content-sprint — question-intent content pipeline

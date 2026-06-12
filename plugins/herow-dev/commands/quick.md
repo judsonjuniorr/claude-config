@@ -2,6 +2,7 @@
 description: (herow) Pipeline gstack ponta-a-ponta para mudança simples (worktree → autoplan → implementar → review → qa → ship)
 argument-hint: <descrição curta da mudança>
 model: sonnet
+effort: medium
 ---
 
 ## Model check

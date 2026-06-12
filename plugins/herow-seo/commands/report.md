@@ -2,6 +2,8 @@
 description: (herow) Consolidated SEO/GEO dashboard — pulls the suite's real KPIs (CTR, indexation coverage, AI-referral, conversion) into one "where are we" snapshot, gated on human review.
 allowed-tools: Read, Write, Bash, WebFetch, WebSearch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
+model: sonnet
+effort: medium
 ---
 
 # /seo:report — the consolidated dashboard

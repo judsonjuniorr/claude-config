@@ -1,6 +1,8 @@
 ---
 name: github-ops
 description: (herow) GitHub/GitLab workflow operations via gh/glab CLI with token-efficient pipe-delimited output. Use when the user wants to commit, push, create/review/merge PRs or MRs, manage issues, check CI runs/checks, or inspect repo/releases. Auto-detects github.com vs gitlab.com and routes to gh or glab.
+model: haiku
+effort: low
 ---
 
 # github-ops

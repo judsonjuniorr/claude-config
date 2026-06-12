@@ -1,6 +1,8 @@
 ---
 name: deep-research
 description: (herow) Multi-source research with cited reports via Exa/web MCPs. Use when the user wants researched, sourced answers — deep dives, comparisons, current-state questions. Quick single-fact lookups don't need this skill.
+model: sonnet
+effort: medium
 ---
 
 # Deep Research

@@ -1,6 +1,8 @@
 ---
 description: (herow) One-command stack installer/integrator — gstack, blueprint/quick/execute, rtk, graphify, headroom; removes OMEGA & conflicts (prompted)
 allowed-tools: Bash, Read, Edit, AskUserQuestion
+model: haiku
+effort: low
 ---
 
 Bootstrap (or re-sync) this machine to the herow stack. **Idempotent** — re-running no-ops what's already done. Drive the steps below in order. The scripts live next to this command at `${CLAUDE_PLUGIN_ROOT}/scripts/setup/` and speak pipe-delimited records: `ok|code|detail`, `err|code|reason`, `info|...` (stderr), plus detect/verify use `dep|… tool|… remove|… pass|… fail|…`.
