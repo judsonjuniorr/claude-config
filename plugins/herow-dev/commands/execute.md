@@ -5,7 +5,9 @@ model: sonnet
 effort: medium
 ---
 
-## Model check
+## Model check (contexto 1M)
+
+O blocker real desta sessão não é o *tier* (Sonnet vs Opus) e sim o **contexto 1M**: o toggle de 1M é global da sessão e herdado pelos comandos/subagents independente do `model` do frontmatter. Numa sessão 1M, este comando roda como `sonnet[1m]` e falha com `API Error: Usage credits required for 1M context` se não houver créditos. Detecte isso pelo sufixo `[1m]`:
 
 ```bash
 python3 -c "
@@ -14,21 +16,23 @@ model = os.environ.get('CLAUDE_MODEL', '')
 if not model:
     try:
         s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
-        model = s.get('model', 'unknown')
-    except: model = 'unknown'
+        model = s.get('model') or ''
+    except: model = ''
 print(model)
 " 2>/dev/null
 ```
 
-Se o output **não contém** `sonnet` e **não é** `opusplan`: avise em 1 linha que a sessão está em Opus e mostre o comando exato para reiniciar em Sonnet diretamente. Construa o comando substituindo `<plano>` pelo argumento real desta invocação (já resolvido acima):
+- Se o output **termina em `[1m]`** (ex.: `claude-sonnet-4-6[1m]`): a sessão está em contexto 1M (cobrado). Avise em 1 linha que esta invocação herda 1M e vai falhar por falta de créditos, e ofereça os dois caminhos:
+  - **Trocar para contexto padrão** (recomendado p/ este comando — roda sem créditos): `/model` → escolha um modelo **não-`[1m]`**, ou reinicie já executando o plano (substitua `<plano>` pelo argumento real resolvido acima):
 
-```
-claude --model claude-sonnet-4-6 "/herow-dev:execute <plano>"
-```
+    ```
+    claude --model claude-sonnet-4-6 "/herow-dev:execute <plano>"
+    ```
+  - **Manter 1M** (só se o trabalho exige Opus + 1M de propósito): rode `/usage-credits` para ligar os créditos.
+- Se o output for **vazio/indeterminado**: **não avise** (fail open — o check é só advisory; a maioria das sessões corretas cai aqui).
+- Caso contrário (modelo de contexto padrão): siga sem avisar.
 
-O usuário copia, roda no terminal e o comando inicia uma nova sessão Sonnet já executando o plano.
-
-> Não bloqueie. Este comando tem `model: sonnet` no frontmatter — esta invocação roda em Sonnet independente. O aviso é custo da sessão pai.
+> Não bloqueie em nenhum caso. Este comando tem `model: sonnet` no frontmatter; em sessão de contexto padrão ele roda em Sonnet normalmente. O aviso acima é só o custo de uma sessão-pai que está em 1M.
 
 ---
 
