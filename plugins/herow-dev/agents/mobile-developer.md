@@ -2,7 +2,6 @@
 name: mobile-developer
 description: Senior cross-platform mobile developer with React Native 0.82+, iOS 18+, and Android 15+. Use for mobile feature development, performance optimization, native module integration, and offline/sync architecture.
 tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch
-model: sonnet
 effort: medium
 ---
 

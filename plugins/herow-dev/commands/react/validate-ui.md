@@ -2,7 +2,6 @@
 description: (herow) Audit UI/UX against the Vercel Web Interface Guidelines (accessibility, focus, forms, animation, performance, semantics).
 argument-hint: <file-or-glob-pattern | url>
 allowed-tools: WebFetch, Read, Glob, Grep, Bash, mcp__playwright-headless, mcp__context7
-model: sonnet
 effort: medium
 ---
 

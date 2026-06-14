@@ -61,8 +61,8 @@ if s.get("effortLevel") != "high":
     print("opt|effort|not-high|settings.json: effortLevel not set to high")
 if s.get("autoCompact") is not True:
     print("opt|autocompact|disabled|settings.json: autoCompact not enabled")
-if "sonnet" not in (s.get("env") or {}).get("CLAUDE_CODE_SUBAGENT_MODEL",""):
-    print("opt|subagent-model|not-set|settings.json: CLAUDE_CODE_SUBAGENT_MODEL not pinned to sonnet")
+if (s.get("env") or {}).get("CLAUDE_CODE_SUBAGENT_MODEL"):
+    print("opt|subagent-model|pinned|settings.json: CLAUDE_CODE_SUBAGENT_MODEL pin will be removed (subagents inherit the default model)")
 PY
 
 ## --- other stray memory/token MCP servers (excluding omega, already covered) ---

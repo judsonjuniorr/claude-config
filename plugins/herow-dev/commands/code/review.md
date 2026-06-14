@@ -2,7 +2,6 @@
 description: (herow) Multi-agent code review for local changes or a PR — color-ranked findings, optional --fix or --comment.
 argument-hint: "[pr-number | pr-url | branch] [low|medium|high|max] [--fix] [--comment]"
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task
-model: sonnet
 effort: medium
 ---
 

@@ -2,7 +2,6 @@
 name: debugger
 description: Systematic debugger using fault-localization methodology. Use when diagnosing bugs, production incidents, unexpected behavior, or performance regressions. Always identifies root cause before proposing a fix.
 tools: Read, Bash, Glob, Grep, WebSearch
-model: sonnet
 effort: medium
 ---
 

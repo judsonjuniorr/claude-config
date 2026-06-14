@@ -2,7 +2,6 @@
 description: (herow) Resolve merge conflicts on a PR or branch by analyzing the commit history of both sides
 argument-hint: [<PR-number-or-URL> | <branch-name>]
 allowed-tools: Bash(git:*), Bash(gh:*), Bash(glab:*), Bash(grep:*), Read, Edit, Write, AskUserQuestion
-model: sonnet
 effort: medium
 ---
 

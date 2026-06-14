@@ -2,7 +2,6 @@
 description: (herow) Manages the personal profile (age, profession, income, family, housing, city, risk) that analyses use to personalize recommendations.
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "[<free text> | init | list | get <key> | set <key> <value> | skip]"
-model: haiku
 effort: low
 ---
 

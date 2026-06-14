@@ -41,8 +41,8 @@ ck autocompact \
   'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if s.get(\"autoCompact\") is True else 1)" 2>/dev/null' \
   "autoCompact enabled" "autoCompact not set in settings.json"
 ck subagent-model \
-  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if \"sonnet\" in s.get(\"env\",{}).get(\"CLAUDE_CODE_SUBAGENT_MODEL\",\"\") else 1)" 2>/dev/null' \
-  "CLAUDE_CODE_SUBAGENT_MODEL=sonnet" "CLAUDE_CODE_SUBAGENT_MODEL not pinned to sonnet"
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if not (s.get(\"env\",{}) or {}).get(\"CLAUDE_CODE_SUBAGENT_MODEL\") else 1)" 2>/dev/null' \
+  "no subagent-model pin (inherits default)" "CLAUDE_CODE_SUBAGENT_MODEL still pinned"
 
 emit summary "${PASS} passed / ${FAIL} failed" "$([ "$FAIL" -eq 0 ] && echo all-green || echo review-fails)"
 exit 0

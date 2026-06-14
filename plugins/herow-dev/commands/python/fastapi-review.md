@@ -1,6 +1,5 @@
 ---
 description: (herow) Review a FastAPI application for architecture, async correctness, dependency injection, Pydantic schemas, security, performance, and testability.
-model: sonnet
 effort: medium
 ---
 

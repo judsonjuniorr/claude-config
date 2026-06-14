@@ -2,7 +2,6 @@
 name: search-specialist
 description: Web research specialist. Use when comprehensive, reliable, up-to-date information is needed from the web — competitive research, technical documentation lookup, fact verification, or synthesizing information from multiple sources.
 tools: WebSearch, WebFetch, Read
-model: sonnet
 effort: medium
 ---
 

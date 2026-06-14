@@ -23,7 +23,6 @@ TARGETS = {
     "effortLevel": "high",
     "autoCompact": True,
 }
-SUBAGENT_MODEL = "claude-sonnet-4-6"
 
 p = sys.argv[1]
 try:
@@ -42,16 +41,14 @@ for key, val in TARGETS.items():
     else:
         changes.append((key, "already-set"))
 
+# Subagents inherit the default input model — remove any legacy pin.
 subagent_key = "CLAUDE_CODE_SUBAGENT_MODEL"
 env = s.get("env")
-if not isinstance(env, dict):
-    env = {}
-    s["env"] = env
-if env.get(subagent_key) != SUBAGENT_MODEL:
-    env[subagent_key] = SUBAGENT_MODEL
-    changes.append(("subagent-model", "set"))
+if isinstance(env, dict) and subagent_key in env:
+    del env[subagent_key]
+    changes.append(("subagent-model", "removed"))
 else:
-    changes.append(("subagent-model", "already-set"))
+    changes.append(("subagent-model", "absent"))
 
 if any(v == "set" for _, v in changes):
     d = os.path.dirname(os.path.abspath(p))

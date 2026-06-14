@@ -2,7 +2,6 @@
 name: ui-ux-designer
 description: Senior UI/UX designer with 15+ years of experience. Research-driven, anti-generic. Use when reviewing UI designs, proposing layout changes, auditing accessibility, or evaluating design decisions.
 tools: Read, WebSearch, WebFetch, Glob
-model: sonnet
 effort: medium
 ---
 

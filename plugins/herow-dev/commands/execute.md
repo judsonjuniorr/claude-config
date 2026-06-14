@@ -1,13 +1,12 @@
 ---
 description: (herow) Executa um plano de .plans/ em uma worktree isolada — implementa, revisa, testa, commita/pusha e abre o PR
 argument-hint: [caminho do plano — default .plans/latest]
-model: sonnet
 effort: medium
 ---
 
 ## Model check (contexto 1M)
 
-O blocker real desta sessão não é o *tier* (Sonnet vs Opus) e sim o **contexto 1M**: o toggle de 1M é global da sessão e herdado pelos comandos/subagents independente do `model` do frontmatter. Numa sessão 1M, este comando roda como `sonnet[1m]` e falha com `API Error: Usage credits required for 1M context` se não houver créditos. Detecte isso pelo sufixo `[1m]`:
+O blocker real não é o *tier* (Sonnet vs Opus) e sim o **contexto 1M**: o toggle de 1M é global da sessão e herdado por comandos/subagents. Este comando **não fixa modelo** — herda o modelo padrão da sessão; numa sessão 1M ele roda como `<modelo>[1m]` e falha com `API Error: Usage credits required for 1M context` se não houver créditos. Detecte isso pelo sufixo `[1m]`:
 
 ```bash
 python3 -c "
@@ -32,7 +31,7 @@ print(model)
 - Se o output for **vazio/indeterminado**: **não avise** (fail open — o check é só advisory; a maioria das sessões corretas cai aqui).
 - Caso contrário (modelo de contexto padrão): siga sem avisar.
 
-> Não bloqueie em nenhum caso. Este comando tem `model: sonnet` no frontmatter; em sessão de contexto padrão ele roda em Sonnet normalmente. O aviso acima é só o custo de uma sessão-pai que está em 1M.
+> Não bloqueie em nenhum caso. Este comando não fixa modelo no frontmatter — herda o modelo padrão da sessão; em contexto padrão roda normalmente. O aviso acima só importa quando a sessão está em 1M.
 
 ---
 
@@ -40,7 +39,7 @@ Você vai **executar** um plano já definido. Caminho:
 
 **${ARGUMENTS:-.plans/latest}**
 
-Pensado pra rodar em Sonnet (mais barato). Trate o plano como contrato: não invente escopo, não refatore além do listado.
+Roda no modelo padrão da sessão. Trate o plano como contrato: não invente escopo, não refatore além do listado.
 
 ## Resolução do caminho
 

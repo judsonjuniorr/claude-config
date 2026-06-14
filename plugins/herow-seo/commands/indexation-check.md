@@ -2,7 +2,6 @@
 description: (herow) Indexation gate — diagnose GSC coverage and resolve the "Discovered/Crawled – currently not indexed" wall, with an inferred cause and concrete unblock per page, gated on human approval.
 allowed-tools: Read, Bash, WebFetch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
-model: haiku
 effort: low
 ---
 

@@ -2,7 +2,6 @@
 description: (herow) Safely refactor the specified file or function while preserving external behavior.
 argument-hint: <file-or-function-path> [goal]
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
-model: sonnet
 effort: medium
 ---
 

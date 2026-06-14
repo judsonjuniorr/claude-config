@@ -2,7 +2,6 @@
 name: fullstack-developer
 description: "Senior fullstack TypeScript developer (Next.js 16, React 19+, tRPC, Drizzle). Implements features end-to-end — UI, API routes, server actions, DB schemas. Use for any implementation task; not for architecture docs (use backend-architect)."
 tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch
-model: sonnet
 effort: medium
 ---
 

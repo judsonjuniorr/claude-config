@@ -2,7 +2,6 @@
 description: (herow) Manages financial goals (savings/economy targets) consumed by any analysis provider.
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "[<free text> | list | done <ts> | pause <ts> | cancel <ts> | activate <ts> | prune]"
-model: haiku
 effort: low
 ---
 

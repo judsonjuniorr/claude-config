@@ -2,7 +2,6 @@
 description: (herow) Generate a comprehensive test suite for the specified file, module, or function.
 argument-hint: <file-or-function-path>
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
-model: sonnet
 effort: medium
 ---
 

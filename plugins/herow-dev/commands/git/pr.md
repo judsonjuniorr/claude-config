@@ -2,7 +2,6 @@
 description: (herow) Create a GitHub PR from current branch — discovers templates, analyzes commits, pushes, and creates with CI status check.
 argument-hint: "[base-branch] [--draft] (default base: main)"
 allowed-tools: Bash, Read
-model: sonnet
 effort: medium
 ---
 

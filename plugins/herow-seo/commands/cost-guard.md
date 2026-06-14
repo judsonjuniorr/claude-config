@@ -2,7 +2,6 @@
 description: (herow) Model-tiering & token-budget policy for the /seo:* suite — cheap tiers for parsing/diagnostics, Opus only for the final judgment call. Policy-only, gated on human approval.
 allowed-tools: Read, Write, Edit, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
-model: haiku
 effort: low
 ---
 

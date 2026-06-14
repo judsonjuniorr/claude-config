@@ -1,7 +1,6 @@
 ---
 description: (herow) One-command stack installer/integrator — gstack, blueprint/quick/execute, rtk, graphify, headroom; removes OMEGA & conflicts (prompted)
 allowed-tools: Bash, Read, Edit, AskUserQuestion
-model: haiku
 effort: low
 ---
 
@@ -15,7 +14,7 @@ Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/detect.sh"`. Parse the records an
 - **Deps**: which of git/brew/python3/uv/node/npm/bun are `installed` vs `missing`.
 - **Stack**: rtk / graphify / headroom / gstack — `installed` or `missing` (missing → will install).
 - **Removal candidates**: every `remove|…` line — OMEGA surfaces, loose duplicate commands, stray memory/token MCP servers.
-- **Token optimizations**: every `opt|…` line — model, advisorModel, autoCompact, CLAUDE_CODE_SUBAGENT_MODEL settings that are missing or wrong. These are auto-applied in Step 4.5 without user approval.
+- **Token optimizations**: every `opt|…` line — model, advisorModel, autoCompact settings that are missing or wrong, plus any legacy `CLAUDE_CODE_SUBAGENT_MODEL` pin to remove. These are auto-applied in Step 4.5 without user approval.
 
 If there are zero missing items, zero removal candidates, and zero token optimizations, say "already set up" and skip to Step 7 (verify).
 
@@ -52,7 +51,7 @@ Settings applied (idempotent):
 - `advisorModel: opus` — advisor review step uses Opus for quality
 - `effortLevel: high` — high reasoning effort by default
 - `autoCompact: true` — auto-compact at 80% of context window (160K on Sonnet)
-- `env.CLAUDE_CODE_SUBAGENT_MODEL: claude-sonnet-4-6` — subagents are pinned to Sonnet regardless of the parent session's model
+- `env.CLAUDE_CODE_SUBAGENT_MODEL` — **removed** if present; subagents inherit the session's default input model instead of a fixed pin
 
 ## Step 5 — Apply approved removals
 
@@ -73,6 +72,6 @@ Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/verify.sh"`. Show the `pass|…`/
 Summarize in a short block:
 - Installed / already-present: gstack, rtk, graphify, headroom (+ mode).
 - Removed (with Yes): OMEGA / loose dups / strays.
-- Token guard: model=opusplan, advisorModel=opus, effortLevel=high, autoCompact=true, CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-4-6.
+- Token guard: model=opusplan, advisorModel=opus, effortLevel=high, autoCompact=true; subagents inherit the default (no CLAUDE_CODE_SUBAGENT_MODEL pin).
 - 3 commands now at `/herow-dev:blueprint|quick|execute`; output is **compressed by default** (`/herow-core:uncompress` for full prose).
 - **Manual follow-up:** restart the Claude session (or `/reload-plugins`) so the herow-dev hook and any removed OMEGA hooks take effect; if init or proxy-wrap was chosen, the restart also activates `ANTHROPIC_BASE_URL` routing — confirm the next API call works and `headroom unwrap claude` if auth fails. Track savings with `headroom perf` and the `headroom_stats` MCP tool.

@@ -2,7 +2,6 @@
 description: (herow) Registra uma NF tomada no Contabilizei a partir de PDF/XML — login headless com código via Gmail, checagem de duplicidade e confirmação antes de enviar.
 argument-hint: "<caminho do PDF ou XML da NF>"
 allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__playwright-headless__browser_navigate, mcp__playwright-headless__browser_snapshot, mcp__playwright-headless__browser_click, mcp__playwright-headless__browser_type, mcp__playwright-headless__browser_select_option, mcp__playwright-headless__browser_fill_form, mcp__playwright-headless__browser_evaluate, mcp__playwright-headless__browser_wait_for, mcp__playwright-headless__browser_close, mcp__claude_ai_Gmail__search_threads, mcp__claude_ai_Gmail__get_thread
-model: sonnet
 effort: medium
 ---
 

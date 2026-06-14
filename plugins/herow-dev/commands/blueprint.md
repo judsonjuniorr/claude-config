@@ -1,7 +1,6 @@
 ---
 description: (herow) Fase de planejamento completa do gstack — persistência via hook, .plans/ local (não commitado)
 argument-hint: <descrição da feature/mudança>
-model: sonnet
 effort: medium
 ---
 

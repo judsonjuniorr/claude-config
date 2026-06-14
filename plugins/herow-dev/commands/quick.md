@@ -1,11 +1,12 @@
 ---
 description: (herow) Pipeline gstack ponta-a-ponta para mudança simples (worktree → autoplan → implementar → review → qa → ship)
 argument-hint: <descrição curta da mudança>
-model: sonnet
 effort: medium
 ---
 
-## Model check
+## Model check (contexto 1M)
+
+O blocker real não é o *tier* (Sonnet vs Opus) e sim o **contexto 1M**: o toggle de 1M é global da sessão e herdado por comandos/subagents. Este comando **não fixa modelo** — herda o modelo padrão da sessão; numa sessão 1M ele roda como `<modelo>[1m]` e falha com `API Error: Usage credits required for 1M context` se não houver créditos. Detecte isso pelo sufixo `[1m]`:
 
 ```bash
 python3 -c "
@@ -14,21 +15,23 @@ model = os.environ.get('CLAUDE_MODEL', '')
 if not model:
     try:
         s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
-        model = s.get('model', 'unknown')
-    except: model = 'unknown'
+        model = s.get('model') or ''
+    except: model = ''
 print(model)
 " 2>/dev/null
 ```
 
-Se o output **não contém** `sonnet` e **não é** `opusplan`: avise em 1 linha que a sessão está em Opus e mostre o comando exato para reiniciar em Sonnet diretamente. Construa o comando substituindo `<descrição>` pelo argumento real desta invocação (já resolvido acima):
+- Se o output **termina em `[1m]`** (ex.: `claude-sonnet-4-6[1m]`): a sessão está em contexto 1M (cobrado). Avise em 1 linha que esta invocação herda 1M e vai falhar por falta de créditos, e ofereça os dois caminhos:
+  - **Trocar para contexto padrão** (recomendado p/ este comando — roda sem créditos): `/model` → escolha um modelo **não-`[1m]`**, ou reinicie já executando a tarefa (substitua `<descrição>` pelo argumento real resolvido acima):
 
-```
-claude --model claude-sonnet-4-6 "/herow-dev:quick <descrição>"
-```
+    ```
+    claude --model claude-sonnet-4-6 "/herow-dev:quick <descrição>"
+    ```
+  - **Manter 1M** (só se o trabalho exige Opus + 1M de propósito): rode `/usage-credits` para ligar os créditos.
+- Se o output for **vazio/indeterminado**: **não avise** (fail open — o check é só advisory; a maioria das sessões corretas cai aqui).
+- Caso contrário (modelo de contexto padrão): siga sem avisar.
 
-O usuário copia, roda no terminal e o comando inicia uma nova sessão Sonnet já executando a tarefa.
-
-> Não bloqueie. Este comando tem `model: sonnet` no frontmatter — esta invocação roda em Sonnet independente. O aviso é custo da sessão pai.
+> Não bloqueie em nenhum caso. Este comando não fixa modelo no frontmatter — herda o modelo padrão da sessão; em contexto padrão roda normalmente. O aviso acima só importa quando a sessão está em 1M.
 
 ---
 
