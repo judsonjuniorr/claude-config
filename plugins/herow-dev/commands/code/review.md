@@ -445,4 +445,4 @@ glab mr note <NUMBER> --message "Code review — 🔴 1  🟠 2  🟡 3  🟢 0
 
 Surface only findings at or above the effort's confidence cutoff. Calibrate severity honestly:
 🟢/🟡 for suggestions, 🟠 for real correctness/test gaps, 🔴 only for bugs, security, or data loss.
-Default invocation (`/code:review`, no args) = Local Mode, all 7 agents, ≥ 80, report only.
+Default invocation (`/herow-dev:code:review`, no args) = Local Mode, all 7 agents, ≥ 80, report only.
