@@ -241,9 +241,53 @@ class TestVerifyCreated(unittest.TestCase):
         self.assertFalse(c.verify_created("oops", {})["ok"])
 
     def test_installments_list_count(self):
-        r = c.verify_created([{"id": 1}, {"id": 2}, {"id": 3}], {"amount_cents": -1})
+        r = c.verify_created([{"id": 1}, {"id": 2}, {"id": 3}],
+                             {"amount_cents": -1, "installments": 3})
         self.assertTrue(r["ok"])
         self.assertEqual(r["count"], 3)
+
+    def test_installments_single_dict_total(self):
+        # api-doc: installment create returns ONE dict with total_installments.
+        r = c.verify_created({"id": 97, "total_installments": 12, "amount_cents": 0},
+                             {"installments": 12})
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["count"], 12)
+
+    def test_installments_count_mismatch(self):
+        r = c.verify_created({"id": 97, "total_installments": 3}, {"installments": 12})
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["reason"], "installment-count")
+
+
+# --- kind guard + periodicity validation -----------------------------------
+
+class TestKindGuard(unittest.TestCase):
+    def test_bad_kind_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            c.normalize_amount(10, "expanse")  # typo
+        self.assertEqual(str(ctx.exception), "validation|kind")
+
+
+class TestPeriodicityValidation(unittest.TestCase):
+    def _tx(self, **kw):
+        base = {"description": "X", "amount_cents": -1000, "date": "2026-06-14",
+                "target": "account", "account_id": 3}
+        base.update(kw)
+        return base
+
+    def test_invalid_installment_periodicity(self):
+        with self.assertRaises(ValueError) as ctx:
+            c.build_transaction_payload(self._tx(installments=3, periodicity="quarterly"))
+        self.assertEqual(str(ctx.exception), "validation|periodicity")
+
+    def test_invalid_recurrence_periodicity(self):
+        with self.assertRaises(ValueError) as ctx:
+            c.build_transaction_payload(self._tx(recurrence="daily"))
+        self.assertEqual(str(ctx.exception), "validation|periodicity")
+
+    def test_valid_trimonthly(self):
+        p = c.build_transaction_payload(self._tx(installments=2, periodicity="trimonthly"))
+        self.assertEqual(p["installments_attributes"]["periodicity"], "trimonthly")
 
 
 # --- 12. dry-run / apply contract (monkeypatched http) ----------------------
@@ -297,6 +341,99 @@ class TestDryRunApply(unittest.TestCase):
         self.assertEqual(body["amount_cents"], -1000)
         self.assertEqual(body["account_id"], 3)
         self.assertTrue(body["paid"], "past-dated expense defaults paid")
+
+
+# --- run-level: transfer direction, dup-abort, input-file, verify-fail ------
+
+class _RunFake:
+    """Two bank accounts + a card; routes GET, captures POST + a tunable response."""
+    def __init__(self, recent=None, post_resp=None):
+        self.posts = []
+        self._recent = recent or []
+        self._post_resp = post_resp
+
+    def get(self, path, params, *auth):
+        if path == "/accounts":
+            return [{"id": 3, "name": "Origem", "type": "checking"},
+                    {"id": 7, "name": "Destino", "type": "checking"}]
+        if path == "/credit_cards":
+            return [{"id": 9, "name": "Visa"}]
+        if path == "/categories":
+            return [{"id": 12, "name": "Mercado"}]
+        if path == "/transactions":
+            return self._recent
+        return []
+
+    def post(self, path, body, *auth):
+        self.posts.append((path, body))
+        if self._post_resp is not None:
+            return self._post_resp
+        return {"id": 99, "amount_cents": body.get("amount_cents", 0),
+                "description": body.get("description")}
+
+
+class _RunPatch(unittest.TestCase):
+    fake_kwargs: dict = {}
+
+    def setUp(self):
+        self.fake = _RunFake(**self.fake_kwargs)
+        self._orig = (c.http_get, c.http_post, c.load_auth)
+        c.http_get, c.http_post = self.fake.get, self.fake.post
+        c.load_auth = lambda: ("e@x", "tok123456", "ua")
+
+    def tearDown(self):
+        c.http_get, c.http_post, c.load_auth = self._orig
+
+
+class TestTransferRun(_RunPatch):
+    def test_direction_de_is_credit_para_is_debit(self):
+        rc = c.main(["--apply", "--force", "--transferencia", "--de", "Origem",
+                     "--para", "Destino", "--valor", "100", "--data", "2026-06-14"])
+        self.assertEqual(rc, 0)
+        path, body = self.fake.posts[0]
+        self.assertEqual(path, "/transfers")
+        # --de (origem, money leaves) → credit_account_id per api-doc.
+        self.assertEqual(body["credit_account_id"], 3)
+        self.assertEqual(body["debit_account_id"], 7)
+        self.assertEqual(body["amount_cents"], 10000)  # positive
+
+
+class TestDuplicateAbort(_RunPatch):
+    fake_kwargs = {"recent": [{"id": 1, "amount_cents": -1000,
+                               "description": "teste", "date": "2026-06-14"}]}
+
+    def test_apply_without_force_aborts_on_duplicate(self):
+        with self.assertRaises(SystemExit) as ctx:
+            c.main(["--apply", "--conta", "Origem", "--despesa", "--valor", "10",
+                    "--data", "2026-06-14", "teste"])
+        self.assertIn("err|duplicate", str(ctx.exception))
+        self.assertEqual(self.fake.posts, [], "must not POST when duplicate aborts")
+
+
+class TestVerifyFailRun(_RunPatch):
+    fake_kwargs = {"post_resp": {"amount_cents": -1000}}  # no id
+
+    def test_missing_id_returns_rc2(self):
+        rc = c.main(["--apply", "--force", "--conta", "Origem", "--despesa",
+                     "--valor", "10", "--data", "2026-06-14", "teste"])
+        self.assertEqual(rc, 2)
+
+
+class TestInputFileInjectionSafe(_RunPatch):
+    def test_free_text_from_file_not_shell(self):
+        import json as _json
+        import tempfile
+        payload = {"description": "café `rm -rf`; $(whoami)", "notes": "n8\"o"}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            _json.dump(payload, f)
+            path = f.name
+        rc = c.main(["--apply", "--force", "--input-file", path, "--conta", "Origem",
+                     "--despesa", "--valor", "10", "--data", "2026-06-14"])
+        self.assertEqual(rc, 0)
+        _, body = self.fake.posts[0]
+        # literal text preserved verbatim — never shell-interpreted
+        self.assertEqual(body["description"], "café `rm -rf`; $(whoami)")
+        self.assertEqual(body["notes"], "n8\"o")
 
 
 # --- resolve_paid: date-aware default + explicit override ------------------

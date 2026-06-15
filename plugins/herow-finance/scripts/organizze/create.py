@@ -33,8 +33,9 @@ from _paths import CACHE, migrate_legacy  # noqa: E402
 
 migrate_legacy()
 
-VALID_PERIODICITIES = {"daily", "weekly", "biweekly", "monthly", "bimonthly",
-                       "quarterly", "semiannually", "yearly"}
+# Per api-doc §"Cria uma movimentação recorrente (parcelada)".
+VALID_PERIODICITIES = {"monthly", "yearly", "weekly", "biweekly",
+                       "bimonthly", "trimonthly"}
 
 
 # --- text normalization (pure) ---------------------------------------------
@@ -72,6 +73,8 @@ def normalize_amount(value: float | int | str, kind: str) -> int:
     cents = round(abs(reais) * 100)
     if cents == 0:
         raise ValueError("validation|amount")
+    if kind not in ("expense", "income"):
+        raise ValueError("validation|kind")
     return -cents if kind == "expense" else cents
 
 
@@ -179,11 +182,16 @@ def build_transaction_payload(tx: dict) -> dict:
         payload["paid"] = bool(tx["paid"])
 
     if tx.get("installments"):
+        per = tx.get("periodicity", "monthly")
+        if per not in VALID_PERIODICITIES:
+            raise ValueError("validation|periodicity")
         payload["installments_attributes"] = {
-            "periodicity": tx.get("periodicity", "monthly"),
+            "periodicity": per,
             "total": int(tx["installments"]),
         }
     elif tx.get("recurrence"):
+        if tx["recurrence"] not in VALID_PERIODICITIES:
+            raise ValueError("validation|periodicity")
         payload["recurrence_attributes"] = {"periodicity": tx["recurrence"]}
     return payload
 
@@ -227,17 +235,29 @@ def verify_created(resp: object, expected: dict) -> dict:
     """Confirm the POST result. Returns {'ok':True,'id':id[,'count':n]} on a
     matching create, else {'ok':False,'reason':...}.
 
-    Installments return a list of rows → report the actual created count.
+    Installments: per api-doc the create returns a SINGLE dict carrying
+    `total_installments` (and `amount_cents` is often 0), so we assert the
+    created total matches the request and skip the amount check. Some responses
+    instead return a list of rows — handle both.
     """
+    want_installments = expected.get("installments")
     if isinstance(resp, list):
         rows = [r for r in resp if isinstance(r, dict) and r.get("id") is not None]
         if not rows:
             return {"ok": False, "reason": "no-id-in-list"}
+        if want_installments and len(rows) != int(want_installments):
+            return {"ok": False, "reason": "installment-count", "id": rows[0]["id"]}
         return {"ok": True, "id": rows[0]["id"], "count": len(rows)}
     if not isinstance(resp, dict):
         return {"ok": False, "reason": "non-dict"}
     if resp.get("id") is None:
         return {"ok": False, "reason": "missing-id"}
+    if want_installments:
+        total = resp.get("total_installments")
+        if total is not None and int(total) != int(want_installments):
+            return {"ok": False, "reason": "installment-count", "id": resp["id"]}
+        return {"ok": True, "id": resp["id"],
+                "count": int(total) if total is not None else None}
     if "amount_cents" in expected and resp.get("amount_cents") is not None \
             and int(resp["amount_cents"]) != int(expected["amount_cents"]):
         return {"ok": False, "reason": "amount-mismatch"}
@@ -247,31 +267,10 @@ def verify_created(resp: object, expected: dict) -> dict:
     return {"ok": True, "id": resp["id"]}
 
 
-def parse_free_text(text: str) -> dict:
-    """Best-effort NL → partial fields (amount/date/description hint).
-
-    The command layer owns rich NL parsing; this is a fallback so the script
-    still works when handed raw free text. Returns only the fields it finds.
-    """
-    out: dict = {}
-    if not text:
-        return out
-    m = re.search(r"\d+(?:[.,]\d{1,2})?", text)
-    if m:
-        out["amount"] = m.group(0)
-    low = _norm(text)
-    if "ontem" in low:
-        out["date_rel"] = "yesterday"
-    elif "hoje" in low:
-        out["date_rel"] = "today"
-    out["description"] = text.strip()
-    return out
-
-
 # --- network / resolution layer --------------------------------------------
 
 def _mask(token: str) -> str:
-    return f"{token[:3]}…{token[-3:]}" if len(token) > 6 else "org_…"
+    return f"{token[:3]}…" if len(token) > 3 else "org…"
 
 
 def fetch_accounts(auth) -> list[dict]:
@@ -355,14 +354,35 @@ def resolve_paid(args: argparse.Namespace, date_iso: str) -> bool:
     return date_iso[:10] <= _today_iso()
 
 
+def _load_input_file(path: str) -> dict:
+    """Read free-text fields (description, notes) from a JSON file.
+
+    The command layer writes user free text here via the Write tool so it never
+    enters a shell-parsed command line (injection-safe). Structured flags stay
+    on argv where argparse type-coerces them.
+    """
+    try:
+        data = json.loads(pathlib.Path(path).read_text())
+    except (OSError, ValueError) as e:
+        sys.exit(f"err|input-file|{e}")
+    if not isinstance(data, dict):
+        sys.exit("err|input-file|esperado objeto JSON")
+    return data
+
+
 def run(args: argparse.Namespace) -> int:
     auth = load_auth()
     email, token, _ua = auth
     _emit("auth", f"as {email} ({_mask(token)})")
 
+    extra = _load_input_file(args.input_file) if args.input_file else {}
     date_iso = args.data or _today_iso()
-    free = parse_free_text(" ".join(args.text)) if args.text else {}
-    description = args.text and " ".join(args.text) or args.descricao or free.get("description", "")
+    if args.text:
+        argv_desc = " ".join(args.text)
+    else:
+        argv_desc = args.descricao or ""
+    description = extra.get("description") or argv_desc
+    notes = extra.get("notes") if extra.get("notes") is not None else args.nota
     paid = resolve_paid(args, date_iso)
 
     # ---- TRANSFER mode -----------------------------------------------------
@@ -372,20 +392,24 @@ def run(args: argparse.Namespace) -> int:
         src = _resolve_or_exit(args.de or "", accounts, "conta origem")
         dest = _resolve_or_exit(args.para or "", accounts, "conta destino")
         amount = normalize_amount(args.valor, "income")  # transfer uses positive
+        # Organizze: credit_account_id = ORIGEM (saída), debit_account_id =
+        # DESTINO (entrada). Verified vs api-doc §Transfers (the -amount record
+        # lands on account_id == credit_account_id).
         tx = {
-            "debit_account_id": src["id"],
-            "credit_account_id": dest["id"],
+            "credit_account_id": src["id"],
+            "debit_account_id": dest["id"],
             "amount_cents": amount,
             "date": date_iso,
             "paid": paid,
             "src_is_card": src["id"] in card_ids,
             "dest_is_card": dest["id"] in card_ids,
-            "notes": args.nota,
+            "notes": notes,
         }
         payload = build_transfer_payload(tx)
-        _emit("resolve", f"transfer {src['name']} -> {dest['name']} R$ {amount/100:.2f}")
-        return _finish(args, auth, "/transfers", payload,
-                       {"amount_cents": amount}, kind="transfer",
+        _emit("resolve", f"transfer {src['name']} (origem) -> {dest['name']} (destino) R$ {amount/100:.2f}")
+        # Transfer read-back verifies id presence only: the POST response is the
+        # signed outflow record, so an amount match would compare +req vs -resp.
+        return _finish(args, auth, "/transfers", payload, {}, kind="transfer",
                        recent=fetch_recent_transactions(auth) if not args.force else [])
 
     # ---- TRANSACTION modes (account / card / invoice) ----------------------
@@ -396,9 +420,9 @@ def run(args: argparse.Namespace) -> int:
 
     category_id = None
     tx: dict = {"description": description, "amount_cents": amount, "date": date_iso,
-                "paid": paid, "notes": args.nota}
+                "paid": paid, "notes": notes}
 
-    if args.transferencia is False and (args.cartao or args.fatura):
+    if args.cartao or args.fatura:
         cards = fetch_credit_cards(auth)
         card = _resolve_or_exit(args.cartao or "", cards, "cartao") if args.cartao else None
         if args.fatura:
@@ -414,9 +438,13 @@ def run(args: argparse.Namespace) -> int:
             inv = resolve_invoice_for_date(date_iso, invoices)
             if inv is None:
                 sys.exit(f"err|invoice-unresolved|{card['name']} para {date_iso}")
+            start = (inv.get("starting_date") or "")[:10]
+            close = (inv.get("closing_date") or "")[:10]
+            approx = not (start and close and start <= date_iso[:10] <= close)
             tx.update(target="card", credit_card_id=card["id"],
                       credit_card_invoice_id=inv["id"])
-            _emit("resolve", f"cartao {card['name']} -> fatura {inv.get('date', inv['id'])}")
+            tag = " [APROXIMADA: sem janela de fechamento, confirme]" if approx else ""
+            _emit("resolve", f"cartao {card['name']} -> fatura {inv.get('date', inv['id'])}{tag}")
     elif args.conta:
         accounts = fetch_accounts(auth)
         acct = _resolve_or_exit(args.conta, accounts, "conta")
@@ -449,24 +477,38 @@ def run(args: argparse.Namespace) -> int:
         tx["recurrence"] = args.periodicidade or "monthly"
 
     payload = build_transaction_payload(tx)
+    expected = {"amount_cents": amount, "description": description}
+    if args.parcelas:
+        expected["installments"] = int(args.parcelas)
+        _emit("installments", f"{args.parcelas}x — semantica do valor NAO verificada "
+              "contra conta real; confira o total no app apos --apply")
     recent = fetch_recent_transactions(auth) if not args.force else []
-    return _finish(args, auth, "/transactions", payload,
-                   {"amount_cents": amount, "description": description},
+    return _finish(args, auth, "/transactions", payload, expected,
                    kind="transaction", recent=recent)
 
 
 def _finish(args, auth, endpoint: str, payload: dict, expected: dict,
             kind: str, recent: list[dict]) -> int:
-    # DUP-CHK
-    if recent:
+    # DUP-CHK — always emit a signal so "no dups" is distinguishable from "not checked".
+    if args.force:
+        _emit("dup-check", "pulado (--force)")
+    elif kind == "transfer":
+        # Transfer payloads carry no description; find_duplicates can't match them
+        # reliably, so we skip rather than give a false all-clear.
+        _emit("dup-check", "pulado (transferencia)")
+    elif not recent:
+        _emit("dup-check", "pulado (sem historico recente)")
+    else:
         dups = find_duplicates({"amount_cents": payload.get("amount_cents", expected.get("amount_cents")),
                                 "description": payload.get("description", ""),
                                 "date": payload.get("date", "")}, recent)
-        if dups and not args.force:
+        if dups:
             d = dups[0]
             _emit("duplicate", f"{len(dups)} similar(es): id {d.get('id')} {d.get('date')}")
             if args.apply:
                 sys.exit("err|duplicate|use --force para confirmar a criacao mesmo assim")
+        else:
+            _emit("dup-check", "0 similar")
 
     # DRY-RUN (default)
     if not args.apply:
@@ -499,6 +541,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Create an Organizze transaction (dry-run by default).")
     p.add_argument("text", nargs="*", help="free-text description")
     p.add_argument("--descricao", help="explicit description (overrides free text join)")
+    p.add_argument("--input-file", dest="input_file",
+                   help="JSON file with free-text fields (description, notes) — "
+                        "injection-safe path for user text (no shell parsing)")
     p.add_argument("--apply", action="store_true", help="actually POST (default: dry-run)")
     p.add_argument("--force", action="store_true", help="skip duplicate confirmation")
     # target
