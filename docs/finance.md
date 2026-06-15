@@ -7,6 +7,7 @@ Personal finance slash commands. Nested under `commands/finance/`, so each is in
 | Command | One-liner |
 |---|---|
 | [`/finance:organizze`](#financeorganizze) | Pull Organizze data via REST API, build a snapshot, delegate to the [`financial-analyst`](../../agents/financial-analyst/README.md) subagent for a prioritized action plan. |
+| `/finance:organizze-create` | Create a transaction in Organizze (account / card / specific invoice / transfer) via REST API. Write path: DRY-RUN by default, single Apply confirm, read-back verify. |
 | [`/finance:goal`](#financegoal) | CRUD of financial goals (`~/finance/plans.md`). Provider-agnostic. |
 | [`/finance:context`](#financecontext) | CRUD of restrictions/context (`~/finance/memory.md`). Provider-agnostic. |
 
@@ -16,6 +17,7 @@ Personal finance slash commands. Nested under `commands/finance/`, so each is in
 commands/finance/
 ├── README.md
 ├── organizze.md                 # /finance:organizze
+├── organizze-create.md          # /finance:organizze-create
 ├── goal.md                      # /finance:goal
 ├── context.md                   # /finance:context
 ├── scripts/                     # provider-agnostic
@@ -24,9 +26,11 @@ commands/finance/
 │   └── plans.py                 # add/list/render/done/status/prune objectives
 └── organizze-scripts/           # Organizze provider
     ├── _common.sh               # load_auth, curl_organizze, die, read_keychain_password
+    ├── _http.py                 # shared load_auth + http_get + http_post (write path)
     ├── _paths.py                # HOME/AUTH/CONFIG/... + re-exports migrate_legacy
     ├── setup_auth.sh            # onboarding (stdin: email\ntoken\npassword)
     ├── pull.py                  # API client + snapshot consolidation
+    ├── create.py                # write path: create transaction/transfer (dry-run/apply/verify)
     ├── reconcile.py             # one-shot balance offset calibration
     ├── config.py                # ~/finance/organizze/.config helper
     ├── cashflow.py              # per-account daily balance projection
@@ -36,7 +40,8 @@ commands/finance/
     ├── scrape_slice.py          # scraper for 1 slice (dashboard|tx YYYY-MM|invoice card_id YYYY-MM invoice_id)
     ├── apply_scrape.py          # consolidates scrape/*.json into the snapshot (surgical override)
     └── tests/
-        └── test_apply_scrape.py # 13 merge/match/idempotency tests
+        ├── test_apply_scrape.py # 13 merge/match/idempotency tests
+        └── test_create.py       # 44 write-path tests (no network)
 ```
 
 ```
