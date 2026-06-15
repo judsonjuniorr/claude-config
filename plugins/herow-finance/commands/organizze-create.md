@@ -23,7 +23,7 @@ Este é o **primeiro caminho de escrita** da integração Organizze (o resto é 
 ## Passos (siga exatamente, não pule)
 
 ### 1. First-run / auth
-Se `~/finance/organizze/.auth` não existir, **não** rode o script: aponte o usuário para o onboarding do token (mesmo `.auth` do `/finance:organizze`, escopo leitura+escrita — sem nova credencial). Leia `organizze-onboarding.md` (§setup do token) se precisar dos passos. Pare aqui até existir o `.auth`.
+Se `~/finance/organizze/.auth` não existir, **não** rode o script: é o mesmo `.auth` do `/finance:organizze` (escopo leitura+escrita — sem nova credencial). **Leia `${CLAUDE_PLUGIN_ROOT}/resources/organizze-onboarding.md` e siga §Step 2 (token setup)** para criar o `.auth`. Pare aqui até existir o `.auth`.
 
 ### 2. Intent parse (linguagem natural → flags)
 Do `$ARGUMENTS`, extraia o que der: descrição, valor, sinal (gastei/paguei → `--despesa`; recebi/ganhei → `--receita`), data relativa (ontem/hoje/"dia X"), alvo (no cartão X → `--cartao`; transferência de A para B → `--transferencia --de A --para B`), parcelas ("3x" → `--parcelas 3`), recorrência ("todo mês"/"fixo" → `--recorrente`). O que **não** der para inferir com confiança vira pergunta no passo 3 — nunca chute valor, conta ou sinal.
@@ -66,8 +66,8 @@ python3 "$SCRIPT" --apply [--force] <mesmas flags do dry-run>
 - Se vier `err|verify|...` (gravou mas o read-back não bateu), mostre um **aviso alto** — não declare "ok" silencioso.
 
 ## Mapa de erros (renderize problema + causa + correção)
-- `err|no-auth|...` → "Sem credencial. Configure o token (onboarding §token)."
-- `err|bad-auth|missing <k>` → "Arquivo `.auth` incompleto (falta `<k>`). Refaça o setup do token (onboarding §token)."
+- `err|no-auth|...` → "Sem credencial. Configure o token: `resources/organizze-onboarding.md` §Step 2."
+- `err|bad-auth|missing <k>` → "Arquivo `.auth` incompleto (falta `<k>`). Refaça o token: `resources/organizze-onboarding.md` §Step 2."
 - `err|duplicate|...` → "Já existe lançamento igual recente (mostrado acima). Confirme criar mesmo assim → re-rode com `--force`, ou cancele."
 - `err|http-401|...` → "Token recusado. Reautentique (apague `~/finance/organizze/.auth` e refaça o setup)."
 - `err|http-422|<body>` → mostre a mensagem do Organizze + o campo; ofereça reabrir o campo via AskUserQuestion.
