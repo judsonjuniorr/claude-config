@@ -14,8 +14,8 @@ import os
 import pathlib
 import sys
 
-# Make shared scripts/_storage.py importable
-_SHARED = pathlib.Path(__file__).resolve().parent.parent / "scripts"
+# Make shared scripts/finance/_storage.py importable
+_SHARED = pathlib.Path(__file__).resolve().parent.parent / "finance"
 if str(_SHARED) not in sys.path:
     sys.path.insert(0, str(_SHARED))
 
