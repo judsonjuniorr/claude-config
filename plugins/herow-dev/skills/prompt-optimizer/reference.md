@@ -105,8 +105,12 @@ For tasks that exceed a single session, split into sequential prompts:
 |-------|--------|---------------|
 | (problem) | (consequence) | (how to fix) |
 
-**Needs Clarification:** Numbered list of questions the user should answer.
-If Phase 0 auto-detected the answer, state it instead of asking.
+**Assumptions & resolved clarifications:** List the answers collected via
+`AskUserQuestion` in Phase 4 and any non-material defaults applied (e.g.
+"Auth: JWT — no auth specified, defaulting to JWT"). Do **not** list open,
+unanswered questions here. The optimized prompt is generated **only after** all
+material questions from Phase 4 are answered; unanswered must-answer questions
+must never appear alongside a generated prompt.
 
 ### Section 2: Recommended Components
 
@@ -175,6 +179,17 @@ Build a user login page
 
 **Phase 0 detects:** `package.json` with Next.js 16, TypeScript, Tailwind CSS
 
+**Phase 4 classifies gaps:**
+- Tech stack → **non-material** (detected from project files).
+- Auth strategy → **non-material** (project's existing auth approach used as default; JWT if none found).
+- Scope → **non-material** (login page is the explicit request; excluded items noted in "Do not").
+
+No material gaps — no `AskUserQuestion`. Proceeds directly to Phase 5.
+
+**Section 1 — Assumptions & resolved clarifications:**
+- Tech stack: Next.js 16 + TypeScript + Tailwind CSS (detected from `package.json`)
+- Auth: reuse existing project auth approach (defaulting to JWT if none found)
+
 **Optimized Prompt (Full):**
 ```
 Implement a user login page using the project's existing tech stack (Next.js 16 + TypeScript + Tailwind CSS).
@@ -208,6 +223,83 @@ Do not:
 - Implement forgot-password
 - Change the existing routing structure
 ```
+
+### Example 1b: Material gap → AskUserQuestion → generate (no project files)
+
+**User input:**
+```
+Build a login page
+```
+
+**Phase 0 detects:** no project files — tech stack unknown.
+
+**Phase 4 classifies gaps:**
+- Tech stack → **material** (determines components, commands, and agent).
+- Auth strategy → **material** (JWT vs OAuth vs Session changes the whole prompt).
+- Target scope (registration? forgot-password?) → **material**.
+
+**Skill calls AskUserQuestion (3 questions batched, before any output):**
+
+```
+Q1 "What tech stack are you using?"
+  Options: Next.js + TypeScript | React + Vite | Python + FastAPI (server-rendered) | Other
+
+Q2 "Which authentication strategy should the login page use?"
+  Options: JWT (stored in httpOnly cookie) | OAuth2 / social login | Session cookie (server-side) | Other
+
+Q3 "What is in scope for this task?"
+  Options: Login form only | Login + registration | Login + registration + forgot-password | Other
+```
+
+**User answers:** Next.js + TypeScript · JWT · Login form only
+
+**Skill folds answers in, runs Phase 5, then emits full output:**
+
+**Section 1 — Assumptions & resolved clarifications:**
+- Tech stack: Next.js + TypeScript (user confirmed; no project files present)
+- Auth: JWT stored in httpOnly cookie (user confirmed)
+- Scope: Login form only — registration and forgot-password excluded
+
+**Optimized Prompt (Full):**
+```
+Implement a user login page in Next.js + TypeScript using JWT authentication
+(httpOnly cookie, no registration or forgot-password in scope).
+
+Requirements:
+- Route: /login (use the App Router convention if Next.js 13+)
+- Form fields: email, password; include validation (Zod preferred)
+- On success: exchange credentials for a JWT, set it as an httpOnly cookie,
+  redirect to /dashboard
+- On failure: display an inline error message; never reveal which field is wrong
+- Loading state during submission
+- Responsive layout (mobile + desktop)
+
+Workflow:
+1. Detect and reuse existing form/auth utilities in the codebase
+2. Generate tests first with /herow-dev:code:generate-tests — unit tests for the
+   form, integration tests for the JWT exchange and cookie-setting flow
+3. Implement the page and auth logic (fullstack-developer agent)
+4. /herow-dev:react:review and /herow-dev:code:review
+5. Confirm all tests pass and the page renders on mobile and desktop
+
+Security:
+- JWT in httpOnly cookie only — never expose to JS
+- Rate-limit login attempts (or note if a middleware already does this)
+- CSRF token on the form
+- XSS: sanitize all user inputs
+
+Acceptance criteria:
+- All tests pass, 80%+ coverage
+- Successful login → /dashboard; failure → inline error with no field disclosure
+- Responsive layout verified
+
+Do not:
+- Implement registration or forgot-password
+- Implement OAuth or social login
+- Change the existing routing structure
+```
+
+---
 
 ### Example 2: Moderate English Prompt
 
