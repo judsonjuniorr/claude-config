@@ -310,6 +310,13 @@ Add a REST API endpoint for user profile updates with validation
 
 **Phase 0 detects:** `pyproject.toml` with FastAPI + SQLAlchemy
 
+**Phase 4 classifies gaps:**
+- Tech stack → **non-material** (detected from project files).
+- Auth strategy → **non-material** (endpoint requires a valid token; project's existing auth approach applies).
+- Scope → **non-material** (PATCH /users/{id} is the explicit request; excluded items noted in "Do not").
+
+No material gaps — no `AskUserQuestion`. Proceeds directly to Phase 5.
+
 **Optimized Prompt (Full):**
 ```
 Add a REST API endpoint for user profile updates (PATCH /api/users/{id}).
@@ -344,6 +351,14 @@ Do not:
 ```
 Migrate our monolith to microservices
 ```
+
+**Phase 0 detects:** no project files — tech stack unknown.
+
+**Phase 4 classifies gaps:**
+- Tech stack → **non-material** (EPIC planning prompt intentionally leaves implementation details to the planning phase; the generated prompt embeds those as questions for the executor to resolve, not questions this skill needs answered now).
+- Scope → **non-material** (full migration is the explicit request; phased breakdown is in the prompt itself).
+
+No material gaps — no `AskUserQuestion`. Proceeds directly to Phase 5.
 
 **Optimized Prompt (Full):**
 ```
