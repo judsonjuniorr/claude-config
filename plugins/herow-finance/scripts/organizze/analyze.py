@@ -25,12 +25,23 @@ from _paths import migrate_legacy  # noqa: E402
 
 migrate_legacy()
 
-DEFAULT_FRAMEWORK = (
-    pathlib.Path(__file__).resolve().parents[3]
-    / "agents"
-    / "financial-analyst"
-    / "financial-analyst.md"
-)
+
+def _plugin_root() -> pathlib.Path:
+    """Walk up from this script to the plugin root (the dir holding .claude-plugin/).
+
+    More robust than a hardcoded parents[N] count: it keeps resolving even if the
+    script moves up or down a directory level. Falls back to parents[2]
+    (scripts/organizze/ -> plugin root) if no marker is found.
+    """
+    here = pathlib.Path(__file__).resolve()
+    for d in here.parents:
+        if (d / ".claude-plugin").is_dir() or (d / "agents").is_dir():
+            return d
+    return here.parents[2]
+
+
+PLUGIN_ROOT = _plugin_root()
+DEFAULT_FRAMEWORK = PLUGIN_ROOT / "agents" / "financial-analyst.md"
 
 
 def cents_to_brl(c: int | float | None) -> str:
@@ -541,7 +552,7 @@ def summarize(snapshot: dict) -> str:
     return "\n".join(out)
 
 
-_SHARED_SCRIPTS = pathlib.Path(__file__).resolve().parent.parent / "scripts"
+_SHARED_SCRIPTS = PLUGIN_ROOT / "scripts" / "finance"
 
 
 def load_memory_block() -> str:
@@ -559,8 +570,15 @@ def load_memory_block() -> str:
             text=True,
             timeout=10,
         )
+        if r.returncode != 0:
+            print(
+                f"warn|memory-render-failed|{script}|{r.stderr.strip()[:120]}",
+                file=sys.stderr,
+            )
+            return ""
         return r.stdout.strip()
-    except Exception:
+    except Exception as e:
+        print(f"warn|memory-render-error|{e}", file=sys.stderr)
         return ""
 
 
@@ -580,8 +598,15 @@ def load_profile_block() -> str:
             text=True,
             timeout=10,
         )
+        if r.returncode != 0:
+            print(
+                f"warn|profile-render-failed|{script}|{r.stderr.strip()[:120]}",
+                file=sys.stderr,
+            )
+            return ""
         return r.stdout.strip()
-    except Exception:
+    except Exception as e:
+        print(f"warn|profile-render-error|{e}", file=sys.stderr)
         return ""
 
 
@@ -600,8 +625,15 @@ def load_plans_block() -> str:
             text=True,
             timeout=10,
         )
+        if r.returncode != 0:
+            print(
+                f"warn|plans-render-failed|{script}|{r.stderr.strip()[:120]}",
+                file=sys.stderr,
+            )
+            return ""
         return r.stdout.strip()
-    except Exception:
+    except Exception as e:
+        print(f"warn|plans-render-error|{e}", file=sys.stderr)
         return ""
 
 
@@ -951,11 +983,18 @@ def main() -> int:
         sys.stdout.write(render_list_targets(snap) + "\n")
         return 0
 
-    fw = (
-        pathlib.Path(args.framework).read_text()
-        if pathlib.Path(args.framework).exists()
-        else ""
-    )
+    fw_path = pathlib.Path(args.framework)
+    if fw_path.exists():
+        fw = fw_path.read_text()
+    else:
+        # Never silently drop the framework: a missing file here means an explicit
+        # bad --framework (the default always resolves). Warn loudly, then degrade
+        # to the generic system prompt rather than aborting the whole analysis.
+        print(
+            f"warn|framework-missing|{fw_path} — using generic system prompt",
+            file=sys.stderr,
+        )
+        fw = ""
     research_dir = pathlib.Path(args.research_dir) if args.research_dir else None
     prompt = render_prompt(snap, fw, research_dir=research_dir)
 
