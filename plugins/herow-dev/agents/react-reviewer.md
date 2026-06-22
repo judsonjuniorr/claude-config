@@ -149,7 +149,7 @@ Always include the file path and line number. Quote the offending snippet when i
 ## Related
 
 - Agents: `typescript-reviewer` (generic TS/JS, invoked alongside on `.tsx`/`.jsx`), `security-reviewer` (project-wide audit)
-- Rules: `rules/react/coding-style.md`, `rules/react/hooks.md`, `rules/react/patterns.md`, `rules/react/security.md`, `rules/react/testing.md`
+- Authoring rules (the canonical source the lanes above map onto — `herow-core/rules/react/`): `coding-style.md`, `patterns.md`, `performance.md`, `security.md`, `testing.md`. The review lanes here are the review-time checklist; consult these files for the authoring guidance behind each check rather than re-copying it.
 
 ---
 
