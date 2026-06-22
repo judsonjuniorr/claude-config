@@ -5,6 +5,12 @@ command (Step 1 detects `.auth` missing; Steps 2.5/2.7 run after the first pull 
 conditions hold). The same `**Absolute paths**` and GLOBAL RULE (ask via `AskUserQuestion`)
 from the main command apply here.
 
+> **Resolve `$SNAP` at the start of every bash block in Steps 2.5 and 2.7** (each block is a new shell, so `$SNAP` does not persist; never re-derive via `$(date ...)`):
+>
+> ```bash
+> SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+> ```
+
 ## Step 2 — Onboarding (first run)
 
 1. Open the token page via headed Playwright (the MCP session is already authenticated):

@@ -117,7 +117,13 @@ PROMPT_FILE=~/finance/organizze/reports/$TS.prompt.md
 
 Do not invoke `analyze.py` yet — first we need to fire the research (Step 5.5) and then render the prompt with `--research-dir` pointing to it.
 
-`analyze.py` reads the snapshot + system prompt from `agents/financial-analyst/financial-analyst.md` + injects `profile.md`, `memory.md`, `plans.md`, and the contents of `$RESEARCH_DIR` (pre-collected research) — returns a single prompt ready to deliver to the subagent.
+`analyze.py` reads the snapshot + system prompt from `agents/financial-analyst.md` + injects `profile.md`, `memory.md`, `plans.md`, and the contents of `$RESEARCH_DIR` (pre-collected research) — returns a single prompt ready to deliver to the subagent.
+
+> **Pre-flight — personalization data.** Before rendering, check which global state files exist:
+> ```bash
+> for f in memory plans profile; do [ -f ~/finance/$f.md ] || echo "missing: ~/finance/$f.md"; done
+> ```
+> `analyze.py` injects these silently — a missing `memory.md` (restrictions/context) or `plans.md` (goals) is dropped with no warning, and a missing `profile.md` renders as `(no data)`. If any are missing, tell the user in 1 line: "No <memory/plans/profile> on file — this analysis will be less personalized; you can add context via `/finance:context`, goals via `/finance:goal`, profile via `/finance:profile`." Then continue (do not block).
 
 ## Steps 5.5 / 5.6 — Market research & per-account forecast
 
@@ -126,7 +132,7 @@ Do not invoke `analyze.py` yet — first we need to fire the research (Step 5.5)
 ## Step 6 — Delegate to the `financial-analyst` subagent
 
 Use the `Agent` tool:
-- `subagent_type`: `financial-analyst` if it exists at `~/.claude/agents/financial-analyst.md`. If it does not exist, **warn the user** ("subagent not installed — use `general-purpose` this time? To install, run `ln -sf <claude-config-root>/agents/financial-analyst/financial-analyst.md ~/.claude/agents/`") and proceed with `general-purpose`.
+- `subagent_type`: `financial-analyst` if it exists at `~/.claude/agents/financial-analyst.md`. If it does not exist, **warn the user** ("subagent not installed — use `general-purpose` this time? To install, run `ln -sf <claude-config-root>/agents/financial-analyst.md ~/.claude/agents/`") and proceed with `general-purpose`.
 - `description`: `Monthly Organizze financial analysis`
 - `prompt`: the contents of `$PROMPT_FILE` (rendered in step 5.5 with pre-collected research).
 
