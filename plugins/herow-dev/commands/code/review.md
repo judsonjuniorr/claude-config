@@ -400,12 +400,15 @@ for the current branch) and `--comment` was not already passed, ask the user **v
 1. **Keep the report on screen** — do nothing further; the findings stay in the terminal.
    This is the default, and the only option when no PR/MR exists or the session is
    non-interactive.
-2. **Submit a review with suggestions** — submit one PR/MR review: *request changes* when
-   any 🔴/🟠 survives, otherwise a comment-only review. Findings whose **Fix** is a concrete
-   replacement for specific diff line(s) post as inline **suggestion blocks** the author can
-   commit in one click; non-mappable fixes become plain inline comments; off-diff findings
-   fold into the summary. All human-readable text is written in the **repository's language**
-   (see *Comment Language*). Mechanics: *Submitting a Review*.
+2. **Submit a review that requests changes** — submit one PR/MR review with the **Request
+   changes** verdict, which **blocks the merge until the review is resolved** (the reviewer
+   re-approves, or the changes are addressed and the stale review is dismissed). This is the
+   point of the option, so it requests changes whenever there is at least one finding —
+   regardless of severity, not just 🔴/🟠. Findings whose **Fix** is a concrete replacement for
+   specific diff line(s) post as inline **suggestion blocks** the author can commit in one
+   click; non-mappable fixes become plain inline comments; off-diff findings fold into the
+   summary. All human-readable text is written in the **repository's language** (see *Comment
+   Language*). Mechanics: *Submitting a Review*.
 
 If `AskUserQuestion` is unavailable (headless/non-interactive), skip the prompt and keep the
 report on screen. Never submit a review without an explicit choice.
@@ -437,17 +440,23 @@ the right commit. Pick the API for the detected platform. Write human-readable t
 repo's language (see *Comment Language*); keep code, paths, emoji, and suggestion blocks
 verbatim.
 
-**Review event (from the post-second-opinion severities):**
+**Review event.** Option 2 **requests changes whenever there is at least one finding** — the
+goal is to block the merge until the findings are addressed, regardless of severity. Only a
+finding-free review approves:
 
 | Surviving findings | GitHub `event` | GitLab |
 |---|---|---|
-| Any 🔴 or 🟠 | `REQUEST_CHANGES` | post discussions, leave threads unresolved, do **not** approve |
-| Only 🟡/🟢 | `COMMENT` | post discussions as notes |
+| One or more (any 🔴/🟠/🟡/🟢) | `REQUEST_CHANGES` | post discussions, leave threads unresolved, do **not** approve |
 | None | `APPROVE` | `glab mr approve` |
 
-GitLab has no "request changes" event — express it by opening unresolved discussion threads,
-leaving the MR un-approved, and stating "changes requested" in the summary note. A `⚠️ DISPUTE`
-🔴/🟠 still counts toward `REQUEST_CHANGES` (advisory; the human decides).
+`REQUEST_CHANGES` blocks the merge while the project requires review resolution (GitHub branch
+protection "Require approvals" / "Dismiss stale reviews"; GitLab "All threads must be resolved").
+Without that protection it is still a hard red signal a maintainer must override deliberately —
+flag that in the summary so the block is intentional. GitLab has no `REQUEST_CHANGES` API event:
+express it by opening unresolved discussion threads, leaving the MR un-approved, and stating
+"changes requested" in the summary note (with "All threads must be resolved" enabled, the open
+threads block the merge). A `⚠️ DISPUTE` finding still counts toward requesting changes
+(advisory; the human resolves it).
 
 **Inline suggestions.** When a finding's **Fix** is a literal replacement for the exact diff
 line(s) it targets, embed a suggestion block so the author can apply it in one click — its
