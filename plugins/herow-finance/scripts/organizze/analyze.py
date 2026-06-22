@@ -552,7 +552,7 @@ def summarize(snapshot: dict) -> str:
     return "\n".join(out)
 
 
-_SHARED_SCRIPTS = pathlib.Path(__file__).resolve().parent.parent / "scripts"
+_SHARED_SCRIPTS = PLUGIN_ROOT / "scripts" / "finance"
 
 
 def load_memory_block() -> str:
@@ -570,8 +570,15 @@ def load_memory_block() -> str:
             text=True,
             timeout=10,
         )
+        if r.returncode != 0:
+            print(
+                f"warn|memory-render-failed|{script}|{r.stderr.strip()[:120]}",
+                file=sys.stderr,
+            )
+            return ""
         return r.stdout.strip()
-    except Exception:
+    except Exception as e:
+        print(f"warn|memory-render-error|{e}", file=sys.stderr)
         return ""
 
 
@@ -591,8 +598,15 @@ def load_profile_block() -> str:
             text=True,
             timeout=10,
         )
+        if r.returncode != 0:
+            print(
+                f"warn|profile-render-failed|{script}|{r.stderr.strip()[:120]}",
+                file=sys.stderr,
+            )
+            return ""
         return r.stdout.strip()
-    except Exception:
+    except Exception as e:
+        print(f"warn|profile-render-error|{e}", file=sys.stderr)
         return ""
 
 
@@ -611,8 +625,15 @@ def load_plans_block() -> str:
             text=True,
             timeout=10,
         )
+        if r.returncode != 0:
+            print(
+                f"warn|plans-render-failed|{script}|{r.stderr.strip()[:120]}",
+                file=sys.stderr,
+            )
+            return ""
         return r.stdout.strip()
-    except Exception:
+    except Exception as e:
+        print(f"warn|plans-render-error|{e}", file=sys.stderr)
         return ""
 
 
