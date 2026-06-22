@@ -16,7 +16,7 @@
       "name": "herow-dev",
       "source": "./plugins/herow-dev",
       "category": "development",
-      "description": "Code/git/react/python commands, dev agents and skills"
+      "description": "Code/git/react commands, language-aware review, dev agents and skills"
     },
     {
       "name": "herow-seo",

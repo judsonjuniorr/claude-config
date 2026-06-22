@@ -50,7 +50,7 @@ Supporting material for the pipeline in SKILL.md.
 | Refactor | `/herow-dev:code:refactor`, `/herow-dev:code:review` | — | code-simplifier, code-reviewer |
 | Research | — | deep-research, exa-search | search-specialist |
 | Testing | `/herow-dev:code:generate-tests`, `/herow-dev:react:test` | — | tdd-guide, pr-test-analyzer |
-| Review | `/herow-dev:code:review`, `/herow-dev:python:review`, `/herow-dev:react:review` | — | code-reviewer, security-reviewer, silent-failure-hunter, comment-analyzer, type-design-analyzer |
+| Review | `/herow-dev:code:review` | — | code-reviewer, security-reviewer, silent-failure-hunter, comment-analyzer, type-design-analyzer |
 | Documentation | `/herow-dev:git:release-notes` | — | comment-analyzer |
 | Infrastructure / API design | — | — | backend-architect |
 | Design (data model / API) | — | — | backend-architect |
@@ -65,9 +65,9 @@ Supporting material for the pipeline in SKILL.md.
 | Tech Stack | Commands / Skills | Agent |
 |------------|-------------------|-------|
 | TypeScript / JavaScript | `/herow-dev:code:review` | typescript-reviewer, code-reviewer |
-| React / Next.js | `/herow-dev:react:review`, `/herow-dev:react:test`, `/herow-dev:react:validate-ui` | react-reviewer, fullstack-developer, ui-ux-designer |
-| Python | `/herow-dev:python:review` | python-pro, python-reviewer |
-| Python / FastAPI | `/herow-dev:python:fastapi-review` | fastapi-reviewer |
+| React / Next.js | `/herow-dev:code:review`, `/herow-dev:react:test`, `/herow-dev:react:validate-ui` | react-reviewer, fullstack-developer, ui-ux-designer |
+| Python | `/herow-dev:code:review` | python-pro, python-reviewer |
+| Python / FastAPI | `/herow-dev:code:review` | fastapi-reviewer |
 | Mobile (React Native / iOS / Android) | — | mobile-developer |
 | Backend / API (any language) | — | backend-architect |
 | Error handling (TS / Python) | error-handling skill | — |
@@ -146,7 +146,7 @@ A compact version for experienced users. Vary by intent type:
 | Refactor | `/herow-dev:code:refactor [scope]. /herow-dev:code:review.` |
 | Research | `Use the deep-research skill for [topic]; cite sources.` |
 | Testing | `/herow-dev:code:generate-tests for [module]` (React: `/herow-dev:react:test`). |
-| Review | `/herow-dev:code:review` (Python: `/herow-dev:python:review`; React: `/herow-dev:react:review`). |
+| Review | `/herow-dev:code:review` (auto-detects language → Python/React/TS specialist reviewers). |
 | Docs | `/herow-dev:git:release-notes since the last tag.` |
 | Git/PR | `/herow-dev:git:pr` (conflicts: `/herow-dev:git:fix-conflicts`). |
 | Planning (EPIC) | `Plan "[objective]" in phases with a review gate between each; use a planning skill if available.` |
@@ -204,7 +204,7 @@ Workflow:
 1. Sketch the component structure and auth flow first, referencing existing page patterns (delegate to the backend-architect agent if the auth/data model is non-trivial)
 2. Generate tests first with /herow-dev:code:generate-tests — unit tests for the login form, integration tests for the auth flow
 3. Implement the login page and auth logic (fullstack-developer agent)
-4. /herow-dev:react:review and /herow-dev:code:review
+4. /herow-dev:code:review (auto-dispatches react + typescript reviewers for .tsx)
 5. Confirm all tests pass and the page renders correctly
 
 Security:
@@ -279,7 +279,7 @@ Workflow:
 2. Generate tests first with /herow-dev:code:generate-tests — unit tests for the
    form, integration tests for the JWT exchange and cookie-setting flow
 3. Implement the page and auth logic (fullstack-developer agent)
-4. /herow-dev:react:review and /herow-dev:code:review
+4. /herow-dev:code:review (auto-dispatches react + typescript reviewers for .tsx)
 5. Confirm all tests pass and the page renders on mobile and desktop
 
 Security:
@@ -336,7 +336,7 @@ Workflow:
 1. Sketch the endpoint contract and dependency chain (backend-architect agent if the schema is non-trivial)
 2. Generate tests first with /herow-dev:code:generate-tests — success, validation failure, auth failure, not-found
 3. Implement following existing handler patterns (python-pro agent)
-4. /herow-dev:python:fastapi-review
+4. /herow-dev:code:review (auto-detects FastAPI → fastapi + python reviewers)
 5. Run the full test suite, confirm no regressions
 
 Do not:

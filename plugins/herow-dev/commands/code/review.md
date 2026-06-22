@@ -1,5 +1,5 @@
 ---
-description: (herow) Multi-agent code review for local changes or a PR — color-ranked findings, optional --fix or --comment.
+description: (herow) Multi-agent code review for local changes or a PR — color-ranked findings, optional --fix or --comment, and an interactive finish that can submit a request-changes review with inline suggestions in the repo's language.
 argument-hint: "[pr-number | pr-url | branch] [low|medium|high|max] [--fix] [--comment]"
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task
 effort: medium
@@ -20,10 +20,11 @@ Split `$ARGUMENTS` into tokens and classify each:
 | A number, a `github.com/.../pull/N` or `gitlab.com/.../merge_requests/N` URL, or a branch name | **target** → PR Review Mode |
 | `low` \| `medium` \| `high` \| `max` | **effort** (default `high`) |
 | `--fix` | apply concrete fixes to the working tree after review |
-| `--comment` | post findings to the PR/MR (PR Review Mode only) |
+| `--comment` | submit a review to the PR/MR — request changes (or comment) with inline suggestions, in the repo language; the non-interactive shortcut for the *Finish* prompt (PR Review Mode only) |
 
 If no **target** token is present → **Local Review Mode**.
 `--fix` and `--comment` may be combined. `--comment` is ignored (with a warning) in Local Mode.
+Without `--comment`, an interactive run ends with the *Finish* prompt (see *Finish — choose an action*) whenever a PR/MR is in play.
 
 > **GitHub vs GitLab.** PR Review Mode works on both. Detect the platform once (see *Platform
 > Detection* in PR Review Mode) and use the matching CLI: **`gh`** for GitHub pull requests,
@@ -156,6 +157,13 @@ Output findings grouped by level, most severe first (level reflects any ESCALATE
 - End with a count line that includes the second-opinion summary:
   `🔴 1  🟠 2  🟡 3  🟢 0   (2nd opinion: ✅2 ⚠️1 ⏫1)`
 
+### Phase 4.6 — FINISH (interactive)
+
+Run the *Finish* prompt (see *Finish — choose an action* below). In Local Mode the
+"submit a review" option is offered only when the current branch has an open PR/MR
+(`gh pr list --head <branch>` / `glab mr list --source-branch <branch>` resolves one);
+otherwise the report stays on screen.
+
 ### Phase 5 — FIX *(only if `--fix`)*
 
 See *Applying Fixes* below.
@@ -261,10 +269,15 @@ Next steps (GitLab):
   - glab mr note <NUMBER> --message "<summary>"   # GitLab has no "request changes"; leave a note
 ```
 
-### Phase 7 — ACT *(only if `--comment` and/or `--fix`)*
+### Phase 7 — FINISH & ACT
 
-- `--comment` → *Posting PR Comments* below.
-- `--fix` → *Applying Fixes* below (check out the branch first: `gh pr checkout <NUMBER>` on GitHub, `glab mr checkout <NUMBER>` on GitLab).
+- If `--comment` was passed → submit the review **non-interactively** (see *Submitting a Review* below).
+- Else, if the session is interactive → run the *Finish* prompt (see *Finish — choose an action*):
+  option 1 keeps the report on screen, option 2 submits the review.
+- Non-interactive run with no `--comment` → report only; print the suggested `gh`/`glab`
+  next-steps (as in Phase 6) and skip the prompt.
+- `--fix` (independent of the above) → *Applying Fixes* below (check out the branch first:
+  `gh pr checkout <NUMBER>` on GitHub, `glab mr checkout <NUMBER>` on GitLab).
 
 ---
 
@@ -378,47 +391,129 @@ Never `git commit` or `git push` — leave that to the user.
 
 ---
 
-## Posting PR Comments (`--comment`)
+## Finish — choose an action
 
-Post each finding as an **inline comment** anchored to its file and line, plus one **summary
-comment**. Use the head SHA so anchors resolve to the right commit. Pick the API for the detected
-platform.
+After the report, when a PR/MR is in play (PR Review Mode, or Local Mode with an open PR
+for the current branch) and `--comment` was not already passed, ask the user **via
+`AskUserQuestion`** how to finish. Offer exactly two options:
+
+1. **Keep the report on screen** — do nothing further; the findings stay in the terminal.
+   This is the default, and the only option when no PR/MR exists or the session is
+   non-interactive.
+2. **Submit a review that requests changes** — submit one PR/MR review with the **Request
+   changes** verdict, which **blocks the merge until the review is resolved** (the reviewer
+   re-approves, or the changes are addressed and the stale review is dismissed). This is the
+   point of the option, so it requests changes whenever there is at least one finding —
+   regardless of severity, not just 🔴/🟠. Findings whose **Fix** is a concrete replacement for
+   specific diff line(s) post as inline **suggestion blocks** the author can commit in one
+   click; non-mappable fixes become plain inline comments; off-diff findings fold into the
+   summary. All human-readable text is written in the **repository's language** (see *Comment
+   Language*). Mechanics: *Submitting a Review*.
+
+If `AskUserQuestion` is unavailable (headless/non-interactive), skip the prompt and keep the
+report on screen. Never submit a review without an explicit choice.
+
+## Comment Language
+
+Human-readable review text (summary, titles, the Issue/Why/Fix labels and their prose) is
+written in the **repository's natural language**, so comments read natively to the project's
+maintainers. Detect that language once, using the first source that yields enough prose to
+judge:
+
+1. A pull-request template: `.github/PULL_REQUEST_TEMPLATE.md`,
+   `.github/pull_request_template.md`, `docs/PULL_REQUEST_TEMPLATE.md`, or any file under
+   `.github/PULL_REQUEST_TEMPLATE/`.
+2. In PR Review Mode, the PR/MR description body fetched in Phase 1.
+3. `README.md` prose (skip code blocks) at the repo root.
+
+Write all comment prose in the detected language. **Default to English** when detection is
+ambiguous or there is too little prose. Localize the labels too (e.g. Issue/Why/Fix →
+Problema/Porquê/Correção for a Portuguese repo). **Never translate** code, identifiers, file
+paths, commands, severity emoji, verdict badges, or the contents of suggestion blocks — those
+stay verbatim.
+
+## Submitting a Review
+
+Used by the *Finish* prompt's option 2 and by the `--comment` flag. Submit **one** review — a
+summary plus inline comments anchored to file+line — using the head SHA so anchors resolve to
+the right commit. Pick the API for the detected platform. Write human-readable text in the
+repo's language (see *Comment Language*); keep code, paths, emoji, and suggestion blocks
+verbatim.
+
+**Review event.** Option 2 **requests changes whenever there is at least one finding** — the
+goal is to block the merge until the findings are addressed, regardless of severity. Only a
+finding-free review approves:
+
+| Surviving findings | GitHub `event` | GitLab |
+|---|---|---|
+| One or more (any 🔴/🟠/🟡/🟢) | `REQUEST_CHANGES` | post discussions, leave threads unresolved, do **not** approve |
+| None | `APPROVE` | `glab mr approve` |
+
+`REQUEST_CHANGES` blocks the merge while the project requires review resolution (GitHub branch
+protection "Require approvals" / "Dismiss stale reviews"; GitLab "All threads must be resolved").
+Without that protection it is still a hard red signal a maintainer must override deliberately —
+flag that in the summary so the block is intentional. GitLab has no `REQUEST_CHANGES` API event:
+express it by opening unresolved discussion threads, leaving the MR un-approved, and stating
+"changes requested" in the summary note (with "All threads must be resolved" enabled, the open
+threads block the merge). A `⚠️ DISPUTE` finding still counts toward requesting changes
+(advisory; the human resolves it).
+
+**Inline suggestions.** When a finding's **Fix** is a literal replacement for the exact diff
+line(s) it targets, embed a suggestion block so the author can apply it in one click — its
+content is the replacement for the commented line range (GitHub uses a plain `suggestion`
+fenced block; GitLab uses `suggestion:-0+0`). Only emit one when the replacement maps 1:1 to
+the commented lines; anchor multi-line replacements to the full range (`start_line`..`line` on
+GitHub). For advice that is not a literal substitution ("extract this", "add a test"), post a
+plain comment. Never attach a suggestion to a `⚠️ DISPUTE` finding or a deleted/context-only line.
 
 ### GitHub — reviews API
 
-One call creates the whole review (summary `body` + inline `comments`):
+One call creates the whole review (summary `body` + inline `comments` + the chosen `event`).
+Comment bodies are localized; suggestion blocks are verbatim code (the 4-backtick fence here is
+only so this doc can show the inner triple-backtick `suggestion` block):
 
-```bash
+````bash
 gh api --method POST repos/{owner}/{repo}/pulls/<NUMBER>/reviews --input - <<'JSON'
 {
   "commit_id": "<headRefOid>",
-  "event": "COMMENT",
-  "body": "Code review — 🔴 1  🟠 2  🟡 3  🟢 0\n\n<one-line decision + summary>",
+  "event": "REQUEST_CHANGES",
+  "body": "<localized summary + 🔴 1  🟠 2  🟡 3  🟢 0 + one-line decision>",
   "comments": [
-    { "path": "path/to/file.ts", "line": 42, "body": "🔴 Critical — <title>\n<issue>. Fix: <change>." },
-    { "path": "path/to/util.ts", "line": 10, "body": "🟡 Medium — <title>\n<issue>. Fix: <change>." }
+    { "path": "path/to/file.ts", "line": 42,
+      "body": "🔴 <Critical> — <title>\n<issue>. <Fix>:\n\n```suggestion\n<corrected line 42>\n```" },
+    { "path": "path/to/util.ts", "start_line": 10, "line": 12,
+      "body": "🟡 <Medium> — <title>\n<issue>.\n\n```suggestion\n<corrected lines 10-12>\n```" },
+    { "path": "path/to/svc.ts", "line": 30,
+      "body": "🟠 <High> — <title>\n<issue>. <Fix>: <prose; no literal replacement>." }
   ]
 }
 JSON
-```
+````
 
 - Resolve `{owner}/{repo}` with `gh repo view --json owner,name` or from the PR URL.
-- `line` is the line in the file's new version (right side of the diff). For deletions or
-  context-only comments, add `"side": "LEFT"` or a `start_line`/`line` range.
+- `line` is the line in the file's new version (right side of the diff); for a multi-line
+  suggestion set `start_line` (+ `start_side`) to the first line and `line` to the last.
+- For deletions or context-only comments add `"side": "LEFT"` (no suggestion block — you
+  cannot suggest a replacement for a removed line).
 
 ### GitLab — discussions API
 
 GitLab needs the MR `diff_refs` (`base_sha`, `start_sha`, `head_sha`) and **one POST per inline
-comment**, then a separate note for the summary. `<PROJECT>` is the URL-encoded path (e.g.
-`group%2Frepo`); fetch the refs from the MR JSON first:
+comment**, then a separate note for the summary. Suggestion syntax is `suggestion:-0+0` (lines
+above/below the anchor to replace). `<PROJECT>` is the URL-encoded path (e.g. `group%2Frepo`):
 
-```bash
+````bash
 # diff_refs once:
 glab api "projects/<PROJECT>/merge_requests/<NUMBER>" | jq .diff_refs
 
 # one inline comment (repeat per finding):
 glab api --method POST "projects/<PROJECT>/merge_requests/<NUMBER>/discussions" \
-  -f body="🔴 Critical — <title>\n<issue>. Fix: <change>." \
+  -f body="🔴 <localized> — <title>
+<issue>. <Fix>:
+
+```suggestion:-0+0
+<corrected line 42>
+```" \
   -f position[position_type]=text \
   -f position[base_sha]=<base_sha> \
   -f position[start_sha]=<start_sha> \
@@ -426,18 +521,18 @@ glab api --method POST "projects/<PROJECT>/merge_requests/<NUMBER>/discussions" 
   -f position[new_path]=path/to/file.ts \
   -f position[new_line]=42
 
-# summary note:
-glab mr note <NUMBER> --message "Code review — 🔴 1  🟠 2  🟡 3  🟢 0
-<one-line decision + summary>"
-```
+# summary note (state "changes requested" in the repo language):
+glab mr note <NUMBER> --message "<localized summary — 🔴 1  🟠 2  🟡 3  🟢 0 — changes requested>"
+````
 
-- For deleted/context lines use `position[old_path]` + `position[old_line]` instead of the `new_*` pair.
+- For deleted/context lines use `position[old_path]` + `position[old_line]` (no suggestion).
 
 ### Both platforms
 
-- If a finding's line is not part of the diff, fold it into the **summary** instead of an inline
-  comment (both APIs reject inline comments outside the diff).
-- Without `--comment`, PR Mode only prints the report and the suggested `gh`/`glab` next-steps.
+- Off-diff findings (line not in the diff) fold into the **summary** — both APIs reject inline
+  comments outside the diff, and suggestions only apply to diff lines.
+- The report-only path (option 1, or a non-interactive run without `--comment`) posts nothing;
+  it just prints the report and the suggested `gh`/`glab` next-steps.
 
 ---
 
@@ -445,4 +540,7 @@ glab mr note <NUMBER> --message "Code review — 🔴 1  🟠 2  🟡 3  🟢 0
 
 Surface only findings at or above the effort's confidence cutoff. Calibrate severity honestly:
 🟢/🟡 for suggestions, 🟠 for real correctness/test gaps, 🔴 only for bugs, security, or data loss.
-Default invocation (`/herow-dev:code:review`, no args) = Local Mode, all 7 agents, ≥ 80, report only.
+Default invocation (`/herow-dev:code:review`, no args) = Local Mode, all 7 agents, ≥ 80. The
+report prints to screen; then, if the current branch has an open PR and the session is
+interactive, the *Finish* prompt offers to submit a request-changes review with suggestions
+(see *Finish — choose an action*).

@@ -256,7 +256,7 @@ CI=true vitest run --coverage
 ## Related Commands
 
 - `/react-build` — fix build errors before running tests
-- `/react-review` — review after implementation
+- `/herow-dev:code:review` — review after implementation (auto-detects React → react + typescript reviewers)
 - `verification-loop` skill — full verification loop
 
 ## Related

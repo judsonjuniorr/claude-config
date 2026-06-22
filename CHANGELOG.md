@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.4.0] - 2026-06-22
+
+### Added
+- `/herow-dev:code:review` — **interactive finish**: after the report, when a PR/MR is in play, the command asks (via `AskUserQuestion`) whether to keep the report on screen or **submit a review**. Submitting always uses the **Request changes** verdict whenever there is at least one finding (any severity), so it **blocks the merge** until the review is resolved — not a passive comment. The review carries inline GitHub/GitLab **suggestion blocks** wherever a fix maps to diff lines, so the author can apply them in one click; off-diff or non-literal fixes fall back to plain comments folded into the summary. All review comment text is written in the **repository's language** (detected from PR template → PR/MR body → README; defaults to English; code/paths/emoji/suggestions never translated). The `--comment` flag is the non-interactive shortcut for the same submission.
+
+### Changed
+- README, `.claude-plugin/marketplace.json`, and the `herow-dev:prompt-optimizer` reference tables now present `code:review` as the single **language-aware** review door (reframed for discoverability — "auto-detects `.tsx`/`.ts`/`.py` → specialist reviewers" — instead of listing per-language commands).
+- `react-reviewer` agent: `## Related` footer repointed to the React authoring rules that exist (dropped the dangling `rules/react/hooks.md` reference) and reframed as the canonical authoring source the review lanes map onto.
+
+### Removed
+- `/herow-dev:python:review`, `/herow-dev:react:review`, `/herow-dev:python:fastapi-review` — the three standalone review commands are **consolidated into `/herow-dev:code:review`**, which already dispatches the matching specialist reviewers by changed-file language (`.tsx`/`.jsx` → `react-reviewer` + `typescript-reviewer`; `.ts`/`.js` → `typescript-reviewer`; `.py`, FastAPI-aware → `fastapi-reviewer` + `python-reviewer`). The per-language reviewer **agents are unchanged** — only the redundant command entry points are gone, making `code:review` the single review door with one consistent output format (its REPORT phase owns formatting).
+
+## [0.1.3.0] - 2026-06-22
+
 ### Added
 - `/herow-core:doctor` config auditor scripts under `plugins/herow-core/scripts/doctor/`: `security.py` (`permissions_deny` deny-block + `plaintext_secrets` mcp-stash scan), `tokens.py` (`headroom_hook_redundancy`, `playwright_headed_active`, `grafana_active`), `hygiene.py` (`gstack_bak`, `claude_md_backups`, `language_rules_paths`), and a read-only `audit.py` orchestrator. Each check emits a JSON line (`check/status/diff/fix_cmd`), is dry-run by default, and applies idempotently with `--apply <id>` writing a timestamped `.bak`. Includes a hermetic `unittest` suite.
 
