@@ -1,8 +1,6 @@
 ---
 name: exa-search
 description: (herow) Reference for the Exa MCP tools (web_search_exa, web_fetch_exa) — parameters and query patterns. Use for quick web/code lookups via Exa. For multi-source cited reports, use the research skill.
-model: sonnet
-effort: medium
 ---
 
 # Exa Search
