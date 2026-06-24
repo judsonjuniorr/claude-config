@@ -13,12 +13,15 @@ CMD="$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_in
 # Strip a leading RTK proxy prefix so `rtk git commit` matches like `git commit`.
 CMD="${CMD#rtk }"
 
-# Hard block: NEVER allow AI-attribution trailers into a commit or PR/MR body,
-# under any circumstance — even via the github-ops scripts (they strip it too,
-# this is the belt-and-suspenders deny). Catches Co-Authored-By: Claude and the
-# "Generated with Claude Code" footer in any git/gh/glab mutation command.
-if printf '%s' "$CMD" | grep -qiE 'co-authored-by:[[:space:]]*claude|noreply@anthropic\.com|generated with \[?claude code|🤖[[:space:]]*generated with'; then
-  reason="github-ops: refusing — never add Co-Authored-By: Claude or 'Generated with Claude Code' attribution to commits or PRs. Remove the attribution and retry."
+# Hard block: NEVER allow any Claude Code / Anthropic reference into a commit or
+# PR/MR body, under any circumstance — even via the github-ops scripts (they
+# strip it too, this is the belt-and-suspenders deny). Catches Co-Authored-By:
+# Claude, the "Generated with Claude Code" footer, the "Claude-Session:" footer,
+# any "claude.ai/code" session link, and any "Claude Code" mention in any
+# git/gh/glab mutation command. Keep this pattern in sync with
+# strip_attribution() in scripts/_common.sh.
+if printf '%s' "$CMD" | grep -qiE 'co-authored-by:[[:space:]]*claude|anthropic|generated with \[?claude code|🤖[[:space:]]*generated with|claude-session:|claude\.ai/code|claude code'; then
+  reason="github-ops: refusing — never add a Claude Code / Anthropic reference (Co-Authored-By: Claude, 'Generated with Claude Code', a Claude-Session: footer, or a claude.ai/code link) to commits or PRs. Remove it and retry."
   python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'deny','permissionDecisionReason':sys.argv[1]}}))" "$reason"
   exit 0
 fi
