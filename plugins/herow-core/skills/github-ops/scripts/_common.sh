@@ -139,12 +139,21 @@ emit_compact() {
 }
 
 # Scrub AI-attribution lines from stdin (commit messages, PR/MR bodies).
-# NEVER let "Co-Authored-By: Claude", "Generated with Claude Code", or the
-# 🤖 footer reach a commit or PR — strip them unconditionally, then trim any
-# trailing blank lines the removed footer block left behind.
+# NEVER let any Claude Code / Anthropic reference reach a commit or PR: this
+# strips "Co-Authored-By: Claude", "Generated with Claude Code", the 🤖 footer,
+# the "Claude-Session:" footer, any "claude.ai/code" session link, and any line
+# mentioning "Claude Code" or "Anthropic". Whole matching lines are dropped; an
+# inline footer appended to a real line (e.g. a trailing session URL) is also
+# trimmed. Finally, trailing blank lines left by a removed footer block are cut.
 strip_attribution() {
-  grep -viE '^[[:space:]]*(co-authored-by:[[:space:]]*claude|co-authored-by:[[:space:]].*noreply@anthropic\.com|🤖[[:space:]]*generated with|generated with \[?claude code)' \
-    | sed -e 's/[[:space:]]*🤖[[:space:]]*Generated with.*$//' \
+  # 1) sed first: trim an inline footer appended to a real line (subject/body)
+  #    so only the footer is removed, not the whole line.
+  # 2) grep: drop lines that are entirely an attribution/reference footer.
+  # 3) awk: cut trailing blank lines left behind by removed footers.
+  sed -e 's/[[:space:]]*🤖[[:space:]]*Generated with.*$//' \
+      -e 's#[[:space:]]*Claude-Session:.*$##' \
+      -e 's#[[:space:]]*https://claude\.ai/code/[^[:space:]]*##g' \
+    | grep -viE '^[[:space:]]*(co-authored-by:[[:space:]]*claude|claude-session:|🤖[[:space:]]*generated with|generated with \[?claude code)|claude\.ai/code|(^|[[:space:]])claude code([[:space:]]|$)|anthropic' \
     | awk '{ lines[NR]=$0 } END { last=NR; while (last>0 && lines[last] ~ /^[[:space:]]*$/) last--; for (i=1;i<=last;i++) print lines[i] }'
 }
 
