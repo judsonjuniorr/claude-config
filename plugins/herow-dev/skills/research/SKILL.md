@@ -1,11 +1,11 @@
 ---
-name: deep-research
+name: research
 description: (herow) Multi-source research with cited reports via Exa/web MCPs. Use when the user wants researched, sourced answers — deep dives, comparisons, current-state questions. Quick single-fact lookups don't need this skill.
 model: sonnet
 effort: medium
 ---
 
-# Deep Research
+# Research
 
 > **Drift-prone skill.** Exa/web MCP tool names, quotas, and result shapes change.
 > Verify the configured MCP tools and current API docs before promising coverage

@@ -48,7 +48,7 @@ Supporting material for the pipeline in SKILL.md.
 | New Feature | `/herow-dev:code:generate-tests`, `/herow-dev:code:review` | — | fullstack-developer, backend-architect, tdd-guide |
 | Bug Fix | `/herow-dev:code:generate-tests`, `/herow-dev:code:review` | — | debugger, tdd-guide |
 | Refactor | `/herow-dev:code:refactor`, `/herow-dev:code:review` | — | code-simplifier, code-reviewer |
-| Research | — | deep-research, exa-search | search-specialist |
+| Research | — | research, exa-search | search-specialist |
 | Testing | `/herow-dev:code:generate-tests`, `/herow-dev:react:test` | — | tdd-guide, pr-test-analyzer |
 | Review | `/herow-dev:code:review` | — | code-reviewer, security-reviewer, silent-failure-hunter, comment-analyzer, type-design-analyzer |
 | Documentation | `/herow-dev:git:release-notes` | — | comment-analyzer |
@@ -87,7 +87,7 @@ Supporting material for the pipeline in SKILL.md.
 **Multi-prompt splitting** (for HIGH/EPIC scope):
 
 For tasks that exceed a single session, split into sequential prompts:
-- Prompt 1: Research + plan (use the `deep-research` skill for unknowns, then sketch phases)
+- Prompt 1: Research + plan (use the `research` skill for unknowns, then sketch phases)
 - Prompt 2–N: Implement one phase per prompt (each ends with `/herow-dev:code:review`)
 - Final Prompt: Integration test + review across all phases
 - If your environment provides a planning skill (e.g. `blueprint`), use it to persist the
@@ -118,7 +118,7 @@ must never appear alongside a generated prompt.
 |------|-----------|---------|
 | Agent | fullstack-developer | Implement the feature end-to-end |
 | Command | /herow-dev:code:review | Post-implementation review |
-| Skill | deep-research | Research unknowns with cited sources |
+| Skill | research | Research unknowns with cited sources |
 | Model | Sonnet | Recommended for this scope |
 
 ### Section 3: Optimized Prompt — Full Version
@@ -144,7 +144,7 @@ A compact version for experienced users. Vary by intent type:
 | New Feature | `Implement [feature]. Generate tests with /herow-dev:code:generate-tests. /herow-dev:code:review.` |
 | Bug Fix | `Use the debugger agent to root-cause [bug]. Add a failing test, fix to green, /herow-dev:code:review.` |
 | Refactor | `/herow-dev:code:refactor [scope]. /herow-dev:code:review.` |
-| Research | `Use the deep-research skill for [topic]; cite sources.` |
+| Research | `Use the research skill for [topic]; cite sources.` |
 | Testing | `/herow-dev:code:generate-tests for [module]` (React: `/herow-dev:react:test`). |
 | Review | `/herow-dev:code:review` (auto-detects language → Python/React/TS specialist reviewers). |
 | Docs | `/herow-dev:git:release-notes since the last tag.` |
@@ -342,7 +342,7 @@ Workflow:
 Do not:
 - Modify existing endpoints
 - Change the database schema (use existing user table)
-- Add new dependencies before checking existing ones (use the exa-search or deep-research skill to confirm)
+- Add new dependencies before checking existing ones (use the exa-search or research skill to confirm)
 ```
 
 ### Example 3: EPIC Project
@@ -379,7 +379,7 @@ Recommended phases:
 - Phase N: Decommission monolith
 
 Each phase = 1 PR, with a /herow-dev:code:review gate between phases.
-Use the deep-research skill for unknowns (e.g. service-mesh choice).
+Use the research skill for unknowns (e.g. service-mesh choice).
 Use git worktrees for parallel service extraction when dependencies allow.
 
 Recommended: Opus for planning, Sonnet for phase execution.
