@@ -15,8 +15,6 @@ origin: community
 metadata:
   author: YannJY02
   version: "1.2.0"
-model: sonnet
-effort: medium
 ---
 
 # Prompt Optimizer

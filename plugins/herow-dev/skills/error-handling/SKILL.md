@@ -1,8 +1,6 @@
 ---
 name: error-handling
 description: (herow) Patterns for robust error handling in TypeScript and Python. Covers typed error hierarchies, the Result pattern, API error envelopes, React error boundaries, retries with backoff, and user-facing error messages.
-model: sonnet
-effort: medium
 ---
 
 # Error Handling Patterns

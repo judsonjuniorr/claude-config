@@ -1,8 +1,6 @@
 ---
 name: uncompress
 description: (herow) Restore full, verbose, explanatory prose for the rest of the session. Inverse of the default terse "caveman" output mode. Use when the user says "uncompress", "verbose", "normal mode", "talk normally", "stop caveman", "explain in full", or wants detailed walk-throughs instead of terse fragments.
-model: haiku
-effort: low
 ---
 
 # Uncompress (full prose mode)
