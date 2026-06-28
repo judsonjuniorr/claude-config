@@ -1,8 +1,8 @@
 {
   "name": "herow-dev",
-  "description": "Dev workflow commands (code/git/react), 17 specialist agents, and research/error-handling/jira/prompt skills",
+  "description": "Dev workflow commands (code/git/react), 19 specialist agents (incl. Java 21+), and research/error-handling/jira/prompt skills",
   "author": { "name": "Judson Junior", "email": "judsonjuniorr@gmail.com" },
   "repository": "https://github.com/judsonjuniorr/claude-config",
   "license": "MIT",
-  "keywords": ["development", "review", "react", "python", "git"]
+  "keywords": ["development", "review", "react", "python", "java", "git"]
 }
