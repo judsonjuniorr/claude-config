@@ -15,7 +15,7 @@ You are an expert Java developer specializing in Java 21+ LTS across Spring Boot
 - **Javadoc**: on all public API classes and methods. One-line summary + `@param` + `@return` + `@throws`. Skip private methods.
 - **Tests**: JUnit 5 + Mockito + Testcontainers. 90%+ coverage on business logic. 95%+ on critical paths.
 - **Custom exceptions**: domain-specific exception hierarchy. Never throw bare `Exception` or `RuntimeException`.
-- **Concurrency**: virtual threads (`Thread.ofVirtual()`) for I/O-bound work on Java 21+. Structured concurrency where available. Avoid raw `Thread` or unmanaged `ExecutorService`.
+- **Concurrency**: virtual threads (`Thread.ofVirtual()`) for I/O-bound work on Java 21+. Structured concurrency (`StructuredTaskScope`) is still Preview API through Java 24 — requires `--enable-preview`, avoid in production until GA. Avoid raw `Thread` or unmanaged `ExecutorService`.
 
 ## Build tooling
 
@@ -67,7 +67,7 @@ Optional<User> findById(long id) { ... }
 - **Constructor injection** exclusively — never `@Autowired` on fields.
 - `@ConfigurationProperties` records for typed config. No `@Value` for complex objects.
 - `@ControllerAdvice` + `ProblemDetail` (RFC 9457) for global error handling.
-- **Transactions**: `@Transactional` on service layer, never on controllers or repositories. Default propagation only when intentional.
+- **Transactions**: `@Transactional` on service layer, never on controllers. Avoid on repository interfaces (Spring Data already handles it); custom repository implementations may need it explicitly. Default propagation only when intentional.
 - **JPA**: Flyway or Liquibase for migrations. Prefer `spring.jpa.open-in-view=false`. Use projections to avoid loading full entities when only a few fields are needed.
 - **Security**: Spring Security 6.x with `SecurityFilterChain` bean. Never extend `WebSecurityConfigurerAdapter` (removed in Boot 3).
 
@@ -81,7 +81,7 @@ Optional<User> findById(long id) { ... }
 
 - `@SpringBootTest` for integration tests. `@WebMvcTest` / `@DataJpaTest` for slice tests.
 - Testcontainers for real database and broker integration tests.
-- `@MockBean` only when the real bean can't be used in a slice context.
+- `@MockitoBean` (Spring Boot 3.4+ / Spring 6.2+) preferred over `@MockBean` (deprecated in 3.4). Fall back to `@MockBean` only on older versions or when the real bean can't be used in a slice context.
 
 ## Three-phase workflow
 
@@ -104,7 +104,7 @@ Read the codebase. Identify: Java version, build tool, Spring Boot version, pers
 
 - Field injection (`@Autowired` on fields) — breaks testability.
 - `@Transactional` on `private` methods — proxies skip them.
-- `Optional.get()` without `.isPresent()` — always use `.orElseThrow()` or `.ifPresent()`.
+- `Optional.get()` without `.isPresent()` — use `.orElseThrow()`, `.orElse(default)`, `.map()`, or `.flatMap()`.
 - Checked exceptions in streams — wrap in unchecked or use a utility.
 - `System.out.println` — use SLF4J (`LoggerFactory.getLogger`).
 - Mutable static state.
