@@ -24,7 +24,7 @@ Before firing a new agent, **check the cache** (default TTL 14 days): if a recen
    - `CITY` = value from the `profile|cidade|...` line (use the literal `"the user's city"` if it's `(no data)`).
    - Each `target|...` line becomes an entry with `name`, `total_cents`, `top_txs`.
 
-3. **For each target, check the cache first** (TTL 14d configurable). Split into two groups: `CACHED` and `MISSING`:
+3. **For each target, check the cache first** (TTL 14d configurable, category-level cache). If `--refresh` was passed in `$ARGUMENTS`, pass `--max-age-days 0` to force re-research of all categories. Split into two groups: `CACHED` and `MISSING`:
    ```bash
    for cat in <list of names>; do
      CACHED_PATH=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/analyze.py \
@@ -80,11 +80,42 @@ Before firing a new agent, **check the cache** (default TTL 14 days): if a recen
 
 6. If ALL pending categories fail (rare), the files are missing from `$RESEARCH_DIR` — `analyze.py` injects only the ones that exist, and the analyst's rule 14 directs using WebSearch as fallback for the rest.
 
-7. Now render the prompt **with** the `--research-dir`:
+7. Now render the prompt **with** the `--research-dir` and `--snapshot-sanitized`:
    ```bash
+   SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+   SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/analyze.py \
-     --snapshot "$SNAP" --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"
+     --snapshot "$SNAP" --snapshot-sanitized "$SNAP_SAN" \
+     --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"
    ```
+
+## Step 5.4 — IPCA fetch (BCB API)
+
+Fetch the latest IPCA (Brazilian CPI) for use in the analysis:
+
+```bash
+IPCA=$(python3 - <<'PY'
+import urllib.request, json, sys
+try:
+    url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/1?formato=json"
+    with urllib.request.urlopen(url, timeout=5) as r:
+        data = json.loads(r.read())[0]
+        print(f"{data['data']}={data['valor']}%")
+except Exception:
+    print("null")
+PY
+)
+echo "info|ipca|$IPCA" >&2
+```
+
+If the result is `null` (API unavailable or timeout), continue without it — do not block the analysis. If fetched, append to `$PROMPT_FILE`:
+```bash
+if [ "$IPCA" != "null" ]; then
+  echo "" >> "$PROMPT_FILE"
+  echo "## Macro context" >> "$PROMPT_FILE"
+  echo "- IPCA (latest): $IPCA (source: BCB, fetched live)" >> "$PROMPT_FILE"
+fi
+```
 
 ## Step 5.6 — Balance and forecast per account (base for the transfer plan)
 

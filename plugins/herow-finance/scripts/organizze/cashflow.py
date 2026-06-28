@@ -92,6 +92,13 @@ def per_account_projection(
     # 1) transactions_future filtered by main account_id
     for t in snapshot.get("transactions_future") or []:
         d = _parse_date(t.get("date"))
+        # Boleto guard: use vencimento_date if present
+        if t.get("vencimento_date"):
+            try:
+                venc_d = dt.date.fromisoformat(t["vencimento_date"][:10])
+                d = venc_d
+            except (ValueError, TypeError):
+                pass  # keep original d
         if d is None or d <= today or d > horizon:
             continue
         if t.get("credit_card_id") is not None:
@@ -199,12 +206,29 @@ def per_account_projection(
         s["critical_days"] = critical
         result_accounts.append(s)
 
+    # Build upcoming_obligations: high-value debits within horizon
+    upcoming_obligations: list[dict] = []
+    for aid_u, acc_u in accounts_by_id.items():
+        for ev in events.get(aid_u, []):
+            d_ev, amt_ev, desc_ev, kind_ev = ev
+            if amt_ev < -50000 and d_ev <= horizon:
+                upcoming_obligations.append({
+                    "date": d_ev.isoformat(),
+                    "description": desc_ev,
+                    "amount_cents": amt_ev,
+                    "account_id": aid_u,
+                    "account_name": acc_u.get("name"),
+                    "kind": kind_ev,
+                })
+    upcoming_obligations.sort(key=lambda x: x["date"])
+
     return {
         "threshold_cents": threshold_cents,
         "horizon_end": horizon.isoformat(),
         "accounts": result_accounts,
         "card_payment_map": {str(k): v for k, v in card_map.items()},
         "unmapped_cards": unmapped_cards,
+        "upcoming_obligations": upcoming_obligations,
     }
 
 

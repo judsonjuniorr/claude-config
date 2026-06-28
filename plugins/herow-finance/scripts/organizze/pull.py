@@ -3,6 +3,7 @@
 
 Usage:
   pull.py --out PATH [--history-days N] [--future-days N]
+  pull.py --re-enrich-only PATH
 
 Reads credentials from ~/finance/organizze/.auth (ORGANIZZE_EMAIL,
 ORGANIZZE_TOKEN, ORGANIZZE_USER_AGENT). Stdlib only.
@@ -11,19 +12,26 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import datetime as dt
 import json
 import pathlib
 import statistics
 import sys
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Optional
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from _paths import HOME, AUTH, CACHE, migrate_legacy  # noqa: E402
 
 migrate_legacy()
+
+_SCRIPTS_DIR = pathlib.Path(__file__).parent
+_ENRICHMENT_RULES_PATH = _SCRIPTS_DIR / "enrichment_rules.yaml"
+_ENRICHMENT_MTIME_PATH = HOME / ".enrichment-mtime"
 
 API = "https://api.organizze.com.br/rest/v2"
 
@@ -126,7 +134,7 @@ def compute_account_balances(
     credit_card_ids: set[int],
     email: str, token: str, ua: str,
     lookback_years: int = 5,
-) -> dict[int, int]:
+) -> tuple[dict[int, int], list[dict]]:
     """Balance per account = sum(paid transactions, account_id, NOT card), in cents.
 
     The /accounts API does not return balance. We reconstruct it by summing the
@@ -134,10 +142,15 @@ def compute_account_balances(
     accounts that are actually cards (account_id ∈ credit_card_ids).
     Supports manual offset in ~/finance/organizze/balances.json:
         {"<account_id>": <offset_cents>}  # added to the calculated value
+
+    Returns:
+        Tuple of (balances_dict, all_transactions_5y) where all_transactions_5y
+        is the flat list of all transactions fetched (deduplicated by id).
     """
     today = dt.date.today()
     start = today.replace(year=today.year - lookback_years)
     sums: dict[int, int] = {a["id"]: 0 for a in accounts if "id" in a}
+    all_txs: dict[int, dict] = {}  # deduplicated by id
     for (a, b) in month_ranges(start, today):
         rows = http_get("/transactions", {"start_date": iso(a), "end_date": iso(b)}, email, token, ua)
         if not isinstance(rows, list):
@@ -145,6 +158,9 @@ def compute_account_balances(
         for t in rows:
             if not isinstance(t, dict):
                 continue
+            # Accumulate ALL transactions for is_recurring detection
+            if "id" in t:
+                all_txs[t["id"]] = t
             if not t.get("paid"):
                 continue
             if t.get("credit_card_id") is not None:
@@ -165,7 +181,7 @@ def compute_account_balances(
                     pass
         except Exception as e:
             print(f"warn|balances-offset|{e}", file=sys.stderr)
-    return sums
+    return sums, list(all_txs.values())
 
 
 def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[int]:
@@ -205,6 +221,216 @@ def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[in
                 if "id" in t:
                     recurring.add(t["id"])
     return recurring
+
+
+def _load_yaml_simple(path: pathlib.Path) -> dict:
+    """Minimal YAML parser for simple key: value, list, and nested dict structures."""
+    if not path.exists():
+        return {}
+    result: dict = {}
+    current_key: Optional[str] = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip())
+        if indent == 0:
+            if ":" not in stripped:
+                continue
+            idx = stripped.index(":")
+            key = stripped[:idx].strip().strip('"').strip("'")
+            rest = stripped[idx + 1:].strip()
+            if "#" in rest:
+                rest = rest[:rest.index("#")].strip()
+            if rest == "" or rest == "{}":
+                current_key = key
+                result.setdefault(key, {})
+            elif rest == "[]":
+                current_key = key
+                result[key] = []
+            else:
+                current_key = key
+                val_raw = rest.strip('"').strip("'")
+                try:
+                    result[key] = float(val_raw) if "." in val_raw else int(val_raw)
+                except ValueError:
+                    result[key] = val_raw
+        else:
+            if current_key is None:
+                continue
+            if stripped.startswith("- "):
+                val = stripped[2:].strip().strip('"').strip("'")
+                if not isinstance(result.get(current_key), list):
+                    result[current_key] = []
+                result[current_key].append(val)
+            elif ":" in stripped:
+                idx = stripped.index(":")
+                k = stripped[:idx].strip().strip('"').strip("'")
+                v = stripped[idx + 1:].strip().strip('"').strip("'")
+                if not isinstance(result.get(current_key), dict):
+                    result[current_key] = {}
+                result[current_key][k] = v
+    return result
+
+
+def _normalize_desc(text: str) -> str:
+    """NFKD normalize, strip digits, lowercase — for recurring detection."""
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    text = "".join(c for c in text if not c.isdigit())
+    return " ".join(text.split())
+
+
+def detect_recurring_from_history(
+    transactions_5y: list[dict],
+    target_transactions: list[dict],
+    threshold_pct: int = 10,
+    min_months: int = 3,
+) -> set[int]:
+    """Mark transactions as recurring using 5-year history.
+
+    Same description, ≥min_months consecutive calendar months,
+    amount variation within ±threshold_pct%.
+
+    Cold start: when fewer than min_months of consecutive history available,
+    returns empty set (silent).
+
+    Args:
+        transactions_5y: Full 5-year transaction history for detection.
+        target_transactions: Transactions to mark as recurring (subset of history).
+        threshold_pct: Max allowed amount variation percentage (default 10%).
+        min_months: Minimum consecutive months required (default 3).
+
+    Returns:
+        Set of IDs from target_transactions that qualify as recurring.
+    """
+    if not transactions_5y or not target_transactions:
+        return set()
+
+    # Group by normalized description → {(year, month): [amounts]}
+    groups: dict[str, dict[tuple[int, int], list[float]]] = {}
+    for t in transactions_5y:
+        desc = (t.get("description") or "").strip()
+        if not desc:
+            continue
+        norm = _normalize_desc(desc)
+        if not norm:
+            continue
+        d_str = (t.get("date") or "")[:10]
+        try:
+            d = dt.date.fromisoformat(d_str)
+        except ValueError:
+            continue
+        amt = abs(float(t.get("amount_cents") or 0))
+        if norm not in groups:
+            groups[norm] = {}
+        key = (d.year, d.month)
+        groups[norm].setdefault(key, []).append(amt)
+
+    # Find recurring groups: ≥min_months consecutive months, low variation
+    recurring_descs: set[str] = set()
+    for norm, month_map in groups.items():
+        if len(month_map) < min_months:
+            continue
+        # Find longest consecutive run
+        months_set = set(month_map.keys())
+        max_run = 0
+        for (y, m) in months_set:
+            # Only start counting from the beginning of a run
+            py, pm = (y, m - 1) if m > 1 else (y - 1, 12)
+            if (py, pm) in months_set:
+                continue
+            run = 0
+            cy, cm = y, m
+            while (cy, cm) in months_set:
+                run += 1
+                if cm == 12:
+                    cy, cm = cy + 1, 1
+                else:
+                    cy, cm = cy, cm + 1
+            max_run = max(max_run, run)
+
+        if max_run < min_months:
+            continue
+
+        # Check amount variation across all months
+        all_amounts: list[float] = []
+        for amounts in month_map.values():
+            all_amounts.extend(amounts)
+        if not all_amounts:
+            continue
+        median_amt = statistics.median(all_amounts)
+        if median_amt == 0:
+            continue
+        variation = (max(all_amounts) - min(all_amounts)) / median_amt
+        if variation <= threshold_pct / 100.0:
+            recurring_descs.add(norm)
+
+    if not recurring_descs:
+        return set()
+
+    # Return IDs from target_transactions whose normalized desc is in recurring_descs
+    result: set[int] = set()
+    for t in target_transactions:
+        desc = (t.get("description") or "").strip()
+        if not desc:
+            continue
+        norm = _normalize_desc(desc)
+        if norm in recurring_descs and "id" in t:
+            result.add(t["id"])
+    return result
+
+
+def enrich_transactions(
+    transactions: list[dict],
+    all_transactions_5y: list[dict],
+    threshold_pct: int = 10,
+    min_months: int = 3,
+) -> list[dict]:
+    """Enrich transactions with is_recurring, is_installment, pix_income_confidence.
+
+    Pure function — does not make API calls. Uses 5-year history for recurring detection.
+
+    Args:
+        transactions: Transactions to enrich (typically tx_past).
+        all_transactions_5y: Full 5-year transaction history for recurring detection.
+        threshold_pct: Amount variation threshold for recurring detection.
+        min_months: Minimum consecutive months for recurring detection.
+
+    Returns:
+        New list with enriched transaction dicts (deep copy — does not mutate input).
+    """
+    result = copy.deepcopy(transactions)
+
+    # Recurring detection using 5-year history
+    history = all_transactions_5y if all_transactions_5y else []
+    recurring_ids = detect_recurring_from_history(history, result, threshold_pct, min_months)
+
+    # Count description appearances in current batch for PIX confidence
+    desc_counts: dict[str, int] = {}
+    for t in result:
+        if int(t.get("amount_cents") or 0) > 0:
+            desc = (t.get("description") or "").strip().lower()
+            if desc:
+                desc_counts[desc] = desc_counts.get(desc, 0) + 1
+
+    for t in result:
+        t_id = t.get("id")
+        t["is_recurring"] = t_id in recurring_ids if t_id is not None else False
+        t["is_installment"] = int(t.get("total_installments") or 1) > 1
+        amt = int(t.get("amount_cents") or 0)
+        if amt > 0:
+            desc = (t.get("description") or "").strip().lower()
+            if "pix" in desc:
+                if desc_counts.get(desc, 0) >= 3:
+                    t["pix_income_confidence"] = 0.9
+                else:
+                    t["pix_income_confidence"] = 0.8
+            else:
+                t["pix_income_confidence"] = 0.0
+        else:
+            t["pix_income_confidence"] = 0.0
+
+    return result
 
 
 def is_principal_account(a: dict) -> bool:
@@ -328,7 +554,6 @@ def build_installments(snapshot: dict) -> list[dict]:
     Key: (normalized description, total_installments). Shows progress, average
     installment amount, how much is left, and expected end date.
     """
-    today = dt.date.today()
     bag: dict[tuple[str, int], list[dict]] = {}
     for t in (snapshot.get("transactions_past") or []) + (snapshot.get("transactions_future") or []):
         total = int(t.get("total_installments") or 1)
@@ -397,12 +622,66 @@ def build_installments(snapshot: dict) -> list[dict]:
 
 # --- main ------------------------------------------------------------------
 
+def _check_enrichment_mtime() -> bool:
+    """Return True if enrichment_rules.yaml has been modified since last run."""
+    if not _ENRICHMENT_RULES_PATH.exists():
+        return False
+    current_mtime = str(_ENRICHMENT_RULES_PATH.stat().st_mtime)
+    if not _ENRICHMENT_MTIME_PATH.exists():
+        return True  # First run — treat as changed
+    stored = _ENRICHMENT_MTIME_PATH.read_text().strip()
+    return stored != current_mtime
+
+
+def _update_enrichment_mtime() -> None:
+    if not _ENRICHMENT_RULES_PATH.exists():
+        return
+    current_mtime = str(_ENRICHMENT_RULES_PATH.stat().st_mtime)
+    try:
+        _ENRICHMENT_MTIME_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _ENRICHMENT_MTIME_PATH.write_text(current_mtime)
+    except Exception as e:
+        print(f"warn|enrichment-mtime-write|{e}", file=sys.stderr)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", default=None, help="Output snapshot path")
     ap.add_argument("--history-days", type=int, default=180)
     ap.add_argument("--future-days", type=int, default=90)
+    ap.add_argument(
+        "--re-enrich-only",
+        metavar="PATH",
+        default=None,
+        help="Read existing snapshot from PATH, re-apply enrichment rules, write back. No API calls.",
+    )
     args = ap.parse_args()
+
+    # --re-enrich-only: re-apply enrichment rules without API calls
+    if args.re_enrich_only:
+        snap_path = pathlib.Path(args.re_enrich_only)
+        if not snap_path.exists():
+            print(f"err|snapshot-missing|{snap_path}", file=sys.stderr)
+            return 1
+        try:
+            snapshot = json.loads(snap_path.read_text())
+        except Exception as e:
+            print(f"err|snapshot-parse|{e}", file=sys.stderr)
+            return 1
+        rules = _load_yaml_simple(_ENRICHMENT_RULES_PATH)
+        threshold_pct = int(rules.get("recurring_threshold_pct") or 10)
+        tx_past = snapshot.get("transactions_past") or []
+        all_txs_5y = tx_past  # best effort without 5y re-fetch
+        enriched = enrich_transactions(tx_past, all_txs_5y, threshold_pct=threshold_pct)
+        snapshot["transactions_past"] = enriched
+        snap_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))
+        print(f"ok|re-enriched|{snap_path}")
+        _update_enrichment_mtime()
+        return 0
+
+    if not args.out:
+        print("err|missing-arg|--out is required", file=sys.stderr)
+        return 2
 
     email, token, ua = load_auth()
     CACHE.mkdir(parents=True, exist_ok=True)
@@ -412,6 +691,10 @@ def main() -> int:
     future_end = today + dt.timedelta(days=args.future_days)
 
     print(f"info|pulling|history={args.history_days}d future={args.future_days}d", file=sys.stderr)
+
+    # CP2: Check enrichment_rules.yaml mtime
+    if _check_enrichment_mtime():
+        print("info|enrichment-reload|rules changed, re-applying enrichment on this run", file=sys.stderr)
 
     accounts_all = http_get("/accounts", None, email, token, ua) or []
     # active = not archived AND type defined (type=null indicates zombie/orphan account)
@@ -430,10 +713,12 @@ def main() -> int:
     print(f"info|credit_cards|{len(credit_cards)} active (ignored {len(credit_cards_all) - len(credit_cards)} archived)", file=sys.stderr)
 
     # Balances per account — calculated via long history (API does not return balance)
-    balances = compute_account_balances(accounts, credit_card_ids, email, token, ua)
+    # Now returns (balances_dict, all_transactions_5y)
+    balances, all_transactions_5y = compute_account_balances(accounts, credit_card_ids, email, token, ua)
     for a in accounts:
         a["_balance_cents"] = balances.get(a.get("id"), 0)
     print(f"info|balances|computed for {len(balances)} accounts", file=sys.stderr)
+    print(f"info|transactions_5y|{len(all_transactions_5y)} transactions in 5y history", file=sys.stderr)
 
     invoices: list[dict] = []
     for cc in credit_cards:
@@ -457,9 +742,16 @@ def main() -> int:
     tx_future = fetch_transactions(today + dt.timedelta(days=1), future_end, email, token, ua)
     print(f"info|transactions_future|{len(tx_future)}", file=sys.stderr)
 
-    recurring_ids = detect_recurring(tx_past)
-    for t in tx_past:
-        t["is_recurring"] = t.get("id") in recurring_ids
+    # Load enrichment config
+    rules = _load_yaml_simple(_ENRICHMENT_RULES_PATH)
+    threshold_pct = int(rules.get("recurring_threshold_pct") or 10)
+
+    # Use new 5-year history-based recurring detection + full enrichment
+    tx_past = enrich_transactions(tx_past, all_transactions_5y, threshold_pct=threshold_pct)
+    print(
+        f"info|recurring|{sum(1 for t in tx_past if t.get('is_recurring'))} recurring transactions detected",
+        file=sys.stderr,
+    )
 
     # Budgets: current month + next 2
     budgets: list[dict] = []
@@ -481,9 +773,11 @@ def main() -> int:
             budgets.append(b)
     print(f"info|budgets|{len(budgets)}", file=sys.stderr)
 
+    pulled_at = dt.datetime.now().isoformat(timespec="seconds")
     snapshot = {
         "meta": {
-            "pulled_at": dt.datetime.now().isoformat(timespec="seconds"),
+            "pulled_at": pulled_at,
+            "fetched_at": pulled_at,  # alias for compat
             "periodo": {"history_start": iso(past_start), "today": iso(today), "future_end": iso(future_end)},
         },
         "accounts": accounts,
@@ -494,9 +788,27 @@ def main() -> int:
         "transactions_future": tx_future,
         "budgets": budgets,
     }
+
+    # raw_installments: installment transactions for reference
+    snapshot["raw_installments"] = [
+        {
+            "id": t.get("id"),
+            "description": t.get("description"),
+            "installment": t.get("installment"),
+            "total_installments": t.get("total_installments"),
+            "amount_cents": t.get("amount_cents"),
+            "date": t.get("date"),
+        }
+        for t in tx_past
+        if int(t.get("total_installments") or 1) > 1
+    ]
+
     snapshot["installments"] = build_installments(snapshot)
     print(f"info|installments|{len(snapshot['installments'])} active installments", file=sys.stderr)
     snapshot["meta"]["totais"] = compute_totals(snapshot)
+
+    # Update enrichment mtime after successful enrichment
+    _update_enrichment_mtime()
 
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
