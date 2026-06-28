@@ -1,0 +1,19 @@
+# Organizze enrichment rules
+# categories: alias map Organizze display name -> canonical key
+categories:
+  "Alimentação": "alimentacao"
+  "Transporte": "transporte"
+  "Saúde": "saude"
+  "Lazer": "lazer"
+  "Educação": "educacao"
+
+# medical_keywords: description fragments that should be masked as [MEDICAL_EXPENSE]
+# Add keywords in lowercase; matching is case-insensitive substring
+medical_keywords: []
+
+# recurring_threshold_pct: amount variation threshold for is_recurring detection
+# Transactions qualify as recurring when amounts are within ±10% across 3+ consecutive months
+recurring_threshold_pct: 10
+
+# alert_threshold_pct: fire CP1 alert when category MTD > this % of historical average
+alert_threshold_pct: 120

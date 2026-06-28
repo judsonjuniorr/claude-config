@@ -17,6 +17,7 @@ Optional arguments (parse from `$ARGUMENTS`):
 - `--history-days N` (default 180)
 - `--future-days N` (default 90)
 - `--no-analyze` → only pull and save the snapshot, do not call the subagent
+- `--refresh` → force re-run of sanitize.py + compute.py even if recent outputs exist, then continue normally
 
 **Absolute paths**:
 - Global scripts (provider-agnostic): `${CLAUDE_PLUGIN_ROOT}/scripts/finance/`
@@ -35,7 +36,14 @@ Optional arguments (parse from `$ARGUMENTS`):
 
 ## Step 0 — Intent routing
 
-If `$ARGUMENTS` is empty or contains only flags (`--history-days`, `--future-days`, `--no-analyze`), go directly to Step 1 (normal analysis flow).
+If `$ARGUMENTS` is empty or contains only flags (`--history-days`, `--future-days`, `--no-analyze`, `--refresh`), go directly to Step 1 (normal analysis flow).
+
+- **Longitudinal query** (`--compare-months N`): if `$ARGUMENTS` contains `--compare-months`, skip the full pipeline and run:
+  ```bash
+  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/compute.py \
+    --compare-months <N from argument, default 3>
+  ```
+  Print the output and stop. Do not run pull.py or analyze.py.
 
 If `$ARGUMENTS` contains natural language text, **do not run pull/analyze just to "have context"** — they are expensive (minutes) and exist only for the analysis flow. Classify:
 
@@ -93,7 +101,41 @@ Error handling:
 - `err|http-400|...` → User-Agent rejected. Check `~/finance/organizze/.auth` (field `ORGANIZZE_USER_AGENT`).
 - `err|network|...` → fail fast, report to the user.
 
+After pull.py runs successfully, print:
+```
+📅 Snapshot pulled at <meta.pulled_at>. Use --refresh to force re-sanitize.
+```
+
 **First run only:** after this pull, follow §Step 2.5 and §Step 2.7 of `organizze-onboarding.md` when their conditions hold (see Step 2 above).
+
+## Step 3.1 — Sanitize snapshot (PII removal)
+
+```bash
+SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/sanitize.py \
+  --snapshot "$SNAP" --out "$SNAP_SAN"
+```
+
+Reads `$SNAP`, tokenizes account IDs (replaces with `acct_<sha256[:8]>`), strips CPF/CNPJ patterns, masks medical descriptions as `[MEDICAL_EXPENSE]`. Saves to `$SNAP_SAN`. Map stored at `~/finance/organizze/.id-map.json`.
+
+On error: print the error and continue with `$SNAP_SAN` absent (analyze.py degrades gracefully when `--snapshot-sanitized` is not provided).
+
+If `--refresh` was passed in `$ARGUMENTS`, run sanitize.py unconditionally regardless of whether `$SNAP_SAN` already exists.
+
+## Step 3.2 — Compute deterministic metrics
+
+```bash
+SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
+if [ -f "$SNAP_SAN" ]; then
+  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/compute.py \
+    --snapshot "$SNAP_SAN" --out ~/finance/organizze/metrics.json
+fi
+```
+
+Writes `~/finance/organizze/metrics.json` with pre-computed burn, runway, category totals, and spending velocity alerts. `analyze.py` loads this inside `render_prompt` — no arithmetic by the LLM.
+
+If `--refresh` was passed in `$ARGUMENTS`, run compute.py unconditionally (pass `--out` to overwrite existing metrics.json).
 
 ## Step 3.5 — Web scraping (real values via raw Playwright per subagent)
 
@@ -117,7 +159,7 @@ PROMPT_FILE=~/finance/organizze/reports/$TS.prompt.md
 
 Do not invoke `analyze.py` yet — first we need to fire the research (Step 5.5) and then render the prompt with `--research-dir` pointing to it.
 
-`analyze.py` reads the snapshot + system prompt from `agents/financial-analyst.md` + injects `profile.md`, `memory.md`, `plans.md`, and the contents of `$RESEARCH_DIR` (pre-collected research) — returns a single prompt ready to deliver to the subagent.
+`analyze.py` reads the snapshot + system prompt from `agents/financial-analyst.md` + injects `profile.md`, `memory.md`, `plans.md`, and the contents of `$RESEARCH_DIR` (pre-collected research) — returns a single prompt ready to deliver to the subagent. It now also accepts `--snapshot-sanitized PATH` to use the PII-sanitized snapshot for the LLM prompt body.
 
 > **Pre-flight — personalization data.** Before rendering, check which global state files exist:
 > ```bash
@@ -143,6 +185,19 @@ Save the subagent's response to `$REPORT`.
 **Read `${CLAUDE_PLUGIN_ROOT}/resources/organizze-capture.md` and follow §Step 6.5 then §Step 6.6:**
 - **§Step 6.5** (optional) — offer to register new memory/restriction and a financial goal.
 - **§Step 6.6** — parse `$REPORT` for `[QUESTION]` lines and bring up to 3 to the user, saving answers to memory. If there are none, continue to Step 7.
+
+## Step 6.7 — Append to audit log
+
+```bash
+SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+METRICS=~/finance/organizze/metrics.json
+if [ -f "$METRICS" ]; then
+  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/audit_log.py \
+    --snapshot "$SNAP" --metrics "$METRICS"
+fi
+```
+
+Appends a JSONL entry to `~/finance/logs/YYYY-MM.jsonl`. Skips silently if the snapshot hash matches the last entry (duplicate run). Never fails fatally.
 
 ## Step 7 — Suggest budget updates
 

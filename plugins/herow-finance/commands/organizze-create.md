@@ -50,6 +50,16 @@ Leia o `info|resolve|...`, `info|category|...`, `info|dry-run|...` e `info|paylo
 
 > **Transferência:** `--de` é a conta de **origem** (de onde sai) e `--para` o **destino** (onde entra) — o script mapeia para `credit_account_id`/`debit_account_id` na direção certa da API. Confirme as duas contas no resumo antes do Apply.
 
+### Step 4.5 — Invalidate compute cache
+
+After a successful write, delete the cached metrics so the next `/finance:organizze` run recomputes fresh values:
+
+```bash
+rm -f ~/finance/organizze/metrics.json
+```
+
+This ensures the next analysis reflects the new transaction. Silent if the file doesn't exist.
+
 ### 5. Aviso de duplicata
 Se aparecer `info|duplicate|...`, mostre o lançamento existente que casou (id/data/valor) **antes** do confirm, para o usuário decidir se é repetição.
 

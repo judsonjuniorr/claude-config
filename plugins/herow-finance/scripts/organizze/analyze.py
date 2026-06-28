@@ -227,7 +227,11 @@ def category_delta(snapshot: dict) -> list[tuple[str, int, int, float]]:
     return rows[:10]
 
 
-def summarize(snapshot: dict) -> str:
+def summarize(
+    snapshot: dict,
+    include_budget: bool = True,
+    cashflow_snapshot: dict | None = None,
+) -> str:
     m = snapshot.get("meta", {})
     t = m.get("totais", {})
     accounts = snapshot.get("accounts") or []
@@ -443,7 +447,8 @@ def summarize(snapshot: dict) -> str:
     out.append("")
 
     # === Cash flow per account — daily projection + critical days ===
-    cf_block = render_cashflow_block(snapshot)
+    # Use cashflow_snapshot (raw) when provided to preserve account ID joins
+    cf_block = render_cashflow_block(cashflow_snapshot if cashflow_snapshot is not None else snapshot)
     if cf_block:
         out.append(cf_block)
         out.append("")
@@ -496,12 +501,11 @@ def summarize(snapshot: dict) -> str:
     out.append("")
     out.append(
         "Top 3 effective spending categories of the month (excluding invoice "
-        "payments). **For each one, you MUST run 1 `WebSearch` "
-        "looking for cheaper alternatives considering the `cidade` from "
-        "the user profile** (non-negotiable rule 14). Present the result "
-        "in the 'Market alternatives' section of the report with URL + price "
-        "found. If no reasonable alternative exists, mark "
-        "`(no alternative found)`."
+        "payments). Research for cheaper alternatives has been PRE-COLLECTED "
+        "by parallel `search-specialist` agents and is injected in the "
+        "'Market research (PRE-COLLECTED)' block above. **Consume that block** "
+        "in the 'Market alternatives' section. DO NOT invoke `WebSearch`. "
+        "If a category is missing from the block, note '(data unavailable)'."
     )
     out.append("")
     targets = top_categories_effective(snapshot, limit=3)
@@ -527,27 +531,28 @@ def summarize(snapshot: dict) -> str:
             out.append("")
     out.append("")
 
-    out.append("## Current month budget (targets vs. actuals)")
-    cur_key_y = today.year
-    cur_key_m = today.month
-    cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
-    rows = []
-    for b in snapshot.get("budgets") or []:
-        if b.get("_year") != cur_key_y or b.get("_month") != cur_key_m:
-            continue
-        name = cats.get(b.get("category_id")) or b.get("name") or "?"
-        budget = int(b.get("amount_in_cents") or b.get("amount_cents") or 0)
-        spent = int(b.get("total_in_cents") or b.get("total_cents") or 0)
-        if budget == 0 and spent == 0:
-            continue
-        pct = (spent / budget * 100.0) if budget else 0.0
-        rows.append((name, spent, budget, pct))
-    for name, spent, budget, pct in sorted(rows, key=lambda x: -x[3])[:15]:
-        out.append(
-            f"- {name}: {cents_to_brl(spent)} / {cents_to_brl(budget)} ({pct:.0f}%)"
-        )
-    if not rows:
-        out.append("- (no budget targets defined)")
+    if include_budget:
+        out.append("## Current month budget (targets vs. actuals)")
+        cur_key_y = today.year
+        cur_key_m = today.month
+        cats = {c.get("id"): c.get("name") for c in snapshot.get("categories") or []}
+        rows = []
+        for b in snapshot.get("budgets") or []:
+            if b.get("_year") != cur_key_y or b.get("_month") != cur_key_m:
+                continue
+            name = cats.get(b.get("category_id")) or b.get("name") or "?"
+            budget = int(b.get("amount_in_cents") or b.get("amount_cents") or 0)
+            spent = int(b.get("total_in_cents") or b.get("total_cents") or 0)
+            if budget == 0 and spent == 0:
+                continue
+            pct = (spent / budget * 100.0) if budget else 0.0
+            rows.append((name, spent, budget, pct))
+        for name, spent, budget, pct in sorted(rows, key=lambda x: -x[3])[:15]:
+            out.append(
+                f"- {name}: {cents_to_brl(spent)} / {cents_to_brl(budget)} ({pct:.0f}%)"
+            )
+        if not rows:
+            out.append("- (no budget targets defined)")
 
     return "\n".join(out)
 
@@ -727,7 +732,7 @@ def load_research_block(research_dir: pathlib.Path | None) -> str:
         try:
             mtime = dt.date.fromtimestamp(f.stat().st_mtime)
             age = (today - mtime).days
-            age_str = f"today" if age == 0 else f"{age}d ago"
+            age_str = "today" if age == 0 else f"{age}d ago"
             out.append(f"## {f.stem} _(collected on {mtime.isoformat()} · {age_str})_")
         except OSError:
             out.append(f"## {f.stem}")
@@ -784,11 +789,81 @@ def render_cashflow_block(snapshot: dict) -> str:
         return f"## Cash flow per account\n_(error computing projection: {e})_"
 
 
+def _render_metrics_block(metrics: dict) -> str:
+    """Format pre-computed metrics for LLM injection.
+
+    Args:
+        metrics: MetricsOutput dict from compute.py.
+
+    Returns:
+        Markdown block string.
+    """
+    out: list[str] = []
+    out.append("## Deterministic metrics (pre-computed — DO NOT recalculate)")
+    out.append("")
+    out.append(
+        "These values were computed by `compute.py` before this analysis. "
+        "Use them directly — do NOT recompute from the raw transactions."
+    )
+    out.append("")
+    out.append(f"- Monthly expenses: **{cents_to_brl(metrics.get('monthly_expenses_cents'))}**")
+    out.append(f"- Monthly income: **{cents_to_brl(metrics.get('monthly_income_cents'))}**")
+    out.append(f"- Liquid balance: **{cents_to_brl(metrics.get('liquid_balance_cents'))}**")
+    burn = metrics.get("burn_cents") or 0
+    burn_sign = "over" if burn > 0 else "under"
+    out.append(f"- Burn (expenses − income): **{cents_to_brl(burn)}** ({burn_sign}spending)")
+    runway = metrics.get("runway_days")
+    if runway is not None:
+        out.append(f"- Runway: **{runway} days** at current burn rate")
+    else:
+        out.append("- Runway: N/A (income ≥ expenses)")
+    out.append(f"  Formula: burn = expenses − income = {cents_to_brl(metrics.get('monthly_expenses_cents'))} − {cents_to_brl(metrics.get('monthly_income_cents'))}")
+    out.append("")
+
+    alerts = (metrics.get("meta") or {}).get("alerts") or []
+    out.append("## Spending velocity alerts")
+    if alerts:
+        for a in alerts:
+            out.append(
+                f"- ⚠️ {a['category']}: R$ {a['mtd_cents'] / 100:.2f} MTD vs "
+                f"R$ {a['historical_avg_cents'] / 100:.2f} avg "
+                f"({a['pct_over']:.0f}% over)"
+            )
+    else:
+        out.append("(no alerts)")
+    return "\n".join(out)
+
+
 def render_prompt(
-    snapshot: dict, framework_md: str, research_dir: pathlib.Path | None = None
-) -> str:
+    snapshot_raw: dict,
+    snapshot_sanitized: dict,
+    framework_md: str,
+    research_dir: pathlib.Path | None = None,
+) -> tuple[str, bool]:
     system = extract_system_prompt(framework_md)
-    summary = summarize(snapshot)
+
+    # Load metrics.json for pre-computed injection
+    metrics_path = pathlib.Path.home() / "finance" / "organizze" / "metrics.json"
+    metrics_loaded = False
+    metrics_block = ""
+    if metrics_path.exists():
+        try:
+            metrics = json.loads(metrics_path.read_text())
+            metrics_loaded = True
+            metrics_block = _render_metrics_block(metrics)
+        except Exception as e:
+            print(f"warn|metrics-load-failed|{e}", file=sys.stderr)
+            metrics_block = '```json\n{"data_quality_flags": ["METRICS_MISSING"]}\n```'
+    else:
+        metrics_block = '```json\n{"data_quality_flags": ["METRICS_MISSING"]}\n```'
+
+    # Use sanitized snapshot for the LLM body; raw snapshot for cashflow (account ID joins)
+    summary = summarize(
+        snapshot_sanitized,
+        include_budget=not metrics_loaded,
+        cashflow_snapshot=snapshot_raw,
+    )
+
     profile_block = load_profile_block()
     memory_block = load_memory_block()
     plans_block = load_plans_block()
@@ -797,17 +872,19 @@ def render_prompt(
     memory_section = f"\n---\n\n{memory_block}\n" if memory_block else ""
     plans_section = f"\n---\n\n{plans_block}\n" if plans_block else ""
     research_section = f"\n---\n\n{research_block}\n" if research_block else ""
+    metrics_section = f"\n---\n\n{metrics_block}\n" if metrics_block else ""
 
     # List of existing account names (for transfer guardrail)
+    # Use raw snapshot so real account names appear (not tokens)
     existing_accounts = [
         a.get("name")
-        for a in (snapshot.get("accounts") or [])
+        for a in (snapshot_raw.get("accounts") or [])
         if not a.get("archived") and a.get("type")
     ]
     accounts_hint = ", ".join(f"`{n}`" for n in existing_accounts if n) or "(none)"
 
-    return f"""{system}
-{profile_section}{memory_section}{plans_section}{research_section}
+    prompt = f"""{system}
+{profile_section}{memory_section}{plans_section}{research_section}{metrics_section}
 ---
 
 # Consolidated data (Organizze)
@@ -930,6 +1007,7 @@ Never propose something that contradicts user memory or creates a new account.
 
 End with the disclaimer: "This is not licensed financial advice."
 """
+    return prompt, metrics_loaded
 
 
 def main() -> int:
@@ -941,6 +1019,12 @@ def main() -> int:
     )
     ap.add_argument("--framework", default=str(DEFAULT_FRAMEWORK))
     ap.add_argument("--out", default=None)
+    ap.add_argument(
+        "--snapshot-sanitized",
+        default=None,
+        help="path to sanitized snapshot (output of sanitize.py); "
+        "sent to LLM prompt body instead of raw snapshot",
+    )
     ap.add_argument(
         "--research-dir",
         default=None,
@@ -977,11 +1061,17 @@ def main() -> int:
         )
         return 2
 
-    snap = json.loads(pathlib.Path(args.snapshot).read_text())
+    snap_raw = json.loads(pathlib.Path(args.snapshot).read_text())
 
     if args.list_targets:
-        sys.stdout.write(render_list_targets(snap) + "\n")
+        sys.stdout.write(render_list_targets(snap_raw) + "\n")
         return 0
+
+    # Load sanitized snapshot (falls back to raw if not provided)
+    if args.snapshot_sanitized and pathlib.Path(args.snapshot_sanitized).exists():
+        snap_san = json.loads(pathlib.Path(args.snapshot_sanitized).read_text())
+    else:
+        snap_san = snap_raw  # graceful degradation
 
     fw_path = pathlib.Path(args.framework)
     if fw_path.exists():
@@ -996,7 +1086,9 @@ def main() -> int:
         )
         fw = ""
     research_dir = pathlib.Path(args.research_dir) if args.research_dir else None
-    prompt = render_prompt(snap, fw, research_dir=research_dir)
+    prompt, metrics_loaded = render_prompt(snap_raw, snap_san, fw, research_dir=research_dir)
+    if not metrics_loaded:
+        print("warn|metrics-missing|budget fallback active", file=sys.stderr)
 
     if args.out:
         pathlib.Path(args.out).write_text(prompt)
