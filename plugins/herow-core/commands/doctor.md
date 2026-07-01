@@ -34,10 +34,16 @@ Doctor never installs silently. If **Run install/repair** is chosen, execute the
 1. **Confirm removals** (`AskUserQuestion`, one Yes per group) for each `remove|…` group detect found — OMEGA surfaces, loose duplicate `blueprint|quick|execute` commands/hooks, stray memory/token MCP servers. Nothing is removed without approval. Collect approved tokens (`omega`, `loose`, `stray:<key>`).
 2. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/ensure-deps.sh"` — installs missing deps; if it reports python3 < 3.10, stop and tell the user to upgrade before headroom.
 3. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` — gstack clone+setup, rtk/graphify verify, headroom install. Then **ask the headroom mode** (`AskUserQuestion`, all force telemetry OFF): **MCP tools (safe)** → `headroom-wrap.sh mcp`; **Durable init (Recommended)** → `headroom-wrap.sh init` (can break Pro/Max OAuth, backed up, needs restart); **Proxy wrap (legacy)** → `headroom-wrap.sh wrap`. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" <mode>`.
-4. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/token-guard.sh"` — safe defaults, no approval needed (`model: opusplan`, `advisorModel: opus`, `effortLevel: high`, `autoCompact: true`, removes any `CLAUDE_CODE_SUBAGENT_MODEL` pin).
-5. If Step 2.1 approved anything: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/remove.sh" <tokens…>` (writes `.bak`s).
-6. Confirm `herow-core` + `herow-dev` are enabled in `~/.claude/settings.json`; the 3 flow commands ship from herow-dev (`/herow-dev:blueprint|quick|execute`).
-7. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/verify.sh"` — show the `pass|…`/`fail|…` records and the `summary|…` line.
+4. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/token-guard.sh"` — safe defaults, no approval needed (`model: opusplan`, `advisorModel: opus`, `effortLevel: high`, `autoCompact: true`, removes any `CLAUDE_CODE_SUBAGENT_MODEL` pin, pins `ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-4-8` and `ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5`).
+5. **Model pin picker** — lets the user choose which Opus and Sonnet to pin for `opusplan` (overrides the safe defaults written by token-guard above):
+   1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup/model-pin.py" --list`. Parse the output lines (`family|id|label`); split into `opus` and `sonnet` candidate **model IDs** (3 each, most recent first). Only these exact IDs are valid choices — never substitute free text.
+   2. `AskUserQuestion` — "Which **Opus** model should `opusplan` use in plan mode?" Options: the 3 opus candidates (mark first as "(Recommended)").
+   3. `AskUserQuestion` — "Which **Sonnet** model should `opusplan` use in execution mode?" Options: the 3 sonnet candidates (mark first as "(Recommended)").
+   4. Before running anything, verify each chosen value is an **exact, unmodified match** to one of the IDs parsed in step 1 — never interpolate a value that wasn't in that list. Dry-run with each value **quoted**: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup/model-pin.py" --apply --opus "<chosen-opus-id>" --sonnet "<chosen-sonnet-id>" --dry-run`. Show the diff. Then `AskUserQuestion` — **Confirm apply?** Proceed only on Yes.
+   5. On Yes: run the same quoted command without `--dry-run`. Report the `.bak` path printed. `model-pin.py` itself checks the installed Claude Code version against each model's minimum (e.g. Sonnet 5 needs ≥ v2.1.197) and falls back or skips the pin with a `warn|…` line if the version is too old — surface that warning to the user if it appears, and suggest `claude update`.
+6. If Step 2.1 approved anything: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/remove.sh" <tokens…>` (writes `.bak`s).
+7. Confirm `herow-core` + `herow-dev` are enabled in `~/.claude/settings.json`; the 3 flow commands ship from herow-dev (`/herow-dev:blueprint|quick|execute`).
+8. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/verify.sh"` — show the `pass|…`/`fail|…` records and the `summary|…` line.
 
 Then continue to Step 3. (If the user chose **Audit only**, skip straight to Step 3.)
 

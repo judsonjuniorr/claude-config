@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0.0] - 2026-06-30
+
+### Added
+- `model-pin.py` — new `scripts/setup/` CLI that lists and pins `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` in `~/.claude/settings.json`. `--list` queries the Anthropic Models API live (top 3 per family, sorted by release date; falls back to a static list when `ANTHROPIC_API_KEY` is absent, the API is unreachable, or a live response only covers one family). `--apply [--opus <id>] [--sonnet <id>]` writes idempotently with an atomic tmp+`os.replace` and a timestamped `.bak` (skipped gracefully when no prior settings.json exists), preserving the original file's permissions; `--dry-run` shows the diff without writing. Rejects a value that doesn't match its family (e.g. a Sonnet ID passed to `--opus`), and checks the installed Claude Code version against each model's minimum before pinning it — falling back (or skipping the pin) with a `warn|…` line when the version is too old, since Sonnet 5 requires Claude Code ≥ v2.1.197 and Opus 4.8 requires ≥ v2.1.154.
+- `/herow-core:doctor` Step 2.5 — **interactive model pin picker**: after `token-guard.sh` applies safe defaults, doctor presents two `AskUserQuestion` prompts (one for Opus, one for Sonnet) showing the 3 most recent models from each family, exact-matched against `--list` output and passed through quoted to `model-pin.py --apply` behind a dry-run diff + confirm gate.
+- `verify.sh` — two new assertions: `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` must be set to a `claude-opus-*` / `claude-sonnet-*` id in `settings.json` env.
+
+### Changed
+- `token-guard.sh` — after applying top-level defaults (`model: opusplan`, `advisorModel: opus`, `effortLevel: high`, `autoCompact: true`), now calls `model-pin.py --apply --opus claude-opus-4-8 --sonnet claude-sonnet-5` (with an exit-code check) so that reinstalling the plugin always guarantees Sonnet 5 / Opus 4.8 pins exist, or falls back cleanly on an older Claude Code. The doctor picker can override these after the fact.
+- `~/.claude/settings.json` (live config) — added `ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-4-8` and `ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5` to the `env` block, guaranteeing the `opusplan` alias's model halves regardless of future alias drift.
+
+### Known risks (accepted)
+- `model-pin.py` has no automated test suite yet (0% coverage on ship review) — a future change to the version-gate, family-validation, or atomic-write logic could regress silently. Accepted for this release; a `scripts/setup/tests/test_model_pin.py` following the existing `doctor/tests/` pattern is a good follow-up.
+- No file locking around the settings.json read-modify-write in `model-pin.py` — concurrent `--apply` invocations could last-writer-wins clobber each other. Low risk for a single-user CLI tool.
+
 ## [0.1.4.0] - 2026-06-22
 
 ### Added

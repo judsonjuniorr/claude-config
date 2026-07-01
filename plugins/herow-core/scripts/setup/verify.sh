@@ -43,6 +43,12 @@ ck autocompact \
 ck subagent-model \
   'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); sys.exit(0 if not (s.get(\"env\",{}) or {}).get(\"CLAUDE_CODE_SUBAGENT_MODEL\") else 1)" 2>/dev/null' \
   "no subagent-model pin (inherits default)" "CLAUDE_CODE_SUBAGENT_MODEL still pinned"
+ck default-opus-model \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); v=(s.get(\"env\",{}) or {}).get(\"ANTHROPIC_DEFAULT_OPUS_MODEL\",\"\"); sys.exit(0 if v.startswith(\"claude-opus-\") else 1)" 2>/dev/null' \
+  "ANTHROPIC_DEFAULT_OPUS_MODEL pinned" "ANTHROPIC_DEFAULT_OPUS_MODEL not set to a claude-opus-* id in settings.json env"
+ck default-sonnet-model \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); v=(s.get(\"env\",{}) or {}).get(\"ANTHROPIC_DEFAULT_SONNET_MODEL\",\"\"); sys.exit(0 if v.startswith(\"claude-sonnet-\") else 1)" 2>/dev/null' \
+  "ANTHROPIC_DEFAULT_SONNET_MODEL pinned" "ANTHROPIC_DEFAULT_SONNET_MODEL not set to a claude-sonnet-* id in settings.json env"
 
 emit summary "${PASS} passed / ${FAIL} failed" "$([ "$FAIL" -eq 0 ] && echo all-green || echo review-fails)"
 exit 0
