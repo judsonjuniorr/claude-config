@@ -66,3 +66,11 @@ if any(v == "set" for _, v in changes):
 for key, status in changes:
     print("ok|%s|%s" % (key, status))
 PY
+
+# Apply model pins (idempotent, safe defaults — doctor picker can override).
+# model-pin.py version-gates claude-sonnet-5/claude-opus-4-8 itself and falls
+# back when the installed Claude Code is too old.
+python3 "${HERE}/model-pin.py" --apply \
+  --opus claude-opus-4-8 \
+  --sonnet claude-sonnet-5 \
+  || { echo "err|token-guard|model-pin apply failed"; exit 1; }
