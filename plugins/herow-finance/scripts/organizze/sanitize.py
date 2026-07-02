@@ -158,6 +158,13 @@ def sanitize_snapshot(snapshot: dict, id_map: dict) -> dict:
 
     result = copy.deepcopy(snapshot)
 
+    # Scrape reconciliation debug fields carry raw, untokenized account names and
+    # transaction descriptions (apply_scrape.py's unreconciled-item labels bypass
+    # sanitize entirely). Nothing downstream (analyze.py) reads them — drop them
+    # rather than let raw text leak into the file meant to be safe for LLM consumption.
+    result.pop("_scrape_meta", None)
+    result.pop("_scrape_unreconciled", None)
+
     def _get_or_create_token(numeric_id: int) -> str:
         key = str(numeric_id)
         if key not in id_map:

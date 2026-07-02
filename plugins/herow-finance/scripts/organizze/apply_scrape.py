@@ -6,6 +6,9 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from pull import compute_totals  # noqa: E402
+
 
 def normalize_name(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower())
@@ -207,6 +210,11 @@ def main() -> None:
             "transactions": unrec_txs,
             "invoices": unrec_invoices,
         }
+
+    # Recompute meta.totais from the now-reconciled accounts/transactions/invoices —
+    # pull.py only computes this once, at pull time, so without this it stays frozen
+    # at pre-scrape values forever, no matter how often the snapshot is re-sanitized.
+    snapshot.setdefault("meta", {})["totais"] = compute_totals(snapshot)
 
     # Backup before writing
     bak_path = snap_path.with_suffix(".json.bak")

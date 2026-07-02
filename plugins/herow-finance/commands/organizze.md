@@ -139,7 +139,7 @@ If `--refresh` was passed in `$ARGUMENTS`, run compute.py unconditionally (pass 
 
 ## Step 3.5 — Web scraping (real values via raw Playwright per subagent)
 
-Enrich the snapshot with real scraped values. **Read `${CLAUDE_PLUGIN_ROOT}/resources/organizze-scrape.md` and follow it** (Steps 3.5a–3.5d). If scraping fails at any point, it degrades silently to API-only (snapshot remains; a WARN line is added at the start of the Step 8 report) and you continue at Step 4.
+Enrich the snapshot with real scraped values. **Read `${CLAUDE_PLUGIN_ROOT}/resources/organizze-scrape.md` and follow it** (Steps 3.5a–3.5e). If scraping fails at any point, it degrades silently to API-only (snapshot remains; a WARN line is added at the start of the Step 8 report) and you continue at Step 4. Step 3.5e re-runs sanitize.py + compute.py so the sanitized snapshot and metrics.json reflect the scraped values, not the pre-scrape ones from Steps 3.1/3.2.
 
 ---
 
