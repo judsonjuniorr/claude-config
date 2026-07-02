@@ -77,3 +77,28 @@ def test_no_raw_account_id_in_prompt_body():
     result = sanitize_snapshot(snapshot, id_map={})
     result_str = json.dumps(result)
     assert str(raw_id) not in result_str
+
+
+def test_scrape_debug_fields_stripped():
+    """Regression guard: apply_scrape.py writes _scrape_unreconciled with raw,
+    untokenized account names and transaction descriptions that bypass every
+    sanitize_snapshot() PII path (CPF/CNPJ stripping, medical masking, account
+    tokenization) — nothing downstream reads these fields, so drop them rather
+    than let raw text leak into the file meant to be safe for LLM consumption.
+    """
+    snapshot = {
+        "transactions_past": [],
+        "transactions_future": [],
+        "accounts": [],
+        "credit_cards": [],
+        "categories": [],
+        "_scrape_meta": {"applied_at": "2026-07-01T23:13:57", "slices": ["dashboard"], "warn": True},
+        "_scrape_unreconciled": {
+            "accounts": ["Conta Pessoal João 123.456.789-00"],
+            "transactions": ["2026-07-09|Consulta Dra. Silva - Psiquiatria"],
+            "invoices": [],
+        },
+    }
+    result = sanitize_snapshot(snapshot, id_map={})
+    assert "_scrape_meta" not in result
+    assert "_scrape_unreconciled" not in result
