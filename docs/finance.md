@@ -55,12 +55,20 @@ plugins/herow-finance/
     │   ├── suggest_budgets.py   # budget suggestions for current + next month
     │   ├── apply_budgets.py     # write budget limits to the web app via Playwright
     │   ├── analyze.py           # snapshot + memory + plans + framework → subagent prompt
+    │   ├── sanitize.py          # PII removal (CPF/CNPJ, medical, account tokenization) → LLM-safe snapshot
+    │   ├── compute.py           # deterministic metrics engine, reads sanitized snapshot
+    │   ├── audit_log.py         # append-only JSONL log of analysis runs (~/finance/logs/)
+    │   ├── enrichment_rules.yaml # category alias map + medical-keyword list (used by sanitize.py/compute.py)
     │   ├── organizze_login.py   # Playwright headless login → .session (storageState)
     │   ├── scrape_slice.py      # scraper for 1 slice (dashboard | tx | invoice)
-    │   ├── apply_scrape.py      # consolidates scrape/*.json into the snapshot (surgical override)
+    │   ├── apply_scrape.py      # consolidates scrape/*.json into the snapshot, recomputes meta.totais (surgical override)
     │   └── tests/
-    │       ├── test_apply_scrape.py  # 13 merge/match/idempotency tests
-    │       └── test_create.py        # 44 write-path tests (no network)
+    │       ├── test_apply_scrape.py  # 15 merge/match/idempotency/meta.totais-recompute tests
+    │       ├── test_sanitize.py      # PII-removal + scrape-debug-field-stripping tests
+    │       ├── test_compute.py       # deterministic metrics tests
+    │       ├── test_audit_log.py     # audit log append/dedup tests
+    │       ├── test_enrichment.py    # category/medical enrichment rule tests
+    │       └── test_create.py        # 54 write-path tests (no network)
     └── contabilizei/            # Contabilizei provider (NF registration)
         ├── _creds.sh            # shared helpers (sourced)
         ├── setup.sh             # idempotent setup + pdfplumber install
