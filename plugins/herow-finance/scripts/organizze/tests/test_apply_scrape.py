@@ -269,6 +269,29 @@ class TestShadowPaths(unittest.TestCase):
             self.assertIn("_scrape_meta", result)
             self.assertEqual(len(result["_scrape_meta"]["slices"]), 3)
 
+    def test_meta_totais_recomputed_from_scraped_balance(self):
+        # meta.totais is written once by pull.py at pull time. Regression guard for
+        # the bug where apply_scrape.py updated per-account _balance_cents but left
+        # the aggregate saldo_cents frozen at its stale pre-scrape value forever.
+        snap = _snap(
+            accounts=[{"id": 1, "name": "Conta", "type": "checking", "_balance_cents": 10000}],
+            meta={"totais": {"saldo_cents": 10000, "saldo_proj_7d_cents": 10000,
+                              "saldo_proj_30d_cents": 10000, "saldo_proj_90d_cents": 10000}},
+        )
+        scrape = {"_filename": "dashboard.json", "type": "dashboard",
+                   "accounts": [{"name": "Conta", "balance_cents": 55000}]}
+        result, _out = self._run_apply(snap, [scrape])
+        self.assertEqual(result["accounts"][0]["_balance_cents"], 55000)
+        self.assertEqual(result["meta"]["totais"]["saldo_cents"], 55000)
+
+    def test_meta_totais_recompute_handles_missing_meta_key(self):
+        snap = _snap(accounts=[{"id": 1, "name": "Conta", "type": "checking", "_balance_cents": 0}])
+        self.assertNotIn("meta", snap)
+        scrape = {"_filename": "dashboard.json", "type": "dashboard",
+                   "accounts": [{"name": "Conta", "balance_cents": 4200}]}
+        result, _out = self._run_apply(snap, [scrape])
+        self.assertEqual(result["meta"]["totais"]["saldo_cents"], 4200)
+
 
 class TestMalformedScrape(unittest.TestCase):
     def test_malformed_json_exits_with_error(self):
