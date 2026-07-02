@@ -144,12 +144,29 @@ python3 "$SCRIPTS/apply_scrape.py" --snapshot "$SNAP"
 ```
 
 Output:
-- `ok|applied|...` → snapshot updated with web values. Continue.
-- `warn|unreconciled|...` → partially applied. Continue but note in the report: "Some items not reconciled — see `_scrape_unreconciled` in the snapshot."
-- `err|...` → **degrade to API-only** with WARN.
+- `ok|applied|...` → snapshot updated with web values. Continue to 3.5e.
+- `warn|unreconciled|...` → partially applied. Continue to 3.5e, but note in the report: "Some items not reconciled — see `_scrape_unreconciled` in the snapshot."
+- `err|...` → **degrade to API-only** with WARN. Skip 3.5e.
 
 **Degradation WARN** (any failure in this step 3.5): add this line at the start of the final report (Step 8):
 
 ```
 ⚠️ WEB SCRAPING: [reason] — analysis based on estimated API values.
 ```
+
+## 3.5e — Refresh sanitized snapshot & metrics (required after any successful reconciliation)
+
+`apply_scrape.py` mutates the **raw** snapshot (`$SNAP`) in place — including recomputing `meta.totais` (current balance, +7/30/90d projections) from the reconciled accounts/transactions/invoices, so the headline balance no longer stays frozen at its pull-time value. But `$SNAP_SAN` (from Step 3.1) and `metrics.json` (from Step 3.2) were already generated **before** scraping ran — they still hold pre-scrape API values. `analyze.py`'s main data body reads `$SNAP_SAN`, while `balance_on.py` (Step 5.6) reads `$SNAP` directly — without this refresh, the same report can show two different balances for the same account (e.g. the "Consolidated data" block vs. the "Balance and forecast per account" tables). Re-run both, exactly as in Steps 3.1/3.2, so every downstream step reads consistent, reconciled numbers:
+
+```bash
+SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/sanitize.py \
+  --snapshot "$SNAP" --out "$SNAP_SAN"
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/compute.py \
+  --snapshot "$SNAP_SAN" --out ~/finance/organizze/metrics.json
+```
+
+Steps 3.1/3.2 have no caching or freshness check of their own — they always run unconditionally. Run this refresh unconditionally too, whenever apply_scrape.py returned `ok|applied|...` or `warn|unreconciled|...`, regardless of whether `--refresh` was passed in `$ARGUMENTS` (that flag controls a separate concern: bypassing the Step 5.5 market-research cache).
+
+On error in either command: print the error and continue with whatever `$SNAP_SAN`/`metrics.json` already exists from Steps 3.1/3.2 (same degrade-gracefully behavior as those steps) — do not block the analysis.
