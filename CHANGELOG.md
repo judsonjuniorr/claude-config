@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1.0] - 2026-07-02
+
+### Fixed
+- `herow-finance` `/finance:organizze` — the balance-scraping reconciliation step (`apply_scrape.py`) mutated the raw Organizze snapshot in place, but the PII-sanitized snapshot and `metrics.json` that the analysis prompt and deterministic metrics actually read were generated *before* scraping ran. A run that corrected a balance via scraping could show two different numbers for the same account in the same report — the per-account breakdown fresh from scraping, the analysis narrative stale from before it. New `organizze-scrape.md` Step 3.5e re-runs `sanitize.py` + `compute.py` after any successful (or partially successful) scrape reconciliation, so every downstream step reads the same reconciled numbers.
+- `apply_scrape.py` — the headline "Current balance" and +7/30/90-day projections (`meta.totais`) were computed once by `pull.py` at pull time and never recomputed afterward, so they stayed frozen at pre-scrape values even after Step 3.5e's refresh. `apply_scrape.py` now recomputes `meta.totais` from the reconciled accounts/transactions/invoices before writing the snapshot back.
+- `sanitize.py` — the scrape reconciliation debug fields (`_scrape_meta`, `_scrape_unreconciled`) carried raw, untokenized account names and transaction descriptions that bypassed every PII-removal path (CPF/CNPJ stripping, medical masking, account tokenization). Nothing downstream reads these fields, so `sanitize_snapshot()` now drops them instead of letting raw text leak into the file meant to be safe for LLM consumption.
+
 ## [0.2.0.0] - 2026-06-30
 
 ### Added
