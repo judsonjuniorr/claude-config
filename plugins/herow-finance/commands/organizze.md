@@ -1,7 +1,7 @@
 ---
-description: (herow) Pulls data from Organizze via REST API and generates a consolidated financial analysis (balance, projection, recommendations).
-allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, mcp__playwright__browser_navigate, mcp__playwright__browser_close, mcp__playwright__browser_snapshot
-argument-hint: "[<free text> | --history-days N | --future-days N | --no-analyze]"
+description: (herow) Pulls data from Organizze via REST API and generates a consolidated financial analysis (balance, projection, recommendations), then renders an interactive HTML dashboard artifact.
+allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, Artifact, mcp__playwright__browser_navigate, mcp__playwright__browser_close, mcp__playwright__browser_snapshot
+argument-hint: "[<free text> | --history-days N | --future-days N | --no-analyze | --lang en|pt-br]"
 effort: medium
 ---
 
@@ -18,6 +18,7 @@ Optional arguments (parse from `$ARGUMENTS`):
 - `--future-days N` (default 90)
 - `--no-analyze` → only pull and save the snapshot, do not call the subagent
 - `--refresh` → force re-run of sanitize.py + compute.py even if recent outputs exist, then continue normally
+- `--lang en|pt-br` → language of the Step 9 interactive artifact. Forgiving parse: accept `en`/`english` and `pt-br`/`ptbr`/`pt` (case-insensitive); an invalid value falls back to the prompt. Overrides **and** persists the remembered choice (`config.py set organizze_artifact_lang`)
 
 **Absolute paths**:
 - Global scripts (provider-agnostic): `${CLAUDE_PLUGIN_ROOT}/scripts/finance/`
@@ -36,7 +37,7 @@ Optional arguments (parse from `$ARGUMENTS`):
 
 ## Step 0 — Intent routing
 
-If `$ARGUMENTS` is empty or contains only flags (`--history-days`, `--future-days`, `--no-analyze`, `--refresh`), go directly to Step 1 (normal analysis flow).
+If `$ARGUMENTS` is empty or contains only flags (`--history-days`, `--future-days`, `--no-analyze`, `--refresh`, `--lang`), go directly to Step 1 (normal analysis flow).
 
 - **Longitudinal query** (`--compare-months N`): if `$ARGUMENTS` contains `--compare-months`, skip the full pipeline and run:
   ```bash
@@ -267,6 +268,112 @@ Print in chat, in this order:
    ```
 
 Do not invent numbers. If the subagent does not cover any field in "Key numbers", mark `(no data)` instead of guessing.
+
+---
+
+## Step 9 — Interactive artifact
+
+After the Step 8 chat output, render a **self-contained, interactive HTML dashboard** via the `Artifact` tool. This is **presentation-only** over data already produced in this run — no new API pulls, no new financial math. The chat output of Step 8 is the source of truth and stays unchanged; the artifact is an additive deliverable.
+
+> **GLOBAL RULE still applies:** the language question in 9c is asked via `AskUserQuestion` (never inline).
+
+### 9a — Resolve inputs (all read-only, all optional)
+
+Every source below may be absent at runtime — resolve what exists and degrade per source, never crash:
+
+```bash
+SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+METRICS=~/finance/organizze/metrics.json                                   # may be absent
+BUDGETS=$(ls -t ~/finance/organizze/budget-suggestions/*.json 2>/dev/null | head -1)  # may be absent
+TRENDS=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/compute.py --compare-months 6 2>/dev/null)  # "not enough months" when <2
+```
+
+`$REPORT` is the report path written in Step 5 / saved in Step 6. `$SNAP .meta.totais` holds the headline totals (fallback when `metrics.json` is absent). Read `$METRICS`, `$REPORT`, `$SNAP`, and `$BUDGETS` for the artifact content; parse `$TRENDS` for month-over-month deltas, sparklines, and the top-movers banner.
+
+Log which sources were present vs. absent (so a degraded artifact is explainable), e.g. `info|artifact|metrics=yes report=yes budgets=no trends=1-month`.
+
+### 9b — Skip when there is nothing to present
+
+If `$REPORT` does not exist (i.e. `--no-analyze` was passed, so no analysis was produced), **skip Step 9 entirely and silently** — there is nothing to present. Do not prompt for language, do not call the `Artifact` tool.
+
+### 9c — Resolve language (ask once, then remember)
+
+Resolve in this precedence order:
+
+1. **`--lang` flag** in `$ARGUMENTS` → normalize (`en`/`english` → `en`; `pt-br`/`ptbr`/`pt` → `pt-br`, case-insensitive). An **invalid** value is ignored (fall through to step 3, the prompt). A valid value is used **and persisted**:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/config.py set organizze_artifact_lang <en|pt-br>
+   ```
+2. **Saved value** (no flag): `ARTIFACT_LANG=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/config.py get organizze_artifact_lang 2>/dev/null)` (do **not** name it `LANG` — that is the reserved POSIX locale variable). If set, use it and print **one** override affordance line so the choice is never a dead-end:
+   - pt-br: `🌐 Artifact em pt-BR — use \`--lang en\` para trocar.`
+   - en: `🌐 Artifact in English — use \`--lang pt-br\` to switch.`
+3. **Unset and no flag** (first run): ask **once** via `AskUserQuestion` — question "Language for the interactive artifact?", 2 options: **pt-BR (recommended)** / **English**. Persist the answer with `config.py set organizze_artifact_lang <choice>`.
+
+Financial figures stay in **R$** in both languages. Everything else (labels + `aria-label`s) is localized. Number/date formatting follows the language: **pt-BR** `R$ 1.234,56` / `dd/mm` / Portuguese month names; **en** `R$ 1,234.56` / `mmm dd`.
+
+### 9d — Build and render the artifact
+
+1. Load the `artifact-design` **and** `dataviz` skills first (calibration + chart-form heuristics), then author the HTML per the **Artifact content spec** below.
+2. Write the HTML to `~/finance/organizze/reports/<same TS as $REPORT>.artifact.html` (for archival; the `Artifact` tool renders from the file).
+3. Call the `Artifact` tool: `favicon` 💰, a **stable** title (`Análise financeira` / `Financial analysis` + the month), a one-sentence `description`.
+4. Print the artifact URL as part of the final output block (see below).
+
+### 9e — Failure is never fatal
+
+If **anything** in 9d fails (skill load, HTML write, `Artifact` tool error), degrade to the Step 8 chat output with **one** WARN line — never fail the whole `/finance:organizze` run because the artifact could not render:
+- pt-br: `⚠️ Não consegui gerar o artifact (<motivo>). A análise acima continua válida.`
+- en: `⚠️ Could not generate the artifact (<reason>). The analysis above still stands.`
+
+---
+
+### Artifact content spec (bake into the build)
+
+**Self-contained (hard CSP):** the `Artifact` tool blocks every external host — inline **all** CSS/JS; charts are **inline SVG** (no CDN chart library); system fonts only; no remote images. Wide tables/charts live inside an `overflow-x:auto` container so the page body never scrolls sideways.
+
+**Theme-aware:** style both light and dark via `@media (prefers-color-scheme: dark)` **and** `:root[data-theme="dark"]` / `:root[data-theme="light"]` overrides (the viewer's toggle stamps `data-theme`; it must win in both directions).
+
+**Information hierarchy (top → bottom, the 3-second scan):**
+1. **Header:** `Análise financeira — <month>` / `Financial analysis — <month>`, snapshot date, current language, and a **Print / PDF** button.
+2. **Top-movers banner** directly under the header — one line, the biggest up/down category vs. last month ("what changed"). Degrades to a warm "first month recorded" note when there is no prior month.
+3. **KPI tile row:** Saldo líquido / Liquid balance · Entradas / Income · Saídas / Expense · Burn/month · Runway (days). Big `tabular-nums` figures, each with a signed month-over-month delta arrow.
+4. **Sectioned/tabbed body:** Categorias/Categories · Metas/Goals · Fluxo de caixa/Cashflow · Cortes/Cuts · Quitação/Payoff · **Relatório completo/Full report** (collapsible `<details>`, last — progressive disclosure).
+
+**Dataviz choices (per the dataviz skill's form heuristic):**
+- **Category breakdown = ranked horizontal bars** (primary), sorted desc by amount, with a sort toggle (amount / MoM delta / name). Ranked bars beat a donut for magnitude and line up with each row's trend badge + sparkline. A donut is optional/secondary for share-of-total only.
+- **Trend badge:** ▲/▼ glyph + signed % vs. last month. Color is semantic **and** redundant with the glyph/sign (never color-only): rising spend = attention color, falling spend = good; invert for income. A category present this month but absent last month shows a **"novo"/"new"** badge, never `↑∞%`.
+- **Sparkline:** ~80×20 inline SVG over up to 6 months, last point marked; a single non-zero month renders flat (no divide-by-zero); `<2` months degrades to `—`.
+- **Cashflow:** line/area over the forecast horizon with a "hoje"/"today" marker and a visible zero baseline.
+- **Runway:** number + a slim horizontal gauge bar (not a dial).
+
+**Accessibility:** text contrast ≥ 4.5:1, chart marks ≥ 3:1, colorblind-safe (glyph/label carry meaning, not hue alone). Tabs and sort headers are real `<button>`s; the full report is `<details>`/`aria-expanded`; visible focus outlines; touch targets ≥ 44px; `tabular-nums` for figure alignment.
+
+**Empty / degraded states (warm, never "No items found"):**
+- `<2` months of history → "Primeiro mês registrado — tendências aparecem no próximo" / "First month recorded — trends appear next month" instead of empty badges/sparklines.
+- `metrics.json` missing → KPI tiles render from `$SNAP .meta.totais` where possible, otherwise show `—` with a quiet "dados detalhados indisponíveis" / "detailed data unavailable" note; the grid stays intact.
+- No budget suggestions → hide the budget panel (no empty table). No cuts/goals → warm per-panel empty state.
+- Negative balance / negative burn → format with the sign, never `NaN`.
+- Long category names → truncate with a `title=` tooltip, no layout break.
+
+**Report markers:** parse `[CUT]` / `[QUESTION]` / `[MEDICAL_EXPENSE]` from `$REPORT` into their panels; never leak the raw marker text into the UI.
+
+**Print / PDF (`@media print`):** the button calls `window.print()`; expand all collapsibles (full report visible), hide interactive controls (tabs become stacked sections), force light theme, `page-break-inside:avoid` on cards/tables, and print a header/footer with the snapshot date + "gerado em"/"generated on".
+
+**Anti-slop:** no generic 3-column card grid, no decorative hero. Lead with numbers + story; cards earn their place (KPI tiles yes, not every paragraph). Minimal shadows.
+
+**PII:** build from the sanitized values already used upstream. **Never** embed raw account IDs, CPF/CNPJ, or the API token in the HTML — the artifact is shareable.
+
+### Final output block
+
+At the very end, alongside the existing footer, print (localized labels; paths verbatim):
+
+```
+🎴 Artifact interativo: <url>
+📄 Snapshot: <SNAP>
+📊 Report: <REPORT>
+```
+
+If the artifact was degraded, add **one** line naming which sections were limited and why, e.g.:
+- `⚠️ metrics.json ausente — artifact gerado só com os totais do snapshot; rode com --refresh para recalcular.` / `⚠️ metrics.json missing — artifact built from snapshot totals only; run with --refresh to recompute.`
 
 ---
 
