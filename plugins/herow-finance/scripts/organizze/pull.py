@@ -8,6 +8,7 @@ Usage:
 Reads credentials from ~/finance/organizze/.auth (ORGANIZZE_EMAIL,
 ORGANIZZE_TOKEN, ORGANIZZE_USER_AGENT). Stdlib only.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,6 +39,7 @@ API = "https://api.organizze.com.br/rest/v2"
 
 # --- auth + http -----------------------------------------------------------
 
+
 def load_auth() -> tuple[str, str, str]:
     if not AUTH.exists():
         sys.exit("err|no-auth|run setup_auth.sh first")
@@ -49,7 +51,11 @@ def load_auth() -> tuple[str, str, str]:
         k, v = line.split("=", 1)
         env[k.strip()] = v.strip().strip('"').strip("'")
     try:
-        return env["ORGANIZZE_EMAIL"], env["ORGANIZZE_TOKEN"], env["ORGANIZZE_USER_AGENT"]
+        return (
+            env["ORGANIZZE_EMAIL"],
+            env["ORGANIZZE_TOKEN"],
+            env["ORGANIZZE_USER_AGENT"],
+        )
     except KeyError as e:
         sys.exit(f"err|bad-auth|missing {e}")
 
@@ -77,6 +83,7 @@ def http_get(path: str, params: dict | None, email: str, token: str, ua: str) ->
 
 
 # --- helpers ---------------------------------------------------------------
+
 
 def iso(d: dt.date) -> str:
     return d.isoformat()
@@ -117,11 +124,20 @@ def cache_set(name: str, data: object) -> None:
 
 # --- domain ----------------------------------------------------------------
 
-def fetch_transactions(start: dt.date, end: dt.date, email: str, token: str, ua: str) -> list[dict]:
+
+def fetch_transactions(
+    start: dt.date, end: dt.date, email: str, token: str, ua: str
+) -> list[dict]:
     """API groups by full month; we iterate month by month and deduplicate by id."""
     seen: dict[int, dict] = {}
-    for (a, b) in month_ranges(start, end):
-        rows = http_get("/transactions", {"start_date": iso(a), "end_date": iso(b)}, email, token, ua)
+    for a, b in month_ranges(start, end):
+        rows = http_get(
+            "/transactions",
+            {"start_date": iso(a), "end_date": iso(b)},
+            email,
+            token,
+            ua,
+        )
         if isinstance(rows, list):
             for t in rows:
                 if isinstance(t, dict) and "id" in t:
@@ -132,7 +148,9 @@ def fetch_transactions(start: dt.date, end: dt.date, email: str, token: str, ua:
 def compute_account_balances(
     accounts: list[dict],
     credit_card_ids: set[int],
-    email: str, token: str, ua: str,
+    email: str,
+    token: str,
+    ua: str,
     lookback_years: int = 5,
 ) -> tuple[dict[int, int], list[dict]]:
     """Balance per account = sum(paid transactions, account_id, NOT card), in cents.
@@ -151,8 +169,14 @@ def compute_account_balances(
     start = today.replace(year=today.year - lookback_years)
     sums: dict[int, int] = {a["id"]: 0 for a in accounts if "id" in a}
     all_txs: dict[int, dict] = {}  # deduplicated by id
-    for (a, b) in month_ranges(start, today):
-        rows = http_get("/transactions", {"start_date": iso(a), "end_date": iso(b)}, email, token, ua)
+    for a, b in month_ranges(start, today):
+        rows = http_get(
+            "/transactions",
+            {"start_date": iso(a), "end_date": iso(b)},
+            email,
+            token,
+            ua,
+        )
         if not isinstance(rows, list):
             continue
         for t in rows:
@@ -209,7 +233,11 @@ def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[in
     for key, txs in buckets.items():
         if len(txs) < 3:
             continue
-        amounts = [abs(float(t.get("amount_cents", 0))) for t in txs if t.get("amount_cents") is not None]
+        amounts = [
+            abs(float(t.get("amount_cents", 0)))
+            for t in txs
+            if t.get("amount_cents") is not None
+        ]
         if not amounts:
             continue
         m = statistics.median(amounts)
@@ -239,9 +267,9 @@ def _load_yaml_simple(path: pathlib.Path) -> dict:
                 continue
             idx = stripped.index(":")
             key = stripped[:idx].strip().strip('"').strip("'")
-            rest = stripped[idx + 1:].strip()
+            rest = stripped[idx + 1 :].strip()
             if "#" in rest:
-                rest = rest[:rest.index("#")].strip()
+                rest = rest[: rest.index("#")].strip()
             if rest == "" or rest == "{}":
                 current_key = key
                 result.setdefault(key, {})
@@ -266,7 +294,7 @@ def _load_yaml_simple(path: pathlib.Path) -> dict:
             elif ":" in stripped:
                 idx = stripped.index(":")
                 k = stripped[:idx].strip().strip('"').strip("'")
-                v = stripped[idx + 1:].strip().strip('"').strip("'")
+                v = stripped[idx + 1 :].strip().strip('"').strip("'")
                 if not isinstance(result.get(current_key), dict):
                     result[current_key] = {}
                 result[current_key][k] = v
@@ -275,7 +303,9 @@ def _load_yaml_simple(path: pathlib.Path) -> dict:
 
 def _normalize_desc(text: str) -> str:
     """NFKD normalize, strip digits, lowercase — for recurring detection."""
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    text = (
+        unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    )
     text = "".join(c for c in text if not c.isdigit())
     return " ".join(text.split())
 
@@ -334,7 +364,7 @@ def detect_recurring_from_history(
         # Find longest consecutive run
         months_set = set(month_map.keys())
         max_run = 0
-        for (y, m) in months_set:
+        for y, m in months_set:
             # Only start counting from the beginning of a run
             py, pm = (y, m - 1) if m > 1 else (y - 1, 12)
             if (py, pm) in months_set:
@@ -403,7 +433,9 @@ def enrich_transactions(
 
     # Recurring detection using 5-year history
     history = all_transactions_5y if all_transactions_5y else []
-    recurring_ids = detect_recurring_from_history(history, result, threshold_pct, min_months)
+    recurring_ids = detect_recurring_from_history(
+        history, result, threshold_pct, min_months
+    )
 
     # Count description appearances in current batch for PIX confidence
     desc_counts: dict[str, int] = {}
@@ -453,7 +485,7 @@ def _load_card_account_map() -> dict[int, int]:
         k, v = k.strip(), v.strip()
         if k.startswith("CARD_PAYMENT_ACCOUNT_"):
             try:
-                mapping[int(k[len("CARD_PAYMENT_ACCOUNT_"):])] = int(v)
+                mapping[int(k[len("CARD_PAYMENT_ACCOUNT_") :])] = int(v)
             except ValueError:
                 pass
     return mapping
@@ -461,7 +493,9 @@ def _load_card_account_map() -> dict[int, int]:
 
 def compute_totals(snapshot: dict) -> dict:
     accounts = snapshot.get("accounts") or []
-    saldo = sum(int(a.get("_balance_cents") or 0) for a in accounts if is_principal_account(a))
+    saldo = sum(
+        int(a.get("_balance_cents") or 0) for a in accounts if is_principal_account(a)
+    )
 
     card_acct_map = _load_card_account_map()
     today = dt.date.today()
@@ -538,9 +572,15 @@ def compute_totals(snapshot: dict) -> dict:
         "saldo_proj_90d_cents": proj_90,
         "n_transacoes_past": len(snapshot.get("transactions_past") or []),
         "n_transacoes_future": len(snapshot.get("transactions_future") or []),
-        "n_recorrentes": sum(1 for t in (snapshot.get("transactions_past") or []) if t.get("is_recurring")),
+        "n_recorrentes": sum(
+            1
+            for t in (snapshot.get("transactions_past") or [])
+            if t.get("is_recurring")
+        ),
         "n_faturas_vence_7d": len(invoices_due_7),
-        "soma_faturas_vence_7d_cents": sum(int(i.get("total_cents") or 0) for i in invoices_due_7),
+        "soma_faturas_vence_7d_cents": sum(
+            int(i.get("total_cents") or 0) for i in invoices_due_7
+        ),
         "n_atrasadas_despesa": n_over_exp,
         "soma_atrasadas_despesa_cents": overdue_exp,
         "n_atrasadas_receita": n_over_inc,
@@ -555,14 +595,19 @@ def build_installments(snapshot: dict) -> list[dict]:
     installment amount, how much is left, and expected end date.
     """
     bag: dict[tuple[str, int], list[dict]] = {}
-    for t in (snapshot.get("transactions_past") or []) + (snapshot.get("transactions_future") or []):
+    for t in (snapshot.get("transactions_past") or []) + (
+        snapshot.get("transactions_future") or []
+    ):
         total = int(t.get("total_installments") or 1)
         if total <= 1:
             continue
         desc = (t.get("description") or "").strip()
         # remove "(x/y)" typically at the end
         norm = desc
-        for tail in (f"({t.get('installment')}/{total})", f" {t.get('installment')}/{total}"):
+        for tail in (
+            f"({t.get('installment')}/{total})",
+            f" {t.get('installment')}/{total}",
+        ):
             if tail in norm:
                 norm = norm.replace(tail, "").strip()
         # remove trailing numeric suffixes for grouping
@@ -575,15 +620,23 @@ def build_installments(snapshot: dict) -> list[dict]:
         # paid_count = max(installment) among paid ones, not count(paid) in window.
         # Snapshot has a short window (180d past); counting only visible ones massively
         # underestimates for long financing (e.g.: home loan 420 months).
-        paid_installments = [int(x.get("installment") or 0) for x in txs_sorted if x.get("paid")]
+        paid_installments = [
+            int(x.get("installment") or 0) for x in txs_sorted if x.get("paid")
+        ]
         paid_count = max(paid_installments) if paid_installments else 0
-        max_installment = max((int(x.get("installment") or 0) for x in txs_sorted), default=0)
+        max_installment = max(
+            (int(x.get("installment") or 0) for x in txs_sorted), default=0
+        )
         # If the highest-numbered installment we see is the last AND it is paid, the installment is done.
         if max_installment == total and all(x.get("paid") for x in txs_sorted):
             continue
         last_paid = next((x for x in reversed(txs_sorted) if x.get("paid")), None)
         next_unpaid = next((x for x in txs_sorted if not x.get("paid")), None)
-        amounts = [abs(int(x.get("amount_cents") or 0)) for x in txs_sorted if x.get("amount_cents") is not None]
+        amounts = [
+            abs(int(x.get("amount_cents") or 0))
+            for x in txs_sorted
+            if x.get("amount_cents") is not None
+        ]
         avg = int(sum(amounts) / len(amounts)) if amounts else 0
         remaining = total - paid_count
         if remaining <= 0:
@@ -603,24 +656,29 @@ def build_installments(snapshot: dict) -> list[dict]:
                 end_date = dt.date(y, m, min(anchor_d.day, 28)).isoformat()
             except ValueError:
                 pass
-        out.append({
-            "description": (txs_sorted[0].get("description") if txs_sorted else norm).strip(),
-            "total_installments": total,
-            "paid": paid_count,
-            "remaining": remaining,
-            "avg_amount_cents": avg,
-            "remaining_amount_cents": avg * remaining,
-            "next_due_date": (next_unpaid or {}).get("date"),
-            "expected_end_date": end_date,
-            "progress_pct": round(paid_count / total * 100.0, 1) if total else 0.0,
-            "almost_done": (remaining <= 3),
-            "long_way": (remaining >= total // 2 and total >= 12),
-        })
+        out.append(
+            {
+                "description": (
+                    txs_sorted[0].get("description") if txs_sorted else norm
+                ).strip(),
+                "total_installments": total,
+                "paid": paid_count,
+                "remaining": remaining,
+                "avg_amount_cents": avg,
+                "remaining_amount_cents": avg * remaining,
+                "next_due_date": (next_unpaid or {}).get("date"),
+                "expected_end_date": end_date,
+                "progress_pct": round(paid_count / total * 100.0, 1) if total else 0.0,
+                "almost_done": (remaining <= 3),
+                "long_way": (remaining >= total // 2 and total >= 12),
+            }
+        )
     out.sort(key=lambda r: -(r["remaining_amount_cents"]))
     return out
 
 
 # --- main ------------------------------------------------------------------
+
 
 def _check_enrichment_mtime() -> bool:
     """Return True if enrichment_rules.yaml has been modified since last run."""
@@ -690,46 +748,71 @@ def main() -> int:
     past_start = today - dt.timedelta(days=args.history_days)
     future_end = today + dt.timedelta(days=args.future_days)
 
-    print(f"info|pulling|history={args.history_days}d future={args.future_days}d", file=sys.stderr)
+    print(
+        f"info|pulling|history={args.history_days}d future={args.future_days}d",
+        file=sys.stderr,
+    )
 
     # CP2: Check enrichment_rules.yaml mtime
     if _check_enrichment_mtime():
-        print("info|enrichment-reload|rules changed, re-applying enrichment on this run", file=sys.stderr)
+        print(
+            "info|enrichment-reload|rules changed, re-applying enrichment on this run",
+            file=sys.stderr,
+        )
 
     accounts_all = http_get("/accounts", None, email, token, ua) or []
     # active = not archived AND type defined (type=null indicates zombie/orphan account)
     accounts = [a for a in accounts_all if not a.get("archived") and a.get("type")]
-    print(f"info|accounts|{len(accounts)} active (ignored {len(accounts_all) - len(accounts)} archived/orphan)", file=sys.stderr)
+    print(
+        f"info|accounts|{len(accounts)} active (ignored {len(accounts_all) - len(accounts)} archived/orphan)",
+        file=sys.stderr,
+    )
 
     categories = cache_get("categories.json", max_age_days=7)
     if categories is None:
         categories = http_get("/categories", None, email, token, ua) or []
         cache_set("categories.json", categories)
-    print(f"info|categories|{len(categories)} (cached={categories is not None})", file=sys.stderr)
+    print(
+        f"info|categories|{len(categories)} (cached={categories is not None})",
+        file=sys.stderr,
+    )
 
     credit_cards_all = http_get("/credit_cards", None, email, token, ua) or []
     credit_cards = [cc for cc in credit_cards_all if not cc.get("archived")]
     credit_card_ids = {cc["id"] for cc in credit_cards if "id" in cc}
-    print(f"info|credit_cards|{len(credit_cards)} active (ignored {len(credit_cards_all) - len(credit_cards)} archived)", file=sys.stderr)
+    print(
+        f"info|credit_cards|{len(credit_cards)} active (ignored {len(credit_cards_all) - len(credit_cards)} archived)",
+        file=sys.stderr,
+    )
 
     # Balances per account — calculated via long history (API does not return balance)
     # Now returns (balances_dict, all_transactions_5y)
-    balances, all_transactions_5y = compute_account_balances(accounts, credit_card_ids, email, token, ua)
+    balances, all_transactions_5y = compute_account_balances(
+        accounts, credit_card_ids, email, token, ua
+    )
     for a in accounts:
         a["_balance_cents"] = balances.get(a.get("id"), 0)
     print(f"info|balances|computed for {len(balances)} accounts", file=sys.stderr)
-    print(f"info|transactions_5y|{len(all_transactions_5y)} transactions in 5y history", file=sys.stderr)
+    print(
+        f"info|transactions_5y|{len(all_transactions_5y)} transactions in 5y history",
+        file=sys.stderr,
+    )
 
     invoices: list[dict] = []
     for cc in credit_cards:
         cid = cc.get("id")
         if not cid:
             continue
-        invs = http_get(
-            f"/credit_cards/{cid}/invoices",
-            {"start_date": iso(past_start), "end_date": iso(future_end)},
-            email, token, ua,
-        ) or []
+        invs = (
+            http_get(
+                f"/credit_cards/{cid}/invoices",
+                {"start_date": iso(past_start), "end_date": iso(future_end)},
+                email,
+                token,
+                ua,
+            )
+            or []
+        )
         for inv in invs:
             inv["_credit_card_id"] = cid
             inv["_credit_card_name"] = cc.get("name")
@@ -739,7 +822,9 @@ def main() -> int:
     tx_past = fetch_transactions(past_start, today, email, token, ua)
     print(f"info|transactions_past|{len(tx_past)}", file=sys.stderr)
 
-    tx_future = fetch_transactions(today + dt.timedelta(days=1), future_end, email, token, ua)
+    tx_future = fetch_transactions(
+        today + dt.timedelta(days=1), future_end, email, token, ua
+    )
     print(f"info|transactions_future|{len(tx_future)}", file=sys.stderr)
 
     # Load enrichment config
@@ -747,7 +832,9 @@ def main() -> int:
     threshold_pct = int(rules.get("recurring_threshold_pct") or 10)
 
     # Use new 5-year history-based recurring detection + full enrichment
-    tx_past = enrich_transactions(tx_past, all_transactions_5y, threshold_pct=threshold_pct)
+    tx_past = enrich_transactions(
+        tx_past, all_transactions_5y, threshold_pct=threshold_pct
+    )
     print(
         f"info|recurring|{sum(1 for t in tx_past if t.get('is_recurring'))} recurring transactions detected",
         file=sys.stderr,
@@ -778,7 +865,11 @@ def main() -> int:
         "meta": {
             "pulled_at": pulled_at,
             "fetched_at": pulled_at,  # alias for compat
-            "periodo": {"history_start": iso(past_start), "today": iso(today), "future_end": iso(future_end)},
+            "periodo": {
+                "history_start": iso(past_start),
+                "today": iso(today),
+                "future_end": iso(future_end),
+            },
         },
         "accounts": accounts,
         "categories": categories,
@@ -803,8 +894,22 @@ def main() -> int:
         if int(t.get("total_installments") or 1) > 1
     ]
 
+    # Repair corrupt transfer pairs (both legs same-signed) before computing any
+    # totals/projections — see cashflow.normalize_transfers.
+    try:
+        from cashflow import normalize_transfers
+    except ImportError:
+        sys.path.insert(0, str(pathlib.Path(__file__).parent))
+        from cashflow import normalize_transfers
+    _fixed = normalize_transfers(snapshot)
+    if _fixed:
+        print(f"info|transfers-normalized|{_fixed} leg(s) repaired", file=sys.stderr)
+
     snapshot["installments"] = build_installments(snapshot)
-    print(f"info|installments|{len(snapshot['installments'])} active installments", file=sys.stderr)
+    print(
+        f"info|installments|{len(snapshot['installments'])} active installments",
+        file=sys.stderr,
+    )
     snapshot["meta"]["totais"] = compute_totals(snapshot)
 
     # Update enrichment mtime after successful enrichment

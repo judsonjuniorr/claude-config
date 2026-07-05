@@ -17,6 +17,7 @@ As a module:
   from cashflow import per_account_projection
   result = per_account_projection(snapshot, threshold_cents=0, horizon_days=90)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -55,6 +56,101 @@ def _brl(c: int) -> str:
     return f"-R$ {s}" if c < 0 else f"R$ {s}"
 
 
+def _all_transactions(snapshot: dict) -> list[dict]:
+    """Flat list across the transaction buckets forecasts read from."""
+    out: list[dict] = []
+    for key in ("transactions_past", "transactions_future"):
+        out.extend(snapshot.get(key) or [])
+    return out
+
+
+def normalize_transfers(snapshot: dict) -> int:
+    """Repair corrupt transfer pairs in-place; return the number of legs fixed.
+
+    A transfer in Organizze is a linked pair of transactions (joined by
+    ``oposite_transaction_id``): money leaves one account (negative leg) and
+    enters another (positive leg), so the pair MUST net to zero. Organizze
+    occasionally emits an occurrence of a *recurring* transfer where BOTH legs
+    carry the same sign — the pair no longer nets to zero and the destination
+    account's forecast is thrown off by 2x the amount (both legs negative makes
+    the incoming money look like an outgoing debit).
+
+    We only repair when the correct per-account direction is unambiguous, taking
+    the sign convention from the *healthy* sibling occurrences of the same
+    ``recurrence_id`` (within a recurrence, an account's transfer leg keeps a
+    consistent sign). The corrupt leg is flipped to that consensus and its
+    opposite leg is forced to net to zero. Pairs whose direction cannot be
+    determined (one-off transfers, no sibling consensus, mismatched magnitudes)
+    are left untouched and a warning is emitted. Healthy pairs are never touched,
+    so the pass is idempotent.
+    """
+    txs = _all_transactions(snapshot)
+    by_id = {t["id"]: t for t in txs if "id" in t}
+
+    # Consensus sign per (recurrence_id, account_id) from transfer legs.
+    from collections import Counter
+
+    votes: dict[tuple, Counter] = {}
+    for t in txs:
+        if not t.get("oposite_transaction_id"):
+            continue
+        rid, aid = t.get("recurrence_id"), t.get("account_id")
+        amt = int(t.get("amount_cents") or 0)
+        if rid is None or aid is None or amt == 0:
+            continue
+        votes.setdefault((rid, aid), Counter())[1 if amt > 0 else -1] += 1
+
+    def consensus(rid, aid) -> int | None:
+        c = votes.get((rid, aid))
+        if not c:
+            return None
+        ranked = c.most_common()
+        # Require a strict majority — a tie gives no direction.
+        if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+            return None
+        return ranked[0][0]
+
+    repaired = 0
+    handled: set[frozenset] = set()
+    for t in txs:
+        op = t.get("oposite_transaction_id")
+        if not op or op not in by_id:
+            continue
+        key = frozenset((t["id"], op))
+        if key in handled:
+            continue
+        handled.add(key)
+        other = by_id[op]
+        a, b = int(t.get("amount_cents") or 0), int(other.get("amount_cents") or 0)
+        if a == 0 or b == 0 or abs(a) != abs(b):
+            continue
+        same_sign = (a > 0) == (b > 0)
+        if not same_sign:
+            continue  # healthy pair
+        mag = abs(a)
+        sa = consensus(t.get("recurrence_id"), t.get("account_id"))
+        sb = consensus(other.get("recurrence_id"), other.get("account_id"))
+        if sa is not None:
+            desired_a = sa
+        elif sb is not None:
+            desired_a = -sb  # derive from the other leg via net-zero invariant
+        else:
+            print(
+                f"warn|transfer-unrepaired|{t.get('date')}|{t.get('description')}|"
+                f"both legs {a}/{b} — direction undeterminable",
+                file=sys.stderr,
+            )
+            continue
+        new_a, new_b = desired_a * mag, -desired_a * mag
+        if new_a != a:
+            t["amount_cents"] = new_a
+            repaired += 1
+        if new_b != b:
+            other["amount_cents"] = new_b
+            repaired += 1
+    return repaired
+
+
 def per_account_projection(
     snapshot: dict,
     threshold_cents: int = 0,
@@ -83,11 +179,15 @@ def per_account_projection(
     horizon = today + dt.timedelta(days=horizon_days)
     card_map = card_to_account_map()
 
+    normalize_transfers(snapshot)
+
     principals = [a for a in (snapshot.get("accounts") or []) if is_principal(a)]
     accounts_by_id = {a["id"]: a for a in principals if "id" in a}
 
     # events per account: [(date, amount_cents, description, kind)]
-    events: dict[int, list[tuple[dt.date, int, str, str]]] = {aid: [] for aid in accounts_by_id}
+    events: dict[int, list[tuple[dt.date, int, str, str]]] = {
+        aid: [] for aid in accounts_by_id
+    }
 
     # 1) transactions_future filtered by main account_id
     for t in snapshot.get("transactions_future") or []:
@@ -157,13 +257,15 @@ def per_account_projection(
             daily.append((d, cur))
             d += dt.timedelta(days=1)
         accounts_proj[aid] = daily
-        accounts_summary.append({
-            "id": aid,
-            "name": acc.get("name"),
-            "initial_cents": bal,
-            "final_cents": daily[-1][1] if daily else bal,
-            "events": evs,
-        })
+        accounts_summary.append(
+            {
+                "id": aid,
+                "name": acc.get("name"),
+                "initial_cents": bal,
+                "final_cents": daily[-1][1] if daily else bal,
+                "events": evs,
+            }
+        )
 
     # 4) detect critical days per account and coverage candidates
     result_accounts: list[dict] = []
@@ -177,8 +279,14 @@ def per_account_projection(
                 continue
             shortfall = threshold_cents - bal
             drivers = [
-                {"date": dd.isoformat(), "description": desc, "amount_cents": amt, "kind": k}
-                for (dd, amt, desc, k) in evs if dd == d and amt < 0
+                {
+                    "date": dd.isoformat(),
+                    "description": desc,
+                    "amount_cents": amt,
+                    "kind": k,
+                }
+                for (dd, amt, desc, k) in evs
+                if dd == d and amt < 0
             ]
             # candidates: other main accounts with projected balance on that day >= shortfall
             covers: list[dict] = []
@@ -190,19 +298,23 @@ def per_account_projection(
                 other_bal = next((b for (dx, b) in other_daily if dx == d), None)
                 if other_bal is None or other_bal < shortfall:
                     continue
-                covers.append({
-                    "account_id": other["id"],
-                    "account_name": other["name"],
-                    "available_cents": other_bal,
-                })
+                covers.append(
+                    {
+                        "account_id": other["id"],
+                        "account_name": other["name"],
+                        "available_cents": other_bal,
+                    }
+                )
             covers.sort(key=lambda x: -x["available_cents"])
-            critical.append({
-                "date": d.isoformat(),
-                "projected_cents": bal,
-                "shortfall_cents": shortfall,
-                "drivers": drivers,
-                "cover_candidates": covers[:5],
-            })
+            critical.append(
+                {
+                    "date": d.isoformat(),
+                    "projected_cents": bal,
+                    "shortfall_cents": shortfall,
+                    "drivers": drivers,
+                    "cover_candidates": covers[:5],
+                }
+            )
         s["critical_days"] = critical
         result_accounts.append(s)
 
@@ -212,14 +324,16 @@ def per_account_projection(
         for ev in events.get(aid_u, []):
             d_ev, amt_ev, desc_ev, kind_ev = ev
             if amt_ev < -50000 and d_ev <= horizon:
-                upcoming_obligations.append({
-                    "date": d_ev.isoformat(),
-                    "description": desc_ev,
-                    "amount_cents": amt_ev,
-                    "account_id": aid_u,
-                    "account_name": acc_u.get("name"),
-                    "kind": kind_ev,
-                })
+                upcoming_obligations.append(
+                    {
+                        "date": d_ev.isoformat(),
+                        "description": desc_ev,
+                        "amount_cents": amt_ev,
+                        "account_id": aid_u,
+                        "account_name": acc_u.get("name"),
+                        "kind": kind_ev,
+                    }
+                )
     upcoming_obligations.sort(key=lambda x: x["date"])
 
     return {
@@ -241,15 +355,21 @@ def render_markdown(proj: dict) -> str:
     out.append("")
 
     if proj.get("unmapped_cards"):
-        out.append("⚠️ Cards WITHOUT a configured paying account (invoices NOT included in projection):")
+        out.append(
+            "⚠️ Cards WITHOUT a configured paying account (invoices NOT included in projection):"
+        )
         for cc in proj["unmapped_cards"]:
-            out.append(f"- {cc['name']} (id={cc['id']}) — run `config.py card-account {cc['id']} <account_id>`")
+            out.append(
+                f"- {cc['name']} (id={cc['id']}) — run `config.py card-account {cc['id']} <account_id>`"
+            )
         out.append("")
 
     any_critical = False
     for acc in proj.get("accounts", []):
         out.append(f"### {acc['name']}")
-        out.append(f"- Initial balance: {_brl(acc['initial_cents'])} · projected final: {_brl(acc['final_cents'])}")
+        out.append(
+            f"- Initial balance: {_brl(acc['initial_cents'])} · projected final: {_brl(acc['final_cents'])}"
+        )
         critical = acc.get("critical_days") or []
         if not critical:
             out.append("- ✅ No critical days on the horizon.")
@@ -258,9 +378,13 @@ def render_markdown(proj: dict) -> str:
         any_critical = True
         out.append(f"- ⚠️ {len(critical)} critical day(s):")
         for cd in critical[:10]:
-            out.append(f"  - **{cd['date']}**: projected balance {_brl(cd['projected_cents'])} (shortfall {_brl(cd['shortfall_cents'])})")
+            out.append(
+                f"  - **{cd['date']}**: projected balance {_brl(cd['projected_cents'])} (shortfall {_brl(cd['shortfall_cents'])})"
+            )
             for drv in cd["drivers"][:5]:
-                out.append(f"    - debit: {drv['description']} · {_brl(drv['amount_cents'])}")
+                out.append(
+                    f"    - debit: {drv['description']} · {_brl(drv['amount_cents'])}"
+                )
             if cd["cover_candidates"]:
                 covers_str = ", ".join(
                     f"{c['account_name']} ({_brl(c['available_cents'])})"
@@ -268,7 +392,9 @@ def render_markdown(proj: dict) -> str:
                 )
                 out.append(f"    - accounts with slack on that day: {covers_str}")
             else:
-                out.append("    - ❌ no main account with sufficient slack on that day.")
+                out.append(
+                    "    - ❌ no main account with sufficient slack on that day."
+                )
         if len(critical) > 10:
             out.append(f"  - … (+{len(critical) - 10} days)")
         out.append("")
@@ -284,14 +410,22 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--horizon-days", type=int, default=90)
-    ap.add_argument("--threshold-cents", type=int, default=None,
-                    help="default: reads from ~/finance/organizze/.config CASHFLOW_THRESHOLD_CENTS")
-    ap.add_argument("--json", action="store_true", help="emite JSON cru em vez de markdown")
+    ap.add_argument(
+        "--threshold-cents",
+        type=int,
+        default=None,
+        help="default: reads from ~/finance/organizze/.config CASHFLOW_THRESHOLD_CENTS",
+    )
+    ap.add_argument(
+        "--json", action="store_true", help="emite JSON cru em vez de markdown"
+    )
     args = ap.parse_args()
 
     snap = json.loads(pathlib.Path(args.snapshot).read_text())
     thr = args.threshold_cents if args.threshold_cents is not None else cfg_threshold()
-    proj = per_account_projection(snap, threshold_cents=thr, horizon_days=args.horizon_days)
+    proj = per_account_projection(
+        snap, threshold_cents=thr, horizon_days=args.horizon_days
+    )
     if args.json:
         print(json.dumps(proj, ensure_ascii=False, indent=2))
     else:
