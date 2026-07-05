@@ -25,6 +25,7 @@ As a module:
   from balance_on import balance_on
   result = balance_on(snapshot, target)   # target: datetime.date
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,11 +35,11 @@ import pathlib
 import sys
 
 try:
-    from cashflow import _parse_date, _brl
+    from cashflow import _parse_date, _brl, normalize_transfers
     from config import card_to_account_map
 except ImportError:
     sys.path.insert(0, str(pathlib.Path(__file__).parent))
-    from cashflow import _parse_date, _brl
+    from cashflow import _parse_date, _brl, normalize_transfers
     from config import card_to_account_map
 
 
@@ -68,6 +69,8 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
     """
     today = dt.date.today()
     card_map = card_to_account_map()
+
+    normalize_transfers(snapshot)
 
     by_id: dict[int, dict] = {}
     kind_of: dict[int, str] = {}
@@ -142,16 +145,22 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
             "delta_cents": delta_fut[aid],
         }
 
-    accounts = sorted((row(a) for a in by_id if kind_of[a] == "principal"),
-                      key=lambda r: r["previsto_cents"])
-    cofrinhos = sorted((row(a) for a in by_id if kind_of[a] == "cofrinho"),
-                       key=lambda r: r["previsto_cents"])
+    accounts = sorted(
+        (row(a) for a in by_id if kind_of[a] == "principal"),
+        key=lambda r: r["previsto_cents"],
+    )
+    cofrinhos = sorted(
+        (row(a) for a in by_id if kind_of[a] == "cofrinho"),
+        key=lambda r: r["previsto_cents"],
+    )
 
     def totals(rows: list[dict]) -> dict:
         return {
             "saldo_cents": sum(r["saldo_cents"] for r in rows),
             "previsto_cents": sum(r["previsto_cents"] for r in rows),
-            "previsto_atrasadas_cents": sum(r["previsto_atrasadas_cents"] for r in rows),
+            "previsto_atrasadas_cents": sum(
+                r["previsto_atrasadas_cents"] for r in rows
+            ),
             "atrasadas_cents": sum(r["atrasadas_cents"] for r in rows),
             "delta_cents": sum(r["delta_cents"] for r in rows),
         }
@@ -168,8 +177,10 @@ def balance_on(snapshot: dict, target: dt.date) -> dict:
 
 
 def _table(rows: list[dict], total: dict, total_label: str) -> list[str]:
-    out = ["| Account | Current balance | Forecast (Organizze) | Forecast w/ overdue |",
-           "|---|--:|--:|--:|"]
+    out = [
+        "| Account | Current balance | Forecast (Organizze) | Forecast w/ overdue |",
+        "|---|--:|--:|--:|",
+    ]
     for r in rows:
         out.append(
             f"| {r['name']} | {_brl(r['saldo_cents'])} | {_brl(r['previsto_cents'])} "
@@ -186,12 +197,20 @@ def _table(rows: list[dict], total: dict, total_label: str) -> list[str]:
 def render_markdown(res: dict) -> str:
     out: list[str] = [f"## Balance and forecast per account up to {res['date']}", ""]
     if res.get("unmapped_cards"):
-        out.append("⚠️ Cards WITHOUT a paying account (invoices NOT included in forecast):")
+        out.append(
+            "⚠️ Cards WITHOUT a paying account (invoices NOT included in forecast):"
+        )
         for cc in res["unmapped_cards"]:
-            out.append(f"- {cc['name']} (id={cc['id']}) — `config.py card-account {cc['id']} <account_id>`")
+            out.append(
+                f"- {cc['name']} (id={cc['id']}) — `config.py card-account {cc['id']} <account_id>`"
+            )
         out.append("")
-    out.append("_Forecast (Organizze) = balance + future unpaid + invoices up to the date._")
-    out.append("_Forecast w/ overdue also adds overdue (past due and unpaid) transactions._")
+    out.append(
+        "_Forecast (Organizze) = balance + future unpaid + invoices up to the date._"
+    )
+    out.append(
+        "_Forecast w/ overdue also adds overdue (past due and unpaid) transactions._"
+    )
     out.append("")
     out += _table(res["accounts"], res["totals"], "Total (main accounts)")
     if res.get("cofrinhos"):
@@ -206,7 +225,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--date", default=None, help="YYYY-MM-DD (default: today)")
-    ap.add_argument("--json", action="store_true", help="emit raw JSON instead of markdown")
+    ap.add_argument(
+        "--json", action="store_true", help="emit raw JSON instead of markdown"
+    )
     args = ap.parse_args()
 
     target = dt.date.fromisoformat(args.date) if args.date else dt.date.today()

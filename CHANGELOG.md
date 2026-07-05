@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.2.0] - 2026-07-05
+
+### Fixed
+- `herow-finance` per-account forecast (`balance_on.py`, `cashflow.py`) — Organizze occasionally emits an occurrence of a *recurring transfer* whose two linked legs (`oposite_transaction_id`) carry the **same sign**, so the pair no longer nets to zero and the destination account's forecast is thrown off by 2× the amount (an incoming R$ 5.500 transfer showing as a R$ 5.500 debit made one account project ~R$ 11k too low — 90 phantom "critical days"). New `cashflow.normalize_transfers()` repairs corrupt pairs in place by taking the correct per-account direction from the healthy sibling occurrences of the same `recurrence_id` (falling back to leaving undeterminable one-offs untouched with a `warn|transfer-unrepaired|…` line). It runs at ingestion in `pull.py` (so new snapshots are clean at the source) and defensively on read in `balance_on.py` / `cashflow.py` (so existing snapshots are repaired at compute time); healthy pairs are never touched, so the pass is idempotent. Regression tests in `tests/test_normalize_transfers.py`.
+
 ## [0.2.1.0] - 2026-07-02
 
 ### Fixed
