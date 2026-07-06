@@ -34,7 +34,7 @@
       "name": "herow-extras",
       "source": "./plugins/herow-extras",
       "category": "productivity",
-      "description": "PRD generator, file organizer, graphify bootstrap"
+      "description": "Idea brainstorm, PRD generator, file organizer, graphify bootstrap"
     }
   ]
 }
