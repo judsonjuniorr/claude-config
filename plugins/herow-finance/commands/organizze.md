@@ -73,7 +73,7 @@ ls ~/finance/organizze/.auth 2>/dev/null
 
 All in `${CLAUDE_PLUGIN_ROOT}/resources/organizze-onboarding.md`:
 - **§Step 2** (token setup) is triggered from Step 1 when `.auth` is missing.
-- **§Step 2.5** (calibrate initial balance) and **§Step 2.7** (map paying account per card) run **after the first `pull.py` in Step 3** when their conditions hold (no `~/finance/organizze/balances.json`; `config.py cards-missing` returns rows). Read that file and follow those sections when you reach Step 3 on a first run.
+- **§Step 2.5** (balance sanity check, optional — balances now come from the CLI's real `accounts get`, no calibration needed) and **§Step 2.7** (map paying account per card) run **after the first `pull.py` in Step 3** when their conditions hold (§2.7 only when `config.py cards-missing` returns rows). Read that file and follow those sections when you reach Step 3 on a first run.
 
 ## Step 2.8 — Fill in missing personal profile fields
 

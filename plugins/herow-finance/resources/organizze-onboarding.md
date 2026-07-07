@@ -32,34 +32,28 @@ from the main command apply here.
    ```
    Replace `$EMAIL`, `$TOKEN` and `$PASSWORD` with the real values (do not expose token/password in history — pass via heredoc).
 
-5. The script validates via `GET /accounts`, saves the password to Keychain, and installs Playwright+Chromium. If it returns `ok|auth-saved|...`, proceed. If `err|bad-credentials|...`, warn and redo Step 2. If `err|scrape-setup-failed|...`, the token was saved but scraping setup failed — Step 3.5a will retry.
+5. The script installs the official `organizze` CLI if missing (reads go through it — see `_cli.py`), validates via `organizze status`, saves the password to Keychain, and installs Playwright+Chromium. If it returns `ok|auth-saved|...`, proceed. If `err|bad-credentials|...`, warn and redo Step 2. If `err|cli-install-failed|...`, the token was saved but the CLI install failed — retry manually (`brew install --cask organizze/tap/organizze` or the curl installer in the script) then re-run `organizze status`. If `err|scrape-setup-failed|...`, the token was saved but scraping setup failed — Step 3.5a will retry.
 
 6. Close the browser:
    ```
    mcp__playwright__browser_close
    ```
 
-## Step 2.5 — Calibrate initial balance (first run only)
+## Step 2.5 — Balance check (optional, first run only)
 
-The Organizze `/accounts` API **does not return the current balance** — `pull.py` calculates it by summing paid transactions from the past 5 years. The initial balance the user entered when creating the account in the app **is not exposed** and creates a discrepancy.
+`pull.py` now fetches the **real balance** per account via `organizze accounts get <id>` (the official CLI), so no reconstruction/calibration is needed anymore. This step is only a sanity check.
 
-After the first `pull.py`, if `~/finance/organizze/balances.json` does not yet exist:
+After the first `pull.py`:
 
-1. Show the user, with `jq '.accounts | map(select(.archived==false and .institution_id != "cofrinho" and (.type == "checking" or .type == "savings"))) | map({id, name, calculated: (._balance_cents / 100)})' "$SNAP"`, the calculated balance for each main account.
+1. Show the user, with `jq '.accounts | map(select(.archived==false and .institution_id != "cofrinho" and (.type == "checking" or .type == "savings"))) | map({id, name, balance: (._balance_cents / 100)})' "$SNAP"`, the real balance for each main account.
 
-2. Use `AskUserQuestion` to confirm: "Does the calculated balance match what appears in the Organizze app for each account?" If not, ask the real balance account by account (in reais, e.g.: `801.74`).
+2. Use `AskUserQuestion` to confirm it matches the Organizze app. It should — these are the account's true balances, not a computed estimate. If it doesn't, that's a data issue (e.g. an archived/orphan account) worth investigating, not something to patch with an offset.
 
-3. Call:
+3. If a permanent adjustment is still needed for some reason (e.g. an external account not tracked in Organizze), an optional manual override is supported:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/reconcile.py --snapshot "$SNAP" <id>=<cents> [<id>=<cents> ...]
    ```
-   E.g.: `1234567=80174 7654321=194746` (R$ 801.74 and R$ 1,947.46 — illustrative IDs).
-
-4. The script writes `~/finance/organizze/balances.json` with the per-account offset. Future pulls apply it automatically — no need to repeat.
-
-5. Re-run `pull.py` (Step 3) to validate.
-
-Skip this step if `balances.json` already exists.
+   This writes `~/finance/organizze/balances.json`, added on top of the real balance on every future pull. Skip this step entirely in the common case.
 
 ## Step 2.7 — Map the paying account for each card (run when missing)
 

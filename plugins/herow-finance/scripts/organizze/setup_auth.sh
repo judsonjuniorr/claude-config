@@ -40,19 +40,31 @@ ORGANIZZE_USER_AGENT="$UA"
 EOF
 chmod 600 "$ORGANIZZE_AUTH"
 
-# Validate
-RESP="$(curl -sS -o /dev/null -w '%{http_code}' \
-  -u "$EMAIL:$TOKEN" \
-  -H "User-Agent: $UA" \
-  -H "Accept: application/json" \
-  "$ORGANIZZE_API/accounts")"
+# Ensure the official `organizze` CLI is installed (reads go through it; see _cli.py).
+if ! command -v organizze >/dev/null 2>&1; then
+  echo "info|installing-organizze-cli|..." >&2
+  if command -v brew >/dev/null 2>&1; then
+    brew install --cask organizze/tap/organizze >&2 \
+      || curl -fsSL https://raw.githubusercontent.com/organizze/agent-tools/main/scripts/install.sh | bash >&2
+  else
+    curl -fsSL https://raw.githubusercontent.com/organizze/agent-tools/main/scripts/install.sh | bash >&2
+  fi
+  command -v organizze >/dev/null 2>&1 || die "cli-install-failed" "organizze CLI install failed — see https://github.com/organizze/agent-tools"
+fi
 
-case "$RESP" in
-  200) ;;
-  401) rm -f "$ORGANIZZE_AUTH"; die "bad-credentials" "401 from /accounts — token rejected" ;;
-  400) rm -f "$ORGANIZZE_AUTH"; die "bad-user-agent" "400 from /accounts — User-Agent rejected" ;;
-  *)   die "unexpected-status" "$RESP from /accounts" ;;
-esac
+# Validate — same creds via CLI (email/token now flow through ORGANIZZE_API_KEY).
+_ERRFILE="$(mktemp)"
+trap 'rm -f "$_ERRFILE"' EXIT
+ORGANIZZE_EMAIL="$EMAIL" ORGANIZZE_API_KEY="$TOKEN" ORGANIZZE_USER_AGENT="$UA" \
+  organizze --json status >/dev/null 2>"$_ERRFILE"
+RC=$?
+if [ $RC -ne 0 ]; then
+  ERR="$(cat "$_ERRFILE" 2>/dev/null)"
+  case "$RC" in
+    3) rm -f "$ORGANIZZE_AUTH"; die "bad-credentials" "organizze status: auth rejected — $ERR" ;;
+    *) die "unexpected-status" "organizze status exit $RC — $ERR" ;;
+  esac
+fi
 
 # Store web password in Keychain + install playwright/chromium (idempotent)
 printf '%s' "$SENHA" | bash "$HERE/setup_scrape.sh" >&2 \
