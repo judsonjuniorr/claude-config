@@ -101,6 +101,9 @@ def cli_json(args: list[str], auth: tuple[str, str, str]) -> object:
         )
     except subprocess.TimeoutExpired:
         sys.exit(f"err|network|{BIN} timed out: {' '.join(args)}")
+    except OSError as e:
+        # e.g. the binary vanished between shutil.which() and exec, or perms changed.
+        sys.exit(f"err|network|{BIN} failed to execute: {e}")
 
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()[:200]

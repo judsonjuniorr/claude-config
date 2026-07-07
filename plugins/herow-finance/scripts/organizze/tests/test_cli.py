@@ -107,6 +107,17 @@ class TestCliJsonTimeout(unittest.TestCase):
         self.assertIn("timed out", str(ctx.exception))
 
 
+class TestCliJsonOSError(unittest.TestCase):
+    @patch("_cli.shutil.which", return_value="/usr/local/bin/organizze")
+    @patch("_cli.subprocess.run")
+    def test_binary_vanishing_mid_exec_maps_to_network_error(self, mock_run, mock_which):
+        # TOCTOU: binary present at shutil.which() but gone by exec time.
+        mock_run.side_effect = FileNotFoundError("No such file or directory")
+        with self.assertRaises(SystemExit) as ctx:
+            cli.cli_json(["accounts", "list"], AUTH)
+        self.assertIn("err|network|", str(ctx.exception))
+
+
 class TestCliJsonBadOutput(unittest.TestCase):
     @patch("_cli.shutil.which", return_value="/usr/local/bin/organizze")
     @patch("_cli.subprocess.run")
