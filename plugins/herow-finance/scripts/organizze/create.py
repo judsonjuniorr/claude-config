@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Create transactions in Organizze via REST v2 — the first WRITE path.
 
-Mirrors the read path's contract (auth/headers via _http.py) and the
+Reads (account/card/category/invoice/recent-tx lookups) go through the official
+`organizze` CLI (see _cli.py) — same rationale as pull.py. Writes stay on the
+hand-rolled REST POST in _http.py: the CLI's write surface can't express
+credit_card_invoice_id, installments_attributes, recurrence_attributes, or
+transfers, all of which this script needs.
+
+Mirrors the read path's contract (auth via _cli.py, writes via _http.py) and the
 apply_budgets.py safety spine: DRY-RUN is the default, `--apply` is the only
 state that POSTs, and every write is read-back verified.
 
@@ -16,6 +22,7 @@ Protocol:
   stderr: info|<state>|...   err|<code>|<detail>     (token never printed)
   stdout: ok|created|<id>    ok|transfer|<id>        (on a real --apply write)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,17 +35,32 @@ import unicodedata
 from collections import Counter
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _http import http_get, http_post, load_auth  # noqa: E402
+from _http import http_post  # noqa: E402
+from _cli import (  # noqa: E402
+    load_auth,
+    accounts_list,
+    credit_cards_list,
+    categories_list,
+    invoices_list,
+    transactions_list,
+)
 from _paths import CACHE, migrate_legacy  # noqa: E402
 
 migrate_legacy()
 
 # Per api-doc §"Cria uma movimentação recorrente (parcelada)".
-VALID_PERIODICITIES = {"monthly", "yearly", "weekly", "biweekly",
-                       "bimonthly", "trimonthly"}
+VALID_PERIODICITIES = {
+    "monthly",
+    "yearly",
+    "weekly",
+    "biweekly",
+    "bimonthly",
+    "trimonthly",
+}
 
 
 # --- text normalization (pure) ---------------------------------------------
+
 
 def _norm(s: str) -> str:
     """Casefold + accent-fold + collapse whitespace. Used for all fuzzy match."""
@@ -52,6 +74,7 @@ def _tokens(s: str) -> set[str]:
 
 
 # --- pure functions (unit-tested core) -------------------------------------
+
 
 def normalize_amount(value: float | int | str, kind: str) -> int:
     """Reais → cents int. expense → negative, income → positive.
@@ -122,8 +145,9 @@ def resolve_invoice_for_date(date_iso: str, invoices: list[dict]) -> dict | None
     return None
 
 
-def suggest_category(description: str, history: list[dict],
-                     categories: list[dict]) -> list[dict]:
+def suggest_category(
+    description: str, history: list[dict], categories: list[dict]
+) -> list[dict]:
     """Most-frequent category among history txs whose description shares a token
     with `description`. Returns category dicts ranked by frequency; [] when
     history is empty or nothing overlaps.
@@ -224,9 +248,11 @@ def find_duplicates(tx: dict, recent: list[dict]) -> list[dict]:
     day = (tx.get("date") or "")[:10]
     out = []
     for r in recent:
-        if (abs(int(r.get("amount_cents", 0))) == amt
-                and _norm(r.get("description", "")) == desc
-                and (r.get("date") or "")[:10] == day):
+        if (
+            abs(int(r.get("amount_cents", 0))) == amt
+            and _norm(r.get("description", "")) == desc
+            and (r.get("date") or "")[:10] == day
+        ):
             out.append(r)
     return out
 
@@ -256,30 +282,40 @@ def verify_created(resp: object, expected: dict) -> dict:
         total = resp.get("total_installments")
         if total is not None and int(total) != int(want_installments):
             return {"ok": False, "reason": "installment-count", "id": resp["id"]}
-        return {"ok": True, "id": resp["id"],
-                "count": int(total) if total is not None else None}
-    if "amount_cents" in expected and resp.get("amount_cents") is not None \
-            and int(resp["amount_cents"]) != int(expected["amount_cents"]):
+        return {
+            "ok": True,
+            "id": resp["id"],
+            "count": int(total) if total is not None else None,
+        }
+    if (
+        "amount_cents" in expected
+        and resp.get("amount_cents") is not None
+        and int(resp["amount_cents"]) != int(expected["amount_cents"])
+    ):
         return {"ok": False, "reason": "amount-mismatch"}
-    if expected.get("description") and resp.get("description") \
-            and _norm(resp["description"]) != _norm(expected["description"]):
+    if (
+        expected.get("description")
+        and resp.get("description")
+        and _norm(resp["description"]) != _norm(expected["description"])
+    ):
         return {"ok": False, "reason": "description-mismatch"}
     return {"ok": True, "id": resp["id"]}
 
 
 # --- network / resolution layer --------------------------------------------
 
+
 def _mask(token: str) -> str:
     return f"{token[:3]}…" if len(token) > 3 else "org…"
 
 
 def fetch_accounts(auth) -> list[dict]:
-    rows = http_get("/accounts", None, *auth) or []
+    rows = accounts_list(auth) or []
     return [a for a in rows if not a.get("archived") and a.get("type")]
 
 
 def fetch_credit_cards(auth) -> list[dict]:
-    rows = http_get("/credit_cards", None, *auth) or []
+    rows = credit_cards_list(auth) or []
     return [c for c in rows if not c.get("archived")]
 
 
@@ -287,21 +323,22 @@ def fetch_categories(auth) -> list[dict]:
     cached = _cache_get("categories.json", 7)
     if cached is not None:
         return cached
-    rows = http_get("/categories", None, *auth) or []
+    rows = categories_list(auth) or []
     _cache_set("categories.json", rows)
     return rows
 
 
 def fetch_invoices(card_id: int, auth) -> list[dict]:
-    return http_get(f"/credit_cards/{card_id}/invoices", None, *auth) or []
+    return invoices_list(card_id, None, None, auth) or []
 
 
 def fetch_recent_transactions(auth, days: int = 90) -> list[dict]:
     today = dt.date.today()
     start = today - dt.timedelta(days=days)
-    return http_get("/transactions",
-                    {"start_date": start.isoformat(), "end_date": today.isoformat()},
-                    *auth) or []
+    return (
+        transactions_list(start.isoformat(), today.isoformat(), auth, all_pages=True)
+        or []
+    )
 
 
 def _cache_get(name: str, max_age_days: int) -> object | None:
@@ -323,6 +360,7 @@ def _cache_set(name: str, data: object) -> None:
 
 
 # --- state machine ----------------------------------------------------------
+
 
 def _emit(state: str, detail: str = "") -> None:
     print(f"info|{state}|{detail}", file=sys.stderr)
@@ -406,11 +444,21 @@ def run(args: argparse.Namespace) -> int:
             "notes": notes,
         }
         payload = build_transfer_payload(tx)
-        _emit("resolve", f"transfer {src['name']} (origem) -> {dest['name']} (destino) R$ {amount/100:.2f}")
+        _emit(
+            "resolve",
+            f"transfer {src['name']} (origem) -> {dest['name']} (destino) R$ {amount / 100:.2f}",
+        )
         # Transfer read-back verifies id presence only: the POST response is the
         # signed outflow record, so an amount match would compare +req vs -resp.
-        return _finish(args, auth, "/transfers", payload, {}, kind="transfer",
-                       recent=fetch_recent_transactions(auth) if not args.force else [])
+        return _finish(
+            args,
+            auth,
+            "/transfers",
+            payload,
+            {},
+            kind="transfer",
+            recent=fetch_recent_transactions(auth) if not args.force else [],
+        )
 
     # ---- TRANSACTION modes (account / card / invoice) ----------------------
     if not description.strip():
@@ -419,19 +467,31 @@ def run(args: argparse.Namespace) -> int:
     amount = normalize_amount(args.valor, kind)
 
     category_id = None
-    tx: dict = {"description": description, "amount_cents": amount, "date": date_iso,
-                "paid": paid, "notes": notes}
+    tx: dict = {
+        "description": description,
+        "amount_cents": amount,
+        "date": date_iso,
+        "paid": paid,
+        "notes": notes,
+    }
 
     if args.cartao or args.fatura:
         cards = fetch_credit_cards(auth)
-        card = _resolve_or_exit(args.cartao or "", cards, "cartao") if args.cartao else None
+        card = (
+            _resolve_or_exit(args.cartao or "", cards, "cartao")
+            if args.cartao
+            else None
+        )
         if args.fatura:
             if card is None and len(cards) == 1:
                 card = cards[0]
             if card is None:
                 sys.exit("err|resolve|cartao obrigatorio com --fatura")
-            tx.update(target="invoice", credit_card_id=card["id"],
-                      credit_card_invoice_id=int(args.fatura))
+            tx.update(
+                target="invoice",
+                credit_card_id=card["id"],
+                credit_card_invoice_id=int(args.fatura),
+            )
             _emit("resolve", f"cartao {card['name']} fatura {args.fatura} (escolhida)")
         else:
             invoices = fetch_invoices(card["id"], auth)
@@ -441,10 +501,16 @@ def run(args: argparse.Namespace) -> int:
             start = (inv.get("starting_date") or "")[:10]
             close = (inv.get("closing_date") or "")[:10]
             approx = not (start and close and start <= date_iso[:10] <= close)
-            tx.update(target="card", credit_card_id=card["id"],
-                      credit_card_invoice_id=inv["id"])
+            tx.update(
+                target="card",
+                credit_card_id=card["id"],
+                credit_card_invoice_id=inv["id"],
+            )
             tag = " [APROXIMADA: sem janela de fechamento, confirme]" if approx else ""
-            _emit("resolve", f"cartao {card['name']} -> fatura {inv.get('date', inv['id'])}{tag}")
+            _emit(
+                "resolve",
+                f"cartao {card['name']} -> fatura {inv.get('date', inv['id'])}{tag}",
+            )
     elif args.conta:
         accounts = fetch_accounts(auth)
         acct = _resolve_or_exit(args.conta, accounts, "conta")
@@ -480,15 +546,32 @@ def run(args: argparse.Namespace) -> int:
     expected = {"amount_cents": amount, "description": description}
     if args.parcelas:
         expected["installments"] = int(args.parcelas)
-        _emit("installments", f"{args.parcelas}x — semantica do valor NAO verificada "
-              "contra conta real; confira o total no app apos --apply")
+        _emit(
+            "installments",
+            f"{args.parcelas}x — semantica do valor NAO verificada "
+            "contra conta real; confira o total no app apos --apply",
+        )
     recent = fetch_recent_transactions(auth) if not args.force else []
-    return _finish(args, auth, "/transactions", payload, expected,
-                   kind="transaction", recent=recent)
+    return _finish(
+        args,
+        auth,
+        "/transactions",
+        payload,
+        expected,
+        kind="transaction",
+        recent=recent,
+    )
 
 
-def _finish(args, auth, endpoint: str, payload: dict, expected: dict,
-            kind: str, recent: list[dict]) -> int:
+def _finish(
+    args,
+    auth,
+    endpoint: str,
+    payload: dict,
+    expected: dict,
+    kind: str,
+    recent: list[dict],
+) -> int:
     # DUP-CHK — always emit a signal so "no dups" is distinguishable from "not checked".
     if args.force:
         _emit("dup-check", "pulado (--force)")
@@ -499,14 +582,26 @@ def _finish(args, auth, endpoint: str, payload: dict, expected: dict,
     elif not recent:
         _emit("dup-check", "pulado (sem historico recente)")
     else:
-        dups = find_duplicates({"amount_cents": payload.get("amount_cents", expected.get("amount_cents")),
-                                "description": payload.get("description", ""),
-                                "date": payload.get("date", "")}, recent)
+        dups = find_duplicates(
+            {
+                "amount_cents": payload.get(
+                    "amount_cents", expected.get("amount_cents")
+                ),
+                "description": payload.get("description", ""),
+                "date": payload.get("date", ""),
+            },
+            recent,
+        )
         if dups:
             d = dups[0]
-            _emit("duplicate", f"{len(dups)} similar(es): id {d.get('id')} {d.get('date')}")
+            _emit(
+                "duplicate",
+                f"{len(dups)} similar(es): id {d.get('id')} {d.get('date')}",
+            )
             if args.apply:
-                sys.exit("err|duplicate|use --force para confirmar a criacao mesmo assim")
+                sys.exit(
+                    "err|duplicate|use --force para confirmar a criacao mesmo assim"
+                )
         else:
             _emit("dup-check", "0 similar")
 
@@ -524,7 +619,10 @@ def _finish(args, auth, endpoint: str, payload: dict, expected: dict,
     chk = verify_created(resp, expected)
     if not chk["ok"]:
         _emit("verify", f"FALHOU: {chk.get('reason')}")
-        print(f"err|verify|criado mas read-back falhou: {chk.get('reason')}", file=sys.stderr)
+        print(
+            f"err|verify|criado mas read-back falhou: {chk.get('reason')}",
+            file=sys.stderr,
+        )
         return 2
     extra = f" ({chk['count']} parcelas)" if chk.get("count") else ""
     _emit("verify", f"ok id {chk['id']}{extra}")
@@ -538,18 +636,29 @@ def _render_payload(payload: dict) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Create an Organizze transaction (dry-run by default).")
+    p = argparse.ArgumentParser(
+        description="Create an Organizze transaction (dry-run by default)."
+    )
     p.add_argument("text", nargs="*", help="free-text description")
-    p.add_argument("--descricao", help="explicit description (overrides free text join)")
-    p.add_argument("--input-file", dest="input_file",
-                   help="JSON file with free-text fields (description, notes) — "
-                        "injection-safe path for user text (no shell parsing)")
-    p.add_argument("--apply", action="store_true", help="actually POST (default: dry-run)")
+    p.add_argument(
+        "--descricao", help="explicit description (overrides free text join)"
+    )
+    p.add_argument(
+        "--input-file",
+        dest="input_file",
+        help="JSON file with free-text fields (description, notes) — "
+        "injection-safe path for user text (no shell parsing)",
+    )
+    p.add_argument(
+        "--apply", action="store_true", help="actually POST (default: dry-run)"
+    )
     p.add_argument("--force", action="store_true", help="skip duplicate confirmation")
     # target
     p.add_argument("--conta", help="account name (account mode)")
     p.add_argument("--cartao", help="credit card name (card mode)")
-    p.add_argument("--fatura", help="explicit invoice id (invoice mode, needs --cartao)")
+    p.add_argument(
+        "--fatura", help="explicit invoice id (invoice mode, needs --cartao)"
+    )
     # amount + sign
     p.add_argument("--valor", help="amount in reais (e.g. 50 / 50,00)")
     p.add_argument("--receita", action="store_true", help="income (positive)")
@@ -558,14 +667,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--categoria", help="category name")
     p.add_argument("--parcelas", type=int, help="number of installments")
     p.add_argument("--periodicidade", help="periodicity for installments/recurrence")
-    p.add_argument("--recorrente", action="store_true", help="fixed/recurring transaction")
+    p.add_argument(
+        "--recorrente", action="store_true", help="fixed/recurring transaction"
+    )
     # transfer
-    p.add_argument("--transferencia", action="store_true", help="transfer between accounts")
+    p.add_argument(
+        "--transferencia", action="store_true", help="transfer between accounts"
+    )
     p.add_argument("--de", help="source account (transfer)")
     p.add_argument("--para", help="destination account (transfer)")
     p.add_argument("--paga", action="store_true", help="force paid=true")
-    p.add_argument("--nao-paga", dest="nao_paga", action="store_true",
-                   help="force paid=false (pending); default infers from date")
+    p.add_argument(
+        "--nao-paga",
+        dest="nao_paga",
+        action="store_true",
+        help="force paid=false (pending); default infers from date",
+    )
     p.add_argument("--nota", help="optional note")
     return p
 

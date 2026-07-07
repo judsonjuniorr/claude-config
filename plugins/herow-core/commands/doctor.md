@@ -20,12 +20,12 @@ Scripts live at `${CLAUDE_PLUGIN_ROOT}/scripts/`:
 
 Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/detect.sh"`. Parse the records and show a compact inventory in four groups:
 - **Deps**: git/brew/python3/uv/node/npm/bun — `installed` vs `missing`.
-- **Stack**: rtk / graphify / headroom / gstack — `installed` or `missing`.
+- **Stack**: rtk / graphify / headroom / gstack / organizze — `installed` or `missing`.
 - **Removal candidates** (`remove|…`) and **Token optimizations** (`opt|…`) — relevant only to the install branch below.
 
 ## Step 2 — Install / repair branch (AskUserQuestion gate)
 
-If any **stack tool is `missing`** (rtk/graphify/headroom/gstack), or detect surfaced removal/opt candidates, ask with `AskUserQuestion`:
+If any **stack tool is `missing`** (rtk/graphify/headroom/gstack/organizze), or detect surfaced removal/opt candidates, ask with `AskUserQuestion`:
 - **Run install/repair now** — bootstrap the stack, then continue to the audit.
 - **Audit only** — skip install; audit whatever exists.
 
@@ -33,7 +33,7 @@ Doctor never installs silently. If **Run install/repair** is chosen, execute the
 
 1. **Confirm removals** (`AskUserQuestion`, one Yes per group) for each `remove|…` group detect found — OMEGA surfaces, loose duplicate `blueprint|quick|execute` commands/hooks, stray memory/token MCP servers. Nothing is removed without approval. Collect approved tokens (`omega`, `loose`, `stray:<key>`).
 2. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/ensure-deps.sh"` — installs missing deps; if it reports python3 < 3.10, stop and tell the user to upgrade before headroom.
-3. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` — gstack clone+setup, rtk/graphify verify, headroom install. Then **ask the headroom mode** (`AskUserQuestion`, all force telemetry OFF): **MCP tools (safe)** → `headroom-wrap.sh mcp`; **Durable init (Recommended)** → `headroom-wrap.sh init` (can break Pro/Max OAuth, backed up, needs restart); **Proxy wrap (legacy)** → `headroom-wrap.sh wrap`. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" <mode>`.
+3. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` — gstack clone+setup, rtk/graphify verify, headroom install, `organizze` CLI install (brew cask, curl fallback — used by `herow-finance`'s Organizze read path). Then **ask the headroom mode** (`AskUserQuestion`, all force telemetry OFF): **MCP tools (safe)** → `headroom-wrap.sh mcp`; **Durable init (Recommended)** → `headroom-wrap.sh init` (can break Pro/Max OAuth, backed up, needs restart); **Proxy wrap (legacy)** → `headroom-wrap.sh wrap`. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" <mode>`.
 4. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/token-guard.sh"` — safe defaults, no approval needed (`model: opusplan`, `advisorModel: opus`, `effortLevel: high`, `autoCompact: true`, removes any `CLAUDE_CODE_SUBAGENT_MODEL` pin, pins `ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-4-8` and `ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5`).
 5. **Model pin picker** — lets the user choose which Opus and Sonnet to pin for `opusplan` (overrides the safe defaults written by token-guard above):
    1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup/model-pin.py" --list`. Parse the output lines (`family|id|label`); split into `opus` and `sonnet` candidate **model IDs** (3 each, most recent first). Only these exact IDs are valid choices — never substitute free text.

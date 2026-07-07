@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0.0] - 2026-07-06
+
+### Added
+- `herow-finance`'s Organizze integration now reads through the official [`organizze` CLI](https://github.com/organizze/agent-tools) (`_cli.py`) instead of a hand-rolled `urllib` client — same API token, same data, officially maintained transport with built-in pagination.
+- `/herow-core:doctor` detects, installs (brew cask / curl fallback), and verifies the `organizze` CLI alongside `rtk`/`graphify`/`headroom`.
+
+### Changed
+- Account balances now come from the CLI's real per-account `balance` (parsed from Organizze's formatted `"R$ 1.234,56"` string) instead of being reconstructed by summing 5 years of transactions — more accurate, and the old balance-calibration onboarding step is now an optional sanity check rather than a required workaround.
+- `create.py`'s account/card/category/invoice/recent-transaction lookups also go through the CLI; the actual writes (transactions, transfers, installments, recurrences, invoice-targeted card entries) stay on the existing REST POST path, since the CLI's write surface doesn't cover all of them.
+- `setup_auth.sh` installs the `organizze` CLI during onboarding and validates credentials with `organizze status`.
+
+### Fixed
+- Two issues caught by pre-merge review before they shipped: the CLI's `accounts get` balance field is a formatted string, not integer cents like every other money field in the API — parsing it directly would have crashed on any non-zero balance; and a narrow TOCTOU where the CLI binary disappears between the presence check and execution now surfaces as a normal `err|network|` failure instead of a raw traceback.
+
 ## [0.2.2.0] - 2026-07-05
 
 ### Fixed

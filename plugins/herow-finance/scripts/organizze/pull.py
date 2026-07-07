@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Pull Organizze data via REST v2 and save a consolidated snapshot.
+"""Pull Organizze data via the official `organizze` CLI and save a consolidated
+snapshot.
 
 Usage:
   pull.py --out PATH [--history-days N] [--future-days N]
   pull.py --re-enrich-only PATH
 
 Reads credentials from ~/finance/organizze/.auth (ORGANIZZE_EMAIL,
-ORGANIZZE_TOKEN, ORGANIZZE_USER_AGENT). Stdlib only.
+ORGANIZZE_TOKEN, ORGANIZZE_USER_AGENT) and forwards them to the `organizze` CLI
+(see _cli.py) — same REST v2 data, official/maintained transport, real account
+balances instead of the old 5-year-summation reconstruction.
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import copy
 import datetime as dt
 import json
@@ -20,13 +22,20 @@ import pathlib
 import statistics
 import sys
 import unicodedata
-import urllib.error
-import urllib.parse
-import urllib.request
 from typing import Optional
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _paths import HOME, AUTH, CACHE, migrate_legacy  # noqa: E402
+from _paths import HOME, CACHE, migrate_legacy  # noqa: E402
+from _cli import (  # noqa: E402
+    load_auth,
+    accounts_list,
+    account_get,
+    categories_list,
+    credit_cards_list,
+    invoices_list,
+    transactions_list,
+    budgets as cli_budgets,
+)
 
 migrate_legacy()
 
@@ -34,74 +43,12 @@ _SCRIPTS_DIR = pathlib.Path(__file__).parent
 _ENRICHMENT_RULES_PATH = _SCRIPTS_DIR / "enrichment_rules.yaml"
 _ENRICHMENT_MTIME_PATH = HOME / ".enrichment-mtime"
 
-API = "https://api.organizze.com.br/rest/v2"
-
-
-# --- auth + http -----------------------------------------------------------
-
-
-def load_auth() -> tuple[str, str, str]:
-    if not AUTH.exists():
-        sys.exit("err|no-auth|run setup_auth.sh first")
-    env: dict[str, str] = {}
-    for line in AUTH.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        env[k.strip()] = v.strip().strip('"').strip("'")
-    try:
-        return (
-            env["ORGANIZZE_EMAIL"],
-            env["ORGANIZZE_TOKEN"],
-            env["ORGANIZZE_USER_AGENT"],
-        )
-    except KeyError as e:
-        sys.exit(f"err|bad-auth|missing {e}")
-
-
-def http_get(path: str, params: dict | None, email: str, token: str, ua: str) -> object:
-    qs = ("?" + urllib.parse.urlencode(params)) if params else ""
-    url = f"{API}{path}{qs}"
-    creds = base64.b64encode(f"{email}:{token}".encode()).decode()
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Basic {creds}",
-            "User-Agent": ua,
-            "Accept": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read().decode("utf-8") or "null")
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:200]
-        sys.exit(f"err|http-{e.code}|{path} {body}")
-    except urllib.error.URLError as e:
-        sys.exit(f"err|network|{e.reason}")
-
 
 # --- helpers ---------------------------------------------------------------
 
 
 def iso(d: dt.date) -> str:
     return d.isoformat()
-
-
-def month_ranges(start: dt.date, end: dt.date) -> list[tuple[dt.date, dt.date]]:
-    """Yield (first_day, last_day) for each month touching [start, end]."""
-    out = []
-    cur = start.replace(day=1)
-    while cur <= end:
-        if cur.month == 12:
-            nxt = cur.replace(year=cur.year + 1, month=1, day=1)
-        else:
-            nxt = cur.replace(month=cur.month + 1, day=1)
-        last = nxt - dt.timedelta(days=1)
-        out.append((max(cur, start), min(last, end)))
-        cur = nxt
-    return out
 
 
 def cache_get(name: str, max_age_days: int) -> object | None:
@@ -126,86 +73,58 @@ def cache_set(name: str, data: object) -> None:
 
 
 def fetch_transactions(
-    start: dt.date, end: dt.date, email: str, token: str, ua: str
+    start: dt.date, end: dt.date, auth: tuple[str, str, str]
 ) -> list[dict]:
-    """API groups by full month; we iterate month by month and deduplicate by id."""
+    """CLI auto-paginates (--all); we still dedupe by id as a safety net."""
+    rows = transactions_list(iso(start), iso(end), auth, all_pages=True)
     seen: dict[int, dict] = {}
-    for a, b in month_ranges(start, end):
-        rows = http_get(
-            "/transactions",
-            {"start_date": iso(a), "end_date": iso(b)},
-            email,
-            token,
-            ua,
-        )
-        if isinstance(rows, list):
-            for t in rows:
-                if isinstance(t, dict) and "id" in t:
-                    seen[t["id"]] = t
+    for t in rows:
+        if isinstance(t, dict) and "id" in t:
+            seen[t["id"]] = t
     return list(seen.values())
 
 
-def compute_account_balances(
-    accounts: list[dict],
-    credit_card_ids: set[int],
-    email: str,
-    token: str,
-    ua: str,
-    lookback_years: int = 5,
-) -> tuple[dict[int, int], list[dict]]:
-    """Balance per account = sum(paid transactions, account_id, NOT card), in cents.
+def fetch_account_balances(
+    accounts: list[dict], auth: tuple[str, str, str]
+) -> dict[int, int]:
+    """Real balance per account, in cents, via `organizze accounts get <id>`.
 
-    The /accounts API does not return balance. We reconstruct it by summing the
-    long history, excluding card invoice spending (credit_card_id != null) and
-    accounts that are actually cards (account_id ∈ credit_card_ids).
+    Replaces the old 5-year transaction-summation reconstruction (the /accounts
+    list endpoint doesn't include balance, but `accounts get` does).
     Supports manual offset in ~/finance/organizze/balances.json:
-        {"<account_id>": <offset_cents>}  # added to the calculated value
-
-    Returns:
-        Tuple of (balances_dict, all_transactions_5y) where all_transactions_5y
-        is the flat list of all transactions fetched (deduplicated by id).
+        {"<account_id>": <offset_cents>}  # added on top of the real balance
     """
-    today = dt.date.today()
-    start = today.replace(year=today.year - lookback_years)
-    sums: dict[int, int] = {a["id"]: 0 for a in accounts if "id" in a}
-    all_txs: dict[int, dict] = {}  # deduplicated by id
-    for a, b in month_ranges(start, today):
-        rows = http_get(
-            "/transactions",
-            {"start_date": iso(a), "end_date": iso(b)},
-            email,
-            token,
-            ua,
-        )
-        if not isinstance(rows, list):
+    balances: dict[int, int] = {}
+    for a in accounts:
+        acc_id = a.get("id")
+        if acc_id is None:
             continue
-        for t in rows:
-            if not isinstance(t, dict):
-                continue
-            # Accumulate ALL transactions for is_recurring detection
-            if "id" in t:
-                all_txs[t["id"]] = t
-            if not t.get("paid"):
-                continue
-            if t.get("credit_card_id") is not None:
-                continue
-            acc = t.get("account_id")
-            if acc in credit_card_ids:
-                continue
-            if acc in sums:
-                sums[acc] += int(t.get("amount_cents") or 0)
+        detail = account_get(acc_id, auth)
+        balances[acc_id] = int(detail.get("balance") or 0)
     offsets_path = HOME / "balances.json"
     if offsets_path.exists():
         try:
             offsets = json.loads(offsets_path.read_text())
             for k, v in offsets.items():
                 try:
-                    sums[int(k)] = sums.get(int(k), 0) + int(v)
+                    balances[int(k)] = balances.get(int(k), 0) + int(v)
                 except (TypeError, ValueError):
                     pass
         except Exception as e:
             print(f"warn|balances-offset|{e}", file=sys.stderr)
-    return sums, list(all_txs.values())
+    return balances
+
+
+def fetch_history_5y(auth: tuple[str, str, str], lookback_years: int = 5) -> list[dict]:
+    """Full transaction history for recurring detection (not balances anymore)."""
+    today = dt.date.today()
+    start = today.replace(year=today.year - lookback_years)
+    rows = transactions_list(iso(start), iso(today), auth, all_pages=True)
+    seen: dict[int, dict] = {}
+    for t in rows:
+        if isinstance(t, dict) and "id" in t:
+            seen[t["id"]] = t
+    return list(seen.values())
 
 
 def detect_recurring(transactions: list[dict], months_window: int = 6) -> set[int]:
@@ -741,7 +660,7 @@ def main() -> int:
         print("err|missing-arg|--out is required", file=sys.stderr)
         return 2
 
-    email, token, ua = load_auth()
+    auth = load_auth()
     CACHE.mkdir(parents=True, exist_ok=True)
 
     today = dt.date.today()
@@ -760,7 +679,7 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    accounts_all = http_get("/accounts", None, email, token, ua) or []
+    accounts_all = accounts_list(auth) or []
     # active = not archived AND type defined (type=null indicates zombie/orphan account)
     accounts = [a for a in accounts_all if not a.get("archived") and a.get("type")]
     print(
@@ -770,29 +689,28 @@ def main() -> int:
 
     categories = cache_get("categories.json", max_age_days=7)
     if categories is None:
-        categories = http_get("/categories", None, email, token, ua) or []
+        categories = categories_list(auth) or []
         cache_set("categories.json", categories)
     print(
         f"info|categories|{len(categories)} (cached={categories is not None})",
         file=sys.stderr,
     )
 
-    credit_cards_all = http_get("/credit_cards", None, email, token, ua) or []
+    credit_cards_all = credit_cards_list(auth) or []
     credit_cards = [cc for cc in credit_cards_all if not cc.get("archived")]
-    credit_card_ids = {cc["id"] for cc in credit_cards if "id" in cc}
     print(
         f"info|credit_cards|{len(credit_cards)} active (ignored {len(credit_cards_all) - len(credit_cards)} archived)",
         file=sys.stderr,
     )
 
-    # Balances per account — calculated via long history (API does not return balance)
-    # Now returns (balances_dict, all_transactions_5y)
-    balances, all_transactions_5y = compute_account_balances(
-        accounts, credit_card_ids, email, token, ua
-    )
+    # Real balances via `organizze accounts get <id>` (no more 5y-summation reconstruction).
+    balances = fetch_account_balances(accounts, auth)
     for a in accounts:
         a["_balance_cents"] = balances.get(a.get("id"), 0)
-    print(f"info|balances|computed for {len(balances)} accounts", file=sys.stderr)
+    print(f"info|balances|fetched for {len(balances)} accounts", file=sys.stderr)
+
+    # Still need long history for recurring detection.
+    all_transactions_5y = fetch_history_5y(auth)
     print(
         f"info|transactions_5y|{len(all_transactions_5y)} transactions in 5y history",
         file=sys.stderr,
@@ -803,28 +721,17 @@ def main() -> int:
         cid = cc.get("id")
         if not cid:
             continue
-        invs = (
-            http_get(
-                f"/credit_cards/{cid}/invoices",
-                {"start_date": iso(past_start), "end_date": iso(future_end)},
-                email,
-                token,
-                ua,
-            )
-            or []
-        )
+        invs = invoices_list(cid, iso(past_start), iso(future_end), auth) or []
         for inv in invs:
             inv["_credit_card_id"] = cid
             inv["_credit_card_name"] = cc.get("name")
         invoices.extend(invs)
     print(f"info|invoices|{len(invoices)}", file=sys.stderr)
 
-    tx_past = fetch_transactions(past_start, today, email, token, ua)
+    tx_past = fetch_transactions(past_start, today, auth)
     print(f"info|transactions_past|{len(tx_past)}", file=sys.stderr)
 
-    tx_future = fetch_transactions(
-        today + dt.timedelta(days=1), future_end, email, token, ua
-    )
+    tx_future = fetch_transactions(today + dt.timedelta(days=1), future_end, auth)
     print(f"info|transactions_future|{len(tx_future)}", file=sys.stderr)
 
     # Load enrichment config
@@ -848,16 +755,11 @@ def main() -> int:
         while m > 12:
             m -= 12
             y += 1
-        b = http_get(f"/budgets/{y}/{m}", None, email, token, ua)
-        if isinstance(b, list):
-            for item in b:
-                item["_year"] = y
-                item["_month"] = m
-            budgets.extend(b)
-        elif isinstance(b, dict):
-            b["_year"] = y
-            b["_month"] = m
-            budgets.append(b)
+        b = cli_budgets(y, m, auth)
+        for item in b:
+            item["_year"] = y
+            item["_month"] = m
+        budgets.extend(b)
     print(f"info|budgets|{len(budgets)}", file=sys.stderr)
 
     pulled_at = dt.datetime.now().isoformat(timespec="seconds")
