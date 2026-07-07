@@ -110,7 +110,9 @@ class TestCliJsonTimeout(unittest.TestCase):
 class TestCliJsonBadOutput(unittest.TestCase):
     @patch("_cli.shutil.which", return_value="/usr/local/bin/organizze")
     @patch("_cli.subprocess.run")
-    def test_non_json_stdout_on_success_exit_maps_to_bad_json(self, mock_run, mock_which):
+    def test_non_json_stdout_on_success_exit_maps_to_bad_json(
+        self, mock_run, mock_which
+    ):
         # rc=0 but stdout isn't valid JSON (e.g. a crash/partial write past the exit check).
         mock_run.return_value = _FakeProc(0, stdout="not json {")
         with self.assertRaises(SystemExit) as ctx:
@@ -132,6 +134,50 @@ class TestTypedHelpers(unittest.TestCase):
         result = cli.account_get(3, AUTH)
         mock_cli_json.assert_called_once_with(["accounts", "get", "3"], AUTH)
         self.assertEqual(result["balance"], 12345)
+
+    @patch("_cli.cli_json")
+    def test_account_get_parses_real_brl_formatted_balance(self, mock_cli_json):
+        # Per the REST v2 OpenAPI spec, GET /accounts/{id}'s `balance` is a
+        # FORMATTED STRING ("R$ 1.234,56"), unlike every other money field in
+        # the API (integer cents) — this is the real shape the CLI returns.
+        mock_cli_json.return_value = {"id": 3, "balance": "R$ 1.234,56"}
+        result = cli.account_get(3, AUTH)
+        self.assertEqual(result["balance"], 123456)
+
+    @patch("_cli.cli_json")
+    def test_account_get_parses_negative_brl_balance(self, mock_cli_json):
+        mock_cli_json.return_value = {"id": 3, "balance": "-R$ 50,00"}
+        result = cli.account_get(3, AUTH)
+        self.assertEqual(result["balance"], -5000)
+
+    @patch("_cli.cli_json")
+    def test_account_get_parses_zero_brl_balance(self, mock_cli_json):
+        mock_cli_json.return_value = {"id": 3, "balance": "R$ 0,00"}
+        result = cli.account_get(3, AUTH)
+        self.assertEqual(result["balance"], 0)
+
+
+class TestParseBrlCents(unittest.TestCase):
+    def test_thousands_and_decimal(self):
+        self.assertEqual(cli._parse_brl_cents("R$ 1.234,56"), 123456)
+
+    def test_no_thousands_separator(self):
+        self.assertEqual(cli._parse_brl_cents("R$ 50,00"), 5000)
+
+    def test_negative_sign_before_symbol(self):
+        self.assertEqual(cli._parse_brl_cents("-R$ 50,00"), -5000)
+
+    def test_negative_sign_after_symbol(self):
+        self.assertEqual(cli._parse_brl_cents("R$ -50,00"), -5000)
+
+    def test_single_digit_cents_padded(self):
+        self.assertEqual(cli._parse_brl_cents("R$ 10,5"), 1050)
+
+    def test_zero(self):
+        self.assertEqual(cli._parse_brl_cents("R$ 0,00"), 0)
+
+    def test_large_value_multiple_thousands_separators(self):
+        self.assertEqual(cli._parse_brl_cents("R$ 1.234.567,89"), 123456789)
 
     @patch("_cli.cli_json")
     def test_invoices_list_with_dates(self, mock_cli_json):

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -120,9 +121,32 @@ def accounts_list(auth: tuple[str, str, str]) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
+def _parse_brl_cents(value: str) -> int:
+    """Parse a formatted BRL string ('R$ 1.234,56', 'R$ -50,00') to integer cents.
+
+    Per the REST v2 OpenAPI spec, GET /accounts/{id}'s `balance` is a formatted
+    string (unlike every other money field in the API, which is integer cents) —
+    strip the currency symbol/thousands separators, keep sign and decimal comma.
+    """
+    negative = "-" in value
+    digits = re.sub(r"[^\d,]", "", value)
+    if not digits:
+        return 0
+    reais_part, _, cents_part = digits.partition(",")
+    reais_part = reais_part or "0"
+    cents_part = (cents_part + "00")[:2] or "00"
+    cents = int(reais_part) * 100 + int(cents_part)
+    return -cents if negative else cents
+
+
 def account_get(account_id: int, auth: tuple[str, str, str]) -> dict:
     data = cli_json(["accounts", "get", str(account_id)], auth)
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    data = dict(data)
+    if isinstance(data.get("balance"), str):
+        data["balance"] = _parse_brl_cents(data["balance"])
+    return data
 
 
 def categories_list(auth: tuple[str, str, str]) -> list[dict]:
