@@ -47,4 +47,21 @@ elif have uv; then
 else
   emit err headroom "uv missing — run ensure-deps first"
 fi
+
+## --- organizze CLI (herow-finance's Organizze read path; brew cask, curl fallback) ---
+if have organizze; then emit ok organizze "$(organizze --version 2>/dev/null | head -1)"
+elif have brew; then
+  info organizze "brew install --cask organizze/tap/organizze"
+  if brew install --cask organizze/tap/organizze; then emit ok organizze installed
+  else
+    info organizze "brew cask failed — falling back to curl installer"
+    curl -fsSL https://raw.githubusercontent.com/organizze/agent-tools/main/scripts/install.sh | bash \
+      && emit ok organizze "installed (curl)" \
+      || emit err organizze "install failed"
+  fi
+else
+  curl -fsSL https://raw.githubusercontent.com/organizze/agent-tools/main/scripts/install.sh | bash \
+    && emit ok organizze "installed (curl)" \
+    || emit err organizze "missing and no brew"
+fi
 exit 0

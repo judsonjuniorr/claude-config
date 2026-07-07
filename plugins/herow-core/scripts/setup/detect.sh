@@ -23,6 +23,7 @@ if have rtk;      then emit tool rtk      installed "$(rtk --version 2>/dev/null
 if have graphify; then emit tool graphify installed "$(graphify --version 2>/dev/null | head -1)"; else emit tool graphify missing -; fi
 if have headroom; then emit tool headroom installed "$(headroom --version 2>/dev/null | head -1)"; else emit tool headroom missing -; fi
 if [ -d "${GSTACK_DIR}/.git" ]; then emit tool gstack installed "${GSTACK_DIR}"; else emit tool gstack missing -; fi
+if have organizze; then emit tool organizze installed "$(organizze --version 2>/dev/null | head -1)"; else emit tool organizze missing -; fi
 
 ## --- OMEGA surfaces (all removal candidates) ---
 have uv && uv tool list 2>/dev/null | grep -qi '^omega-memory' && emit remove omega uv-tool "uv tool: omega-memory"
