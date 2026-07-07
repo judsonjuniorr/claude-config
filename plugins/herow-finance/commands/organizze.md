@@ -1,5 +1,5 @@
 ---
-description: (herow) Pulls data from Organizze via REST API and generates a consolidated financial analysis (balance, projection, recommendations), then renders an interactive HTML dashboard artifact.
+description: (herow) Pulls data from Organizze via the official `organizze` CLI and generates a consolidated financial analysis (balance, projection, recommendations), then renders an interactive HTML dashboard artifact.
 allowed-tools: Bash, Read, Write, AskUserQuestion, Agent, Artifact, mcp__playwright__browser_navigate, mcp__playwright__browser_close, mcp__playwright__browser_snapshot
 argument-hint: "[<free text> | --history-days N | --future-days N | --no-analyze | --lang en|pt-br]"
 effort: medium
@@ -97,9 +97,9 @@ The script prints `info|...` lines on stderr (counts per endpoint) and a final `
 > ```
 > This is the canonical path. Always use it whenever you need `$SNAP` in a new block.
 
-Error handling:
-- `err|http-401|...` → token rejected. Delete `~/finance/organizze/.auth` and return to Step 2.
-- `err|http-400|...` → User-Agent rejected. Check `~/finance/organizze/.auth` (field `ORGANIZZE_USER_AGENT`).
+Error handling (reads now go through the `organizze` CLI — see `_cli.py`'s exit-code map):
+- `err|auth|...` → token rejected. Delete `~/finance/organizze/.auth` and return to Step 2.
+- `err|no-cli|...` → the `organizze` CLI isn't on PATH. Run `scripts/setup/install-stack.sh` or `/herow-core:doctor`.
 - `err|network|...` → fail fast, report to the user.
 
 After pull.py runs successfully, print:

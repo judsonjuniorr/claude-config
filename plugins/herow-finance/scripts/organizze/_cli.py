@@ -88,7 +88,8 @@ def cli_json(args: list[str], auth: tuple[str, str, str]) -> object:
     """
     if shutil.which(BIN) is None:
         sys.exit(
-            f"err|no-cli|{BIN} not found on PATH — install via scripts/setup/ensure-deps.sh"
+            f"err|no-cli|{BIN} not found on PATH — install via "
+            "scripts/setup/install-stack.sh (or /herow-core:doctor)"
         )
     email, token, ua = auth
     try:

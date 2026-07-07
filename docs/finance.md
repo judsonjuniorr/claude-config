@@ -141,7 +141,7 @@ Any failure in Step 3.5 (login, 2FA, scraping, consolidation) degrades silently 
 
 ## /herow-finance:organizze
 
-Pulls personal financial data from **Organizze** via its official REST API, builds a consolidated snapshot, and delegates analysis to the [`financial-analyst`](../plugins/herow-finance/agents/financial-analyst.md) subagent.
+Pulls personal financial data from **Organizze** via the official [`organizze` CLI](https://github.com/organizze/agent-tools) (wrapping the REST v2 API), builds a consolidated snapshot, and delegates analysis to the [`financial-analyst`](../plugins/herow-finance/agents/financial-analyst.md) subagent.
 
 ### What it does
 
