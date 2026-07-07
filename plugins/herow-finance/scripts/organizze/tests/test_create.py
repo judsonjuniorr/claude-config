@@ -489,14 +489,18 @@ class _RunFake:
         self.posts = []
         self._recent = recent or []
         self._post_resp = post_resp
-        self._invoices = invoices if invoices is not None else [
-            {
-                "id": 501,
-                "date": "2026-06-01",
-                "starting_date": "2026-05-20",
-                "closing_date": "2026-06-19",
-            }
-        ]
+        self._invoices = (
+            invoices
+            if invoices is not None
+            else [
+                {
+                    "id": 501,
+                    "date": "2026-06-01",
+                    "starting_date": "2026-05-20",
+                    "closing_date": "2026-06-19",
+                }
+            ]
+        )
 
     def accounts_list(self, auth):
         return [

@@ -5,6 +5,7 @@ the urllib->CLI migration (real balance vs 5-year-summation reconstruction);
 these tests monkeypatch pull's _cli imports (account_get, transactions_list)
 to verify them with no subprocess/network.
 """
+
 import json
 import os
 import pathlib
