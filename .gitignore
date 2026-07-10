@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .plans/
+.claude/plans/
 .claude/worktree/
 .playwright-mcp/
 reddit-raw.json

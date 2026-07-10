@@ -1,77 +1,197 @@
 #!/usr/bin/env bash
 # Harness-driven persistence for /herow-dev:blueprint.
 # Fires on PreToolUse/PostToolUse for the Skill tool (registered in herow-dev/hooks/hooks.json).
-# - PRE  : snapshot file mtimes into /tmp/blueprint-<id>.snap
-# - POST : diff against snapshot, append artifacts + checkpoint to .plans/<id>.state.json
-# Only acts when .plans/.active exists in the project dir.
+#
+# Layout: one directory per plan under .claude/plans/<slug>/ holding plan.md, state.json,
+# optional source.md, and an artifacts/ subdir for everything the plan's orchestration produces.
+#
+# Concurrency model (parallel sessions in the same repo are the norm):
+#   - The active plan is bound to the SESSION, not the repo: the marker file is
+#     .claude/plans/.active-<session_id>, and this hook only acts on the plan owned by
+#     the session_id in its OWN payload. A second session's Skill calls never land in
+#     another session's plan.
+#   - state.json is written atomically (temp file + os.replace) so a crash or the hook
+#     timeout can never leave torn/half-written JSON that poisons every later run.
+#   - The mtime snapshot is scoped to the plan's own artifacts/ dir and keyed per
+#     invocation (LIFO stack), so nested/overlapping Skill calls never clobber each other.
+#     Pairing is exact for nested calls; for truly concurrent (non-nested) calls within one
+#     session, per-skill artifact ATTRIBUTION is best-effort — records stay intact, but an
+#     artifact may be listed under the sibling call that finished first.
 set -eu
 
 EVENT="${1:-post}"
 PAYLOAD="$(cat || true)"
 CWD="${CLAUDE_PROJECT_DIR:-$PWD}"
-MARKER="$CWD/.plans/.active"
 
-[ -f "$MARKER" ] || exit 0
-ID="$(tr -d '[:space:]' < "$MARKER")"
-[ -n "$ID" ] || exit 0
-
-SKILL="$(printf '%s' "$PAYLOAD" | python3 -c "import json,sys
+# --- Resolve the session that owns this hook invocation, and the skill name. ---
+read_field() {
+  # $1 = python expression against the parsed payload dict `d`; prints '' on any error.
+  printf '%s' "$PAYLOAD" | python3 -c "import json,sys
 try:
   d=json.load(sys.stdin)
-  ti=d.get('tool_input',{})
-  print(ti.get('skill') or ti.get('args') or '')
-except: pass" 2>/dev/null || true)"
-[ -n "$SKILL" ] || exit 0
+except Exception:
+  print(''); sys.exit(0)
+try:
+  print($1)
+except Exception:
+  print('')" 2>/dev/null || true
+}
 
-STATE="$CWD/.plans/$ID.state.json"
-SNAP="/tmp/blueprint-$ID.snap"
+SID="$(read_field "d.get('session_id') or ''")"
+[ -n "$SID" ] || exit 0
+# session_id becomes part of the marker filename — restrict to a safe charset so a hostile
+# or malformed payload can never smuggle a path separator into the marker path.
+case "$SID" in *[!A-Za-z0-9._-]*) exit 0 ;; esac
+
+MARKER="$CWD/.claude/plans/.active-$SID"
+[ -f "$MARKER" ] || exit 0                       # this session is not blueprinting — no-op
+# Tolerate the marker being removed concurrently (consolidation's rm) — a benign teardown
+# race must produce a clean no-op, not a set -e abort on the failed redirection.
+SLUG="$(tr -d '[:space:]' < "$MARKER" 2>/dev/null || true)"
+[ -n "$SLUG" ] || exit 0
+# The slug is model-generated (kebab-cased from the feature description) and crosses a trust
+# boundary here: it is used verbatim in a filesystem path. Reject anything outside a strict
+# charset and any leading dot ('.', '..', hidden dirs), or a traversal slug like '../../..'
+# would make this hook create dirs and write state OUTSIDE the repo.
+case "$SLUG" in *[!A-Za-z0-9._-]*|.*) exit 0 ;; esac
+
+PLAN_DIR="$CWD/.claude/plans/$SLUG"
+[ -d "$PLAN_DIR" ] || exit 0
+
+SKILL="$(read_field "(lambda ti: ti.get('skill') or ti.get('args') or '')(d.get('tool_input',{}))")"
+[ -n "$SKILL" ] || exit 0
+# Normalize: drop ONE leading slash and ONE plugin-namespace segment (herow-core:github-ops
+# -> github-ops), so the canonical coverage checklist (unnamespaced) matches reliably while
+# multi-segment skills keep their identity (herow-dev:code:review -> code:review, not review).
+SKILL="${SKILL#/}"
+SKILL="${SKILL#*:}"
+
+STATE="$PLAN_DIR/state.json"
+ART_DIR="$PLAN_DIR/artifacts"
+SNAP_DIR="$PLAN_DIR/.snap"
+STACK="$SNAP_DIR/stack"
 NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+mkdir -p "$ART_DIR" "$SNAP_DIR"
+
+# Serialize the stack mutation + state.json read-modify-write per plan. The harness can run
+# independent tool calls (hence Skill PRE/POST pairs) concurrently within one session, and
+# atomic os.replace() alone would still lose an update in that race. macOS ships no flock(1),
+# so use mkdir as a bounded spinlock, and FAIL OPEN after the bound so the hook can never hang
+# toward its 15/20s timeout. lock_release only ever removes a lock this invocation owns.
+LOCK="$SNAP_DIR/.lock"
+lock_held=0
+lock_acquire() {
+  local i=0 m now
+  while [ "$i" -lt 50 ]; do
+    if mkdir "$LOCK" 2>/dev/null; then lock_held=1; return 0; fi
+    i=$((i + 1))
+    # Break provably-dead locks: the critical section is sub-second, so a lock dir older
+    # than 10s means its owner died without the EXIT trap (kill -9). Without this, every
+    # later invocation would burn the full spin and then run unlocked until consolidation.
+    m="$(stat -f %m "$LOCK" 2>/dev/null || stat -c %Y "$LOCK" 2>/dev/null || echo 0)"
+    now="$(date +%s)"
+    if [ "$m" -gt 0 ] && [ $((now - m)) -gt 10 ]; then
+      rmdir "$LOCK" 2>/dev/null || true
+      continue
+    fi
+    sleep 0.1
+  done
+  return 0                                        # ~5s elapsed — proceed unlocked (fail open)
+}
+lock_release() {
+  [ "$lock_held" = 1 ] || return 0
+  rmdir "$LOCK" 2>/dev/null || true
+  lock_held=0
+}
+trap '[ "$lock_held" = 1 ] && rmdir "$LOCK" 2>/dev/null; true' EXIT
 
 # BSD (macOS) vs GNU stat
 if stat -f "%m" "$0" >/dev/null 2>&1; then
-  STAT_FMT='-f' STAT_ARG='%m %N'
+  STAT_ARGS=(-f '%m %N')
 else
-  STAT_FMT='-c' STAT_ARG='%Y %n'
+  STAT_ARGS=(-c '%Y %n')
 fi
 
+# Snapshot only the plan's own artifacts/ dir — fast, and immune to unrelated repo churn
+# (worktrees, builds) or the plan's own bookkeeping (state.json / plan.md rewrites).
 snapshot() {
-  cd "$CWD" && find . -type f \
-    -not -path './node_modules/*' \
-    -not -path './.git/*' \
-    -not -path './.plans/*' \
-    -not -path './dist/*' -not -path './build/*' \
-    -print0 2>/dev/null \
-    | xargs -0 stat "$STAT_FMT" "$STAT_ARG" 2>/dev/null | sort
+  find "$ART_DIR" -type f -print0 2>/dev/null \
+    | xargs -0 stat "${STAT_ARGS[@]}" 2>/dev/null | sort
 }
 
 if [ "$EVENT" = "pre" ]; then
+  SNAP="$(mktemp "$SNAP_DIR/pre.XXXXXX")"
   snapshot > "$SNAP" || true
+  lock_acquire
+  printf '%s\n' "$SNAP" >> "$STACK"           # LIFO: paired by the matching POST
+  lock_release
   exit 0
 fi
 
-# POST: compute diff and append to state
-[ -f "$SNAP" ] || exit 0
-NEW="$(mktemp)"
+# POST: pop the most recent PRE snapshot for this session's plan (LIFO pairs nested calls).
+# The pop and the state.json update below run under the lock so a concurrent PRE append or a
+# second POST cannot double-pop the stack or lose a skill record.
+[ -f "$STACK" ] || exit 0
+lock_acquire
+SNAP="$(tail -n 1 "$STACK" 2>/dev/null || true)"
+if [ -z "$SNAP" ]; then lock_release; exit 0; fi
+# Drop the popped entry from the stack.
+TMP_STACK="$(mktemp "$SNAP_DIR/stack.XXXXXX")"
+sed '$d' "$STACK" > "$TMP_STACK" 2>/dev/null || true
+mv "$TMP_STACK" "$STACK"
+if [ ! -f "$SNAP" ]; then lock_release; exit 0; fi   # snapshot gone (teardown race) — drop record, fail open
+
+NEW="$(mktemp "$SNAP_DIR/post.XXXXXX")"
 snapshot > "$NEW" || true
 
+# comm/sed/python can fail on odd filenames (e.g. invalid UTF-8); never let that abort the
+# hook under set -e — an unrecorded artifact list is degraded, not fatal.
 ARTIFACTS_JSON="$(comm -13 "$SNAP" "$NEW" 2>/dev/null \
-  | awk '{print $2}' \
-  | python3 -c "import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))")"
+  | sed 's/^[0-9]* //' \
+  | python3 -c "import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))" 2>/dev/null || true)"
+[ -n "$ARTIFACTS_JSON" ] || ARTIFACTS_JSON='[]'
 
-python3 - "$STATE" "$SKILL" "$NOW" "$ARTIFACTS_JSON" <<'PY'
-import json, sys, pathlib
-state_path, skill, ts, artifacts_json = sys.argv[1:5]
+# Append the skill record via an atomic read-modify-write: write a sibling temp file in the
+# same directory, then os.replace() over state.json so readers only ever see a whole file.
+# `|| true`: a write failure (disk full, permissions) must degrade to a lost record, never
+# abort the hook with a non-zero exit — this script's contract is fail open.
+python3 - "$STATE" "$SLUG" "$SKILL" "$NOW" "$ARTIFACTS_JSON" <<'PY' || true
+import json, os, sys, tempfile, pathlib
+state_path, slug, skill, ts, artifacts_json = sys.argv[1:6]
 artifacts = json.loads(artifacts_json)
 p = pathlib.Path(state_path)
-state = json.loads(p.read_text()) if p.exists() else {"id": p.stem.replace('.state',''), "skills": []}
-state.setdefault("skills", []).append({
-    "skill": skill,
-    "finished_at": ts,
-    "artifacts": artifacts,
-})
+recovered = None
+try:
+    state = json.loads(p.read_text()) if p.exists() else {}
+except Exception:
+    # A corrupt file here means external damage (atomic writes can't produce it). Preserve it
+    # aside instead of silently discarding recorded history, and leave a visible marker.
+    # Repeat corruption gets a timestamped aside so the first preserved copy is never clobbered.
+    aside = p.with_name(p.name + ".corrupt")
+    if aside.exists():
+        aside = p.with_name(p.name + ".corrupt." + ts.replace(":", ""))
+    try: p.replace(aside)
+    except OSError: pass
+    state = {}
+    recovered = ts
+state.setdefault("schema", 1)
+if recovered:
+    state["recovered_from_corruption"] = recovered
+state.setdefault("id", slug)
+state.setdefault("skills", [])
+state["skills"].append({"skill": skill, "finished_at": ts, "artifacts": artifacts})
 state["last_update"] = ts
-p.write_text(json.dumps(state, indent=2))
+fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=".state.", suffix=".json")
+try:
+    with os.fdopen(fd, "w") as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp, str(p))         # atomic on the same filesystem
+except Exception:
+    try: os.unlink(tmp)
+    except OSError: pass
+    raise
 PY
 
+lock_release
 rm -f "$SNAP" "$NEW"
 exit 0

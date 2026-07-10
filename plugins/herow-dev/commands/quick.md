@@ -1,12 +1,12 @@
 ---
-description: (herow) Pipeline gstack ponta-a-ponta para mudança simples (worktree → autoplan → implementar → review → qa → ship)
-argument-hint: <descrição curta da mudança>
+description: (herow) End-to-end gstack pipeline for a simple change (worktree → autoplan → implement → review → qa → ship)
+argument-hint: <short description of the change>
 effort: medium
 ---
 
-## Model check (contexto 1M)
+## Model check (1M context)
 
-O blocker real não é o *tier* (Sonnet vs Opus) e sim o **contexto 1M**: o toggle de 1M é global da sessão e herdado por comandos/subagents. Este comando **não fixa modelo** — herda o modelo padrão da sessão; numa sessão 1M ele roda como `<modelo>[1m]` e falha com `API Error: Usage credits required for 1M context` se não houver créditos. Detecte isso pelo sufixo `[1m]`:
+The real blocker isn't the *tier* (Sonnet vs Opus) but **1M context**: the 1M toggle is session-global and inherited by commands/subagents. This command **does not pin a model** — it inherits the session's default model; in a 1M session it runs as `<model>[1m]` and fails with `API Error: Usage credits required for 1M context` if there are no credits. Detect this by the `[1m]` suffix:
 
 ```bash
 python3 -c "
@@ -21,58 +21,62 @@ print(model)
 " 2>/dev/null
 ```
 
-- Se o output **termina em `[1m]`** (ex.: `claude-sonnet-4-6[1m]`): a sessão está em contexto 1M (cobrado). Avise em 1 linha que esta invocação herda 1M e vai falhar por falta de créditos, e ofereça os dois caminhos:
-  - **Trocar para contexto padrão** (recomendado p/ este comando — roda sem créditos): `/model` → escolha um modelo **não-`[1m]`**, ou reinicie já executando a tarefa (substitua `<descrição>` pelo argumento real resolvido acima):
+- If the output **ends in `[1m]`** (e.g. `claude-sonnet-4-6[1m]`): the session is in 1M context (billed). Warn in 1 line that this invocation inherits 1M and will fail for lack of credits, and offer the two paths:
+  - **Switch to standard context** (recommended for this command — runs without credits): `/model` → pick a **non-`[1m]`** model, or restart already running the task (replace `<description>` with the actual argument resolved above):
 
     ```
-    claude --model claude-sonnet-4-6 "/herow-dev:quick <descrição>"
+    claude --model claude-sonnet-4-6 "/herow-dev:quick <description>"
     ```
-  - **Manter 1M** (só se o trabalho exige Opus + 1M de propósito): rode `/usage-credits` para ligar os créditos.
-- Se o output for **vazio/indeterminado**: **não avise** (fail open — o check é só advisory; a maioria das sessões corretas cai aqui).
-- Caso contrário (modelo de contexto padrão): siga sem avisar.
+  - **Keep 1M** (only if the work genuinely needs Opus + 1M): run `/usage-credits` to turn on credits.
+- If the output is **empty/indeterminate**: **don't warn** (fail open — the check is advisory only; most correct sessions land here).
+- Otherwise (standard-context model): proceed without warning.
 
-> Não bloqueie em nenhum caso. Este comando não fixa modelo no frontmatter — herda o modelo padrão da sessão; em contexto padrão roda normalmente. O aviso acima só importa quando a sessão está em 1M.
+> Don't block in any case. This command does not pin a model in the frontmatter — it inherits the session's default model; in standard context it runs normally. The warning above only matters when the session is in 1M.
 
 ---
 
-Você vai executar uma mudança pequena/média de ponta a ponta usando o pipeline gstack. A descrição da mudança é:
+You are going to execute a small/medium change end-to-end using the gstack pipeline. The change description is:
 
 **$ARGUMENTS**
 
-## Regras de execução
+## Execution rules
 
-1. **Não pare para perguntar** a menos que o pedido seja genuinamente ambíguo (múltiplas interpretações incompatíveis). Em caso de dúvida menor, tome a decisão razoável e siga.
-2. **Auto-fix em falhas:** se `/review` ou `/qa` acharem problemas, corrija automaticamente e re-rode a etapa até passar (máx 3 tentativas por etapa; se exceder, pare e reporte).
-3. **Não pule etapas.** A ordem importa para evitar retrabalho.
-4. **Todo o desenvolvimento acontece numa worktree isolada** (ver abaixo) — nunca edite o working tree principal.
+1. **Don't stop to ask** unless the request is genuinely ambiguous (multiple incompatible interpretations). For minor doubts, make the reasonable call and proceed.
+2. **Auto-fix on failures:** if `/review` or `/qa` find issues, fix them automatically and re-run the step until it passes (max 3 attempts per step; if exceeded, stop and report).
+3. **Don't skip steps.** Order matters to avoid rework.
+4. **All development happens in an isolated worktree** (see below) — never edit the main working tree.
 
-## Integração graphify (busca/exploração)
+## Language of generated artifacts
 
-As skills do gstack não usam graphify sozinhas — você é responsável por isso:
+All generated code, comments, commit messages, and documentation must be in English, even when the blueprint, questions, or user input are in Portuguese — unless the user explicitly requests otherwise.
 
-- **Exploração:** quando precisar entender o código antes de mudar, se `graphify-out/graph.json` existe, **prefira `graphify query "<pergunta>"`** (subgrafo escopado) a grep/leitura ampla. Se não existe e o repo é grande, ofereça bootstrapar com `/herow-extras:graphify-install` (1 vez por repo).
-- **Após implementar:** rode `graphify update .` (AST-only, sem custo de API) na worktree para manter o grafo coerente com o código novo.
+## graphify integration (search/exploration)
 
-## Isolamento em worktree (obrigatório)
+gstack skills don't use graphify on their own — you're responsible for that:
 
-A implementação, `/review`, `/qa` e `/ship` rodam todos numa **git worktree dedicada** em `.claude/worktree/<slug>`, nunca no working tree principal.
+- **Exploration:** when you need to understand the code before changing it, if `graphify-out/graph.json` exists, **prefer `graphify query "<question>"`** (scoped subgraph) over broad grep/reading. If it doesn't exist and the repo is large, offer to bootstrap it with `/herow-extras:graphify-install` (once per repo).
+- **After implementing:** run `graphify update .` (AST-only, no API cost) in the worktree to keep the graph in sync with the new code.
 
-1. **Branch base = branch atual do repositório.** Capture-a antes de tudo: `git rev-parse --abbrev-ref HEAD`. É contra ela que o PR será aberto. **Se a base for ambígua** (HEAD destacado, ou `git rev-parse` não retornar uma branch nomeada), use `AskUserQuestion` para confirmar a branch base — ofereça a detectada/`main` como opção recomendada.
-2. **Slug + tipo (Conventional Commits).** Slug kebab-case da descrição (máx 40 chars). `<tipo>` inferido da descrição: `feat` (nova funcionalidade), `fix` (correção), `refactor`, `chore`, `docs`.
-3. **Garanta `.claude/worktree/` no `.gitignore`** do repo (adicione a linha se faltar) — a worktree não é versionada.
-4. **Crie a worktree:** `git worktree add .claude/worktree/<slug> -b <tipo>/<slug> <branch-base>`. Se a worktree ou a branch já existem, **pare** e avise — pode haver outra execução em andamento.
-5. **`cd` para `.claude/worktree/<slug>`** e faça toda a implementação lá dentro.
+## Worktree isolation (mandatory)
 
-## Sequência obrigatória
+Implementation, `/review`, `/qa`, and `/ship` all run in a **dedicated git worktree** at `.claude/worktree/<slug>`, never in the main working tree.
 
-1. **Planejamento rápido** — invoque `/autoplan` com a descrição acima (pode rodar no tree principal). Surfacie apenas decisões críticas (não me pergunte coisas óbvias).
-2. **Worktree** — execute o "Isolamento em worktree" acima e entre na worktree.
-3. **Implementação** — execute o plano. Use graphify para explorar (ver acima) e o subagent apropriado (`fullstack-developer`, `python-pro`, `mobile-developer`, etc.) conforme a stack tocada. Ao terminar, rode `graphify update .`.
-4. **Review** — rode `/review`. Aplique auto-fixes. Re-rode até zero findings críticos.
-5. **QA** — rode `/qa` apontando para o ambiente local/staging detectado. Corrija bugs encontrados. Re-rode até passar.
-6. **Ship** — rode `/ship` para abrir o PR **contra a branch base** capturada no passo 1 do isolamento.
-7. **Limpeza da worktree** — só depois do PR aberto: volte ao repo raiz (`cd`) e `git worktree remove .claude/worktree/<slug>` (a branch permanece no PR). Se a remoção falhar, reporte e deixe a worktree intacta — não force às cegas.
+1. **Base branch = the repository's current branch.** Capture it before anything else: `git rev-parse --abbrev-ref HEAD`. The PR will be opened against it. **If the base is ambiguous** (detached HEAD, or `git rev-parse` doesn't return a named branch), use `AskUserQuestion` to confirm the base branch — offer the detected branch/`main` as the recommended option.
+2. **Slug + type (Conventional Commits).** Kebab-case slug from the description (max 40 chars). `<type>` inferred from the description: `feat` (new feature), `fix` (fix), `refactor`, `chore`, `docs`.
+3. **Ensure `.claude/worktree/` is in the repo's `.gitignore`** (add the line if missing) — the worktree isn't versioned.
+4. **Create the worktree:** `git worktree add .claude/worktree/<slug> -b <type>/<slug> <base-branch>`. If the worktree or branch already exist, **stop** and warn — another execution may be in progress.
+5. **`cd` into `.claude/worktree/<slug>`** and do all the implementation there.
 
-## Output final
+## Mandatory sequence
 
-Reporte em até 6 linhas: o que foi feito, branch (`<tipo>/<slug>`, base), link do PR, qualquer pendência conhecida, e o status das etapas gstack em 1 linha — `autoplan / review / qa / ship`, cada uma marcada ✅ executada, ⬜ pulada (com motivo) ou ❌ falhou.
+1. **Quick planning** — invoke `/autoplan` with the description above (can run on the main tree). Surface only critical decisions (don't ask about obvious things).
+2. **Worktree** — carry out the "Worktree isolation" section above and enter the worktree.
+3. **Implementation** — execute the plan. Use graphify to explore (see above) and the appropriate subagent (`fullstack-developer`, `python-pro`, `mobile-developer`, etc.) depending on the stack touched. When done, run `graphify update .`.
+4. **Review** — run `/review`. Apply auto-fixes. Re-run until zero critical findings.
+5. **QA** — run `/qa` pointing at the detected local/staging environment. Fix bugs found. Re-run until it passes.
+6. **Ship** — run `/ship` to open the PR **against the base branch** captured in step 1 of the isolation section.
+7. **Worktree cleanup** — only after the PR is opened: return to the repo root (`cd`) and `git worktree remove .claude/worktree/<slug>` (the branch stays on the PR). If removal fails, report it and leave the worktree intact — don't force it blindly.
+
+## Final output
+
+Report in up to 6 lines: what was done, branch (`<type>/<slug>`, base), PR link, any known pending items, and the status of the gstack steps in 1 line — `autoplan / review / qa / ship`, each marked ✅ executed, ⬜ skipped (with reason), or ❌ failed.
