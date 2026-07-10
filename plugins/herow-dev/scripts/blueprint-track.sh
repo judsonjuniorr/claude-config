@@ -14,6 +14,9 @@
 #     timeout can never leave torn/half-written JSON that poisons every later run.
 #   - The mtime snapshot is scoped to the plan's own artifacts/ dir and keyed per
 #     invocation (LIFO stack), so nested/overlapping Skill calls never clobber each other.
+#     Pairing is exact for nested calls; for truly concurrent (non-nested) calls within one
+#     session, per-skill artifact ATTRIBUTION is best-effort — records stay intact, but an
+#     artifact may be listed under the sibling call that finished first.
 set -eu
 
 EVENT="${1:-post}"
@@ -36,6 +39,9 @@ except Exception:
 
 SID="$(read_field "d.get('session_id') or ''")"
 [ -n "$SID" ] || exit 0
+# session_id becomes part of the marker filename — restrict to a safe charset so a hostile
+# or malformed payload can never smuggle a path separator into the marker path.
+case "$SID" in *[!A-Za-z0-9._-]*) exit 0 ;; esac
 
 MARKER="$CWD/.claude/plans/.active-$SID"
 [ -f "$MARKER" ] || exit 0                       # this session is not blueprinting — no-op
@@ -43,16 +49,22 @@ MARKER="$CWD/.claude/plans/.active-$SID"
 # race must produce a clean no-op, not a set -e abort on the failed redirection.
 SLUG="$(tr -d '[:space:]' < "$MARKER" 2>/dev/null || true)"
 [ -n "$SLUG" ] || exit 0
+# The slug is model-generated (kebab-cased from the feature description) and crosses a trust
+# boundary here: it is used verbatim in a filesystem path. Reject anything outside a strict
+# charset and any leading dot ('.', '..', hidden dirs), or a traversal slug like '../../..'
+# would make this hook create dirs and write state OUTSIDE the repo.
+case "$SLUG" in *[!A-Za-z0-9._-]*|.*) exit 0 ;; esac
 
 PLAN_DIR="$CWD/.claude/plans/$SLUG"
 [ -d "$PLAN_DIR" ] || exit 0
 
 SKILL="$(read_field "(lambda ti: ti.get('skill') or ti.get('args') or '')(d.get('tool_input',{}))")"
 [ -n "$SKILL" ] || exit 0
-# Normalize: drop a leading plugin namespace (herow-core:github-ops -> github-ops) and any
-# leading slash, so the canonical coverage checklist (unnamespaced) matches reliably.
-SKILL="${SKILL##*/}"
-SKILL="${SKILL##*:}"
+# Normalize: drop ONE leading slash and ONE plugin-namespace segment (herow-core:github-ops
+# -> github-ops), so the canonical coverage checklist (unnamespaced) matches reliably while
+# multi-segment skills keep their identity (herow-dev:code:review -> code:review, not review).
+SKILL="${SKILL#/}"
+SKILL="${SKILL#*:}"
 
 STATE="$PLAN_DIR/state.json"
 ART_DIR="$PLAN_DIR/artifacts"
@@ -69,10 +81,20 @@ mkdir -p "$ART_DIR" "$SNAP_DIR"
 LOCK="$SNAP_DIR/.lock"
 lock_held=0
 lock_acquire() {
-  local i=0
+  local i=0 m now
   while [ "$i" -lt 50 ]; do
     if mkdir "$LOCK" 2>/dev/null; then lock_held=1; return 0; fi
-    i=$((i + 1)); sleep 0.1
+    i=$((i + 1))
+    # Break provably-dead locks: the critical section is sub-second, so a lock dir older
+    # than 10s means its owner died without the EXIT trap (kill -9). Without this, every
+    # later invocation would burn the full spin and then run unlocked until consolidation.
+    m="$(stat -f %m "$LOCK" 2>/dev/null || stat -c %Y "$LOCK" 2>/dev/null || echo 0)"
+    now="$(date +%s)"
+    if [ "$m" -gt 0 ] && [ $((now - m)) -gt 10 ]; then
+      rmdir "$LOCK" 2>/dev/null || true
+      continue
+    fi
+    sleep 0.1
   done
   return 0                                        # ~5s elapsed — proceed unlocked (fail open)
 }
@@ -131,7 +153,9 @@ ARTIFACTS_JSON="$(comm -13 "$SNAP" "$NEW" 2>/dev/null \
 
 # Append the skill record via an atomic read-modify-write: write a sibling temp file in the
 # same directory, then os.replace() over state.json so readers only ever see a whole file.
-python3 - "$STATE" "$SLUG" "$SKILL" "$NOW" "$ARTIFACTS_JSON" <<'PY'
+# `|| true`: a write failure (disk full, permissions) must degrade to a lost record, never
+# abort the hook with a non-zero exit — this script's contract is fail open.
+python3 - "$STATE" "$SLUG" "$SKILL" "$NOW" "$ARTIFACTS_JSON" <<'PY' || true
 import json, os, sys, tempfile, pathlib
 state_path, slug, skill, ts, artifacts_json = sys.argv[1:6]
 artifacts = json.loads(artifacts_json)
@@ -142,10 +166,12 @@ try:
 except Exception:
     # A corrupt file here means external damage (atomic writes can't produce it). Preserve it
     # aside instead of silently discarding recorded history, and leave a visible marker.
+    # Repeat corruption gets a timestamped aside so the first preserved copy is never clobbered.
     aside = p.with_name(p.name + ".corrupt")
-    if not aside.exists():
-        try: p.replace(aside)
-        except OSError: pass
+    if aside.exists():
+        aside = p.with_name(p.name + ".corrupt." + ts.replace(":", ""))
+    try: p.replace(aside)
+    except OSError: pass
     state = {}
     recovered = ts
 state.setdefault("schema", 1)

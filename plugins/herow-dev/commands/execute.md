@@ -73,7 +73,7 @@ Todo o desenvolvimento acontece numa **git worktree dedicada**, nunca no working
 
 1. **Branch base = branch atual do repositório.** Capture-a antes de tudo: `git rev-parse --abbrev-ref HEAD`. É contra ela que o PR será aberto no final. **Se a base for ambígua** (HEAD destacado, ou `git rev-parse` não retornar uma branch nomeada), use `AskUserQuestion` para confirmar a branch base — ofereça a detectada/`main` como opção recomendada.
 2. **Defina o slug e o tipo** seguindo Conventional Commits:
-   - O slug vem do nome do arquivo do plano.
+   - O slug vem do **nome do diretório do plano** (`.claude/plans/<SLUG>/`), removendo o prefixo de timestamp `YYYYMMDD-HHMMSS-`. No fallback legado (`.plans/<ID>.md`), vem do nome do arquivo.
    - O `<tipo>` é inferido do conteúdo do plano: `feat` (nova funcionalidade), `fix` (correção de bug), `refactor` (reestruturação sem mudança de comportamento), `chore` (manutenção/config), `docs` (documentação). Na dúvida entre dois, use o que melhor descreve o objetivo principal.
    - Ex: plano `dark-mode-eager-quilt` (nova feature) → tipo `feat`, branch `feat/dark-mode-eager-quilt`.
 3. **Garanta que `.claude/worktree/` está no `.gitignore`** do repo (adicione a linha se faltar) — a worktree não deve ser versionada.

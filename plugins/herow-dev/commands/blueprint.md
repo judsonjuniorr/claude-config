@@ -14,7 +14,7 @@ Descrição:
 
 ## Setup inicial (faça primeiro, em ordem)
 
-1. `mkdir -p .claude/plans`
+1. `mkdir -p .claude/plans` e varra marcadores mortos de sessões antigas (inertes, mas acumulam): `find .claude/plans -maxdepth 1 -name '.active-*' -mtime +7 -delete 2>/dev/null || true`
 2. **Garanta que `.claude/plans/` está gitignored (idempotente).** Rode o guard abaixo — ele acrescenta `.claude/plans/` ao excludesfile global do git (só se faltar) e ao `.gitignore` do repo (só se faltar), **mantendo** a linha legada `.plans/`:
 
    ```bash
@@ -25,7 +25,7 @@ Descrição:
      printf '%s\n' '.claude/plans/' >> .gitignore
    fi
    ```
-3. Gere o slug do plano: `TS=$(date -u +%Y%m%d-%H%M%S)`, slug kebab-case da descrição (máx 40 chars), `SLUG="${TS}-<slug>"`. Esse `SLUG` é o nome do **diretório** do plano.
+3. Gere o slug do plano: `TS=$(date -u +%Y%m%d-%H%M%S)`, slug kebab-case da descrição (máx 40 chars, **apenas `[a-z0-9-]`** — o hook rejeita silenciosamente qualquer outro caractere), `SLUG="${TS}-<slug>"`. Esse `SLUG` é o nome do **diretório** do plano.
 4. **Reivindique o diretório do plano como claim de unicidade atômico** — `mkdir` **sem** `-p`:
 
    ```bash

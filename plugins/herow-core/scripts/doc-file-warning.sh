@@ -20,6 +20,9 @@ case "$FILE" in
   /*) abs="$FILE" ;;
   *)  abs="$PWD/$FILE" ;;
 esac
+# Canonicalize before any prefix match: without this, '../' segments defeat the globs below
+# (e.g. '.claude/plans/../../x.md' would match the plans exemption while resolving elsewhere).
+abs="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$abs" 2>/dev/null || printf '%s' "$abs")"
 
 # Only guard files inside the current repo. Plugins (gstack, etc.) writing plans
 # to ~/.gstack, ~/.claude, or anywhere outside the repo are allowed silently.
