@@ -230,7 +230,7 @@ python3 scripts/organizze/create.py --input-file /tmp/tx.json \
 python3 scripts/organizze/create.py --apply [--force] <same flags>
 ```
 
-> **API write surface (verified vs. api-doc):** transaction `amount_cents` negative = expense; `account_id` XOR (`credit_card_id` + `credit_card_invoice_id`); `installments_attributes{periodicity,total}` XOR `recurrence_attributes{periodicity}`. Transfer (`POST /transfers`): `credit_account_id` = **origem** (saída), `debit_account_id` = **destino** (entrada), positive amount, bank accounts only.
+> **API write surface (verified vs. api-doc):** transaction `amount_cents` negative = expense; `account_id` XOR (`credit_card_id` + `credit_card_invoice_id`); `installments_attributes{periodicity,total}` XOR `recurrence_attributes{periodicity}`. Transfer (`POST /transfers`): `credit_account_id` = **source** (outbound), `debit_account_id` = **destination** (inbound), positive amount, bank accounts only.
 
 ---
 
@@ -302,7 +302,7 @@ Storage: `~/finance/profile.md` (hand-editable, provider-agnostic). `analyze.py`
 
 ## /herow-finance:nf-tomada
 
-The **Contabilizei** provider — registers a received NF (nota fiscal de serviço tomado) in the Contabilizei web app from a PDF or XML. Headless Playwright login with the email verification code read via Gmail, duplicate check against already-registered NFs, and an explicit confirmation before submitting.
+The **Contabilizei** provider — registers a received NF (nota fiscal, an incoming service invoice) in the Contabilizei web app from a PDF or XML. Headless Playwright login with the email verification code read via Gmail, duplicate check against already-registered NFs, and an explicit confirmation before submitting.
 
 ```bash
 /herow-finance:nf-tomada ~/Downloads/nota-fiscal.pdf

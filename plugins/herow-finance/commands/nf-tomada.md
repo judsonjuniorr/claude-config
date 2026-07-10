@@ -1,128 +1,128 @@
 ---
-description: (herow) Registra uma NF tomada no Contabilizei a partir de PDF/XML — login headless com código via Gmail, checagem de duplicidade e confirmação antes de enviar.
-argument-hint: "<caminho do PDF ou XML da NF>"
+description: (herow) Registers a received NF (service invoice) in Contabilizei from a PDF/XML — headless login with code via Gmail, duplicate check, and confirmation before submitting.
+argument-hint: "<path to the NF PDF or XML>"
 allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__playwright-headless__browser_navigate, mcp__playwright-headless__browser_snapshot, mcp__playwright-headless__browser_click, mcp__playwright-headless__browser_type, mcp__playwright-headless__browser_select_option, mcp__playwright-headless__browser_fill_form, mcp__playwright-headless__browser_evaluate, mcp__playwright-headless__browser_wait_for, mcp__playwright-headless__browser_close, mcp__claude_ai_Gmail__search_threads, mcp__claude_ai_Gmail__get_thread
 effort: medium
 ---
 
 # `/contabilizei:nf-tomada`
 
-**Regra global: toda pergunta ao usuário usa `AskUserQuestion` com opções — nunca inline.** `AskUserQuestion` exige **no mínimo 2 opções** por pergunta; para campos de texto livre (email, senha, código), ofereça a opção desejada + uma alternativa como "Abortar"/"Outro".
+**Global rule: every question to the user uses `AskUserQuestion` with options — never inline.** `AskUserQuestion` requires **at least 2 options** per question; for free-text fields (email, password, code), offer the desired option + an alternative such as "Abort"/"Other".
 
-Registra uma NF tomada (nota fiscal de serviço recebida) no Contabilizei a partir de um arquivo PDF ou XML local.
+Registers a received NF (a service invoice received from a provider) in Contabilizei from a local PDF or XML file.
 
-## Passo 0 — Extrair dados da NF
+## Step 0 — Extract NF data
 
-Resolve `$ARGUMENTS` como caminho do arquivo. Se vazio ou não informado, use `AskUserQuestion` para pedir o caminho.
+Resolve `$ARGUMENTS` as the file path. If empty or not provided, use `AskUserQuestion` to ask for the path.
 
 ```bash
 SCRIPT_DIR="${CLAUDE_PLUGIN_ROOT}/scripts/contabilizei"
 [ -f "$SCRIPT_DIR/extract_nf.py" ] || { echo "err|scripts-not-found|$SCRIPT_DIR" >&2; exit 1; }
 bash "$SCRIPT_DIR/setup.sh" >&2
-python3 "$SCRIPT_DIR/extract_nf.py" "<caminho>"
+python3 "$SCRIPT_DIR/extract_nf.py" "<path>"
 ```
 
-Leia o JSON retornado. Se houver campos `null` nos campos obrigatórios (`cnpj`, `razao_social`, `data_emissao`, `numero`, `valor`), leia o `.txt` correspondente em `~/finance/contabilizei/extracted/<base>.txt` e complete os campos usando o texto bruto.
+Read the returned JSON. If any required field is `null` (`cnpj`, `razao_social`, `data_emissao`, `numero`, `valor`), read the corresponding `.txt` at `~/finance/contabilizei/extracted/<base>.txt` and fill in the fields using the raw text.
 
-**Hard-stop:** se após ler o `.txt` algum campo obrigatório ainda for `null`, pare com erro claro:
+**Hard-stop:** if, after reading the `.txt`, any required field is still `null`, stop with a clear error:
 
-> "Não foi possível extrair [campos] da NF. Verifique o arquivo e informe os valores manualmente ou tente outro formato."
+> "Could not extract [fields] from the NF. Check the file and provide the values manually, or try another format."
 
-Use `AskUserQuestion` para oferecer: corrigir manualmente / abortar.
+Use `AskUserQuestion` to offer: correct manually / abort.
 
-Ao mostrar os dados extraídos na confirmação (passo 6), **destaque** campos que vieram do `.txt`/regex (fonte frágil) para o usuário revisar.
+When showing the extracted data in the confirmation (step 6), **highlight** fields that came from the `.txt`/regex (fragile source) for the user to review.
 
-**Valor:** `parse_valor_br` retorna centavos (int). Formate como `R$ X.XXX,XX` apenas na exibição; passe o valor formatado no formulário.
+**Value:** `parse_valor_br` returns cents (int). Format as `R$ X.XXX,XX` only for display; pass the formatted value into the form.
 
-## Passo 1 — Credenciais (primeira vez)
+## Step 1 — Credentials (first time)
 
 ```bash
 CONTABILIZEI_HOME="$HOME/finance/contabilizei"
 CONFIG="$CONTABILIZEI_HOME/.config"
 ```
 
-Se `$CONFIG` não existir ou não tiver `EMAIL=`:
+If `$CONFIG` does not exist or has no `EMAIL=`:
 
-Use `AskUserQuestion` para coletar email de login do Contabilizei.
+Use `AskUserQuestion` to collect the Contabilizei login email.
 
-Salve em `$CONFIG` com `chmod 600`:
+Save it in `$CONFIG` with `chmod 600`:
 ```
 EMAIL="<email>"
 ```
 
-Verifique se a senha já está no Keychain:
+Check whether the password is already in the Keychain:
 ```bash
 security find-generic-password -a "<email>" -s "contabilizei-login" -w >/dev/null 2>&1
 ```
 
-Se não estiver: use `AskUserQuestion` para perguntar a senha (campo de texto livre com aviso de que não será exibida no transcript). Salve **apenas no Keychain**:
+If not: use `AskUserQuestion` to ask for the password (free-text field with a warning that it won't be shown in the transcript). Save it **only in the Keychain**:
 ```bash
-security add-generic-password -a "<email>" -s "contabilizei-login" -w "<senha>" -U
+security add-generic-password -a "<email>" -s "contabilizei-login" -w "<password>" -U
 ```
 
-A senha **nunca aparece em argv nem em logs.** Use `browser_fill_form` ou `browser_evaluate` para injetá-la no formulário — nunca `browser_type` com o valor literal visível.
+The password **never appears in argv or in logs.** Use `browser_fill_form` or `browser_evaluate` to inject it into the form — never `browser_type` with the literal value visible.
 
-## Passo 2 — Login e listagem
+## Step 2 — Login and listing
 
-Registre o instante do início do login (para o guard de tempo do código OTP):
+Record the moment the login starts (for the OTP code time guard):
 ```
-SUBMIT_TIME = agora (ISO)
+SUBMIT_TIME = now (ISO)
 ```
 
-**Orientação inicial — snapshot obrigatório antes de qualquer ação:**
+**Initial guidance — mandatory snapshot before any action:**
 
 ```
 browser_navigate → https://app.contabilizei.com.br/painel-de-controle/#/nota-tomada/listagem
 browser_snapshot
 ```
 
-> A URL canônica inclui `/painel-de-controle/`. Sem ela o app redireciona, mas use a forma completa nas navegações dos passos 4–6 para evitar redirects extras.
+> The canonical URL includes `/painel-de-controle/`. Without it the app redirects, but use the full form in the navigations of steps 4–6 to avoid extra redirects.
 
-Analise o snapshot:
-- **Se já está na listagem** (logado): vá para o passo 3.
-- **Se está na tela de login** (form de email/senha):
-  1. Leia a senha do Keychain: `security find-generic-password -a "<email>" -s "contabilizei-login" -w`
-  2. Preencha o campo de email com `browser_type`.
-  3. Preencha a senha com `browser_evaluate` injetando JS que escreve no campo de senha — ou use `browser_fill_form` — **nunca** com o valor literal em `browser_type`.
-  4. Submeta o formulário.
-  5. `browser_snapshot` → analise o resultado.
-- **Se aparece desafio de código de acesso** (formulário pedindo código enviado por email):
-  - Veja sub-passo "Código de acesso" abaixo.
-- **Se aparece outro desafio (SMS, autenticador, trusted-device)**:
-  - Use `AskUserQuestion` para pedir o código ao usuário (fallback manual).
-  - Preencha e submeta.
-- **Se sessão expirou durante o fluxo** (detectado em qualquer passo): re-execute este passo 2 completo.
+Analyze the snapshot:
+- **If already on the listing** (logged in): go to step 3.
+- **If on the login screen** (email/password form):
+  1. Read the password from the Keychain: `security find-generic-password -a "<email>" -s "contabilizei-login" -w`
+  2. Fill in the email field with `browser_type`.
+  3. Fill in the password with `browser_evaluate`, injecting JS that writes to the password field — or use `browser_fill_form` — **never** with the literal value in `browser_type`.
+  4. Submit the form.
+  5. `browser_snapshot` → analyze the result.
+- **If an access code challenge appears** (a form asking for a code sent by email):
+  - See the "Access code" sub-step below.
+- **If another challenge appears (SMS, authenticator, trusted device)**:
+  - Use `AskUserQuestion` to ask the user for the code (manual fallback).
+  - Fill it in and submit.
+- **If the session expires during the flow** (detected at any step): re-run this entire step 2.
 
-### Sub-passo: Código de acesso por email
+### Sub-step: Access code by email
 
-O remetente do código é `seguranca@contabilizei.com.br` (assunto: "Seu código de acesso à plataforma chegou!"). A query `from:contabilizei` cobre.
+The code sender is `seguranca@contabilizei.com.br` (subject: "Seu código de acesso à plataforma chegou!"). The query `from:contabilizei` covers it.
 
-Polling do Gmail (até ~30s, 6 tentativas com `browser_wait_for {time: 5}` entre elas):
+Gmail polling (up to ~30s, 6 attempts with `browser_wait_for {time: 5}` between them):
 
 ```
-Para cada tentativa (i = 1..6):
-  browser_wait_for {time: 5}   # espaça sem sleep bloqueado
+For each attempt (i = 1..6):
+  browser_wait_for {time: 5}   # spaces out without a blocking sleep
   Gmail.search_threads(query="from:contabilizei newer_than:1h", max_results=5)
-  Para cada thread (mais recente primeiro):
+  For each thread (most recent first):
     Gmail.get_thread(thread_id=...)
-    Extraia o corpo do email mais recente
-    Verifique: timestamp do email > SUBMIT_TIME  ← guard de tempo
-    Regex contextual: r'(?:c[oó]digo(?:\s+de)?\s+(?:acesso|verifica[çc][ãa]o)|seu\s+c[oó]digo)[^\d]*(\d{4,8})'
-    Se match E message-id ainda não consumido:
-      Registre o message-id como consumido (evita código expirado em retry)
-      Use o código encontrado → preencha e submeta
-      Marque o email como lido (remova o label UNREAD via Gmail.unlabel_message — sempre, após obter o código)
-      Quebra o loop
+    Extract the body of the most recent email
+    Check: email timestamp > SUBMIT_TIME  ← time guard
+    Contextual regex: r'(?:c[oó]digo(?:\s+de)?\s+(?:acesso|verifica[çc][ãa]o)|seu\s+c[oó]digo)[^\d]*(\d{4,8})'
+    If match AND message-id not yet consumed:
+      Record the message-id as consumed (avoids an expired code on retry)
+      Use the found code → fill in and submit
+      Mark the email as read (remove the UNREAD label via Gmail.unlabel_message — always, after obtaining the code)
+      Break the loop
 ```
 
-Se após 6 tentativas nenhum código for encontrado ou o desafio não for por email:
-- Use `AskUserQuestion` para pedir o código ao usuário (fallback manual).
+If after 6 attempts no code is found or the challenge isn't by email:
+- Use `AskUserQuestion` to ask the user for the code (manual fallback).
 
-Após submeter o código: `browser_snapshot` → confirme que está na listagem antes de prosseguir.
+After submitting the code: `browser_snapshot` → confirm you're on the listing before proceeding.
 
-### Sub-passo: Dispensar modais bloqueantes (rodar após CADA navegação)
+### Sub-step: Dismiss blocking modals (run after EVERY navigation)
 
-O app exibe modais recorrentes que reaparecem a cada navegação e cobrem o conteúdo: **"Sua mensalidade está atrasada"**, **"Por onde eu começo?"**, **QR code do app** e similares. Dispense-os antes de interagir com a página — clique direto via JS (eles podem estar fora da viewport, o que faz `browser_click` dar timeout):
+The app shows recurring modals that reappear on every navigation and cover the content: **"Sua mensalidade está atrasada"** ("Your monthly fee is overdue"), **"Por onde eu começo?"** ("Where do I start?"), the app **QR code**, and similar. Dismiss them before interacting with the page — click directly via JS (they may be outside the viewport, which makes `browser_click` time out):
 
 ```
 browser_evaluate:
@@ -138,120 +138,120 @@ browser_evaluate:
 }
 ```
 
-> **NÃO** clique em "Regularizar mensalidade", "Cancelar" de um dialog de registro, nem em botões de ação fiscal. Dispense apenas modais informativos/onboarding.
+> Do **NOT** click "Regularizar mensalidade" ("Settle monthly fee"), "Cancelar" ("Cancel") on a registration dialog, or any fiscal action button. Only dismiss informational/onboarding modals.
 >
-> **Cuidado com dialogs latentes:** o snapshot de acessibilidade pode listar `dialog` nodes que estão no DOM mas **ocultos** (`v-show`/`display:none`) — não estão realmente ativos. Antes de tratar um dialog como bloqueante ou agir nos seus botões, **confirme que está visível**:
+> **Watch out for latent dialogs:** the accessibility snapshot may list `dialog` nodes that are in the DOM but **hidden** (`v-show`/`display:none`) — they aren't actually active. Before treating a dialog as blocking or acting on its buttons, **confirm it's visible**:
 >
 > ```
-> browser_evaluate (no elemento do dialog):
+> browser_evaluate (on the dialog element):
 > (el) => { const r = el.getBoundingClientRect(); return !!el.offsetParent && r.width > 0 && r.height > 0; }
 > ```
 
-## Passo 3 — Checar duplicidade
+## Step 3 — Check for duplicates
 
-A listagem **não** tem busca livre por CNPJ/número — o filtro real é o seletor **Competência** (mês + ano). Selecione a competência correspondente ao mês/ano de `data_emissao` da NF.
+The listing **has no** free-text search by CNPJ/number — the real filter is the **Competência** ("Period") selector (month + year). Select the period matching the month/year of the NF's `data_emissao`.
 
-`browser_snapshot` → localize os dois `combobox` de Competência (mês e ano). Use `browser_select_option` para selecionar o mês e o ano da NF.
+`browser_snapshot` → locate the two Period **combobox** fields (month and year). Use `browser_select_option` to select the NF's month and year.
 
-Examine o "Histórico de notas" resultante:
-- Se aparecer NF com mesmo **número** (e série, se houver) do mesmo prestador:
-  - Reporte: "NF já registrada (CNPJ `<cnpj>`, série `<serie>`, nº `<numero>`)."
+Examine the resulting "Histórico de notas" ("Invoice history"):
+- If an NF with the same **number** (and series, if any) from the same provider appears:
+  - Report: "NF already registered (CNPJ `<cnpj>`, series `<serie>`, no. `<numero>`)."
   - `browser_close`
-  - Encerre o comando.
-- Se mostrar "Nenhuma nota tomada encontrada" ou nenhuma com o número da NF: prossiga para o passo 4.
+  - End the command.
+- If it shows "Nenhuma nota tomada encontrada" ("No received invoice found") or none with the NF's number: proceed to step 4.
 
-> **Nota:** este check será repetido no passo 6 (imediatamente antes de Registrar) para cobrir o intervalo de tempo durante a pausa de confirmação (TOCTOU).
+> **Note:** this check is repeated in step 6 (immediately before Register) to cover the time window during the confirmation pause (TOCTOU).
 
-## Passo 4 — Resolver prestador
+## Step 4 — Resolve provider
 
-`browser_snapshot` — verifique onde está antes de navegar.
+`browser_snapshot` — check where you are before navigating.
 
 ```
 browser_navigate → https://app.contabilizei.com.br/painel-de-controle/#/nota-tomada/prestadores
 browser_snapshot
 ```
 
-Dispense os modais (sub-passo do passo 2). A tela tem um campo "Busque pelo nome ou CNPJ do prestador" e a lista de prestadores já cadastrados.
+Dismiss the modals (sub-step from step 2). The screen has a "Busque pelo nome ou CNPJ do prestador" ("Search by provider name or CNPJ") field and the list of already-registered providers.
 
-Busque o prestador pelo CNPJ extraído (ou localize-o na lista).
+Search for the provider by the extracted CNPJ (or locate it in the list).
 
-- **Existe:** clique no item do prestador. A URL muda para `.../nota-tomada/registrar` com CNPJ e razão social já preenchidos no topo do form. Verifique com `browser_snapshot`.
-- **Não existe:** clique em "Cadastrar novo prestador" e preencha CNPJ e razão social nos campos correspondentes (identifique pelos rótulos/placeholders no snapshot).
+- **Exists:** click the provider item. The URL changes to `.../nota-tomada/registrar` with CNPJ and company name already filled in at the top of the form. Confirm with `browser_snapshot`.
+- **Doesn't exist:** click "Cadastrar novo prestador" ("Register new provider") and fill in CNPJ and company name in the corresponding fields (identify them by the labels/placeholders in the snapshot).
 
-## Passo 5 — Preencher formulário
+## Step 5 — Fill in the form
 
-`browser_snapshot` — confirme que está no formulário de registro e dispense os modais (sub-passo do passo 2).
+`browser_snapshot` — confirm you're on the registration form and dismiss the modals (sub-step from step 2).
 
-Identifique os campos pelo snapshot (rótulos/placeholders reais). Os `data-testid` abaixo foram observados e servem como **dica/fallback** — confirme no snapshot antes de usar:
+Identify the fields from the snapshot (real labels/placeholders). The `data-testid` values below were observed and serve as a **hint/fallback** — confirm in the snapshot before using them:
 
-- **Data de emissão** (`input-emission-date`, placeholder `00/00/0000`): valor de `data_emissao` no formato `DD/MM/AAAA`.
-- **Número** (`input-invoice-number`): valor de `numero`.
-- **Série** (`input-serial-number`): **o campo aceita apenas dígitos.** Se `serie` for não-numérica (ex.: "E"), **deixe em branco** — não tente digitar a letra (é rejeitada silenciosamente).
-- **Valor** (`input-grade-value`, id `input-valor-nota`): campo **mascarado** (`R$ 0,00`). `browser_fill_form`/`browser_type` não funcionam. Injete via JS com o setter nativo, passando só os números com vírgula decimal (ex.: `10,99`):
+- **Issue date** (`input-emission-date`, placeholder `00/00/0000`): value of `data_emissao` in `DD/MM/AAAA` format.
+- **Number** (`input-invoice-number`): value of `numero`.
+- **Series** (`input-serial-number`): **the field only accepts digits.** If `serie` is non-numeric (e.g., "E"), **leave it blank** — don't try to type the letter (it's silently rejected).
+- **Value** (`input-grade-value`, id `input-valor-nota`): a **masked** field (`R$ 0,00`). `browser_fill_form`/`browser_type` don't work. Inject via JS using the native setter, passing only the digits with a decimal comma (e.g., `10,99`):
   ```
   browser_evaluate:
   () => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     const el = document.querySelector('[data-testid="input-grade-value"]');
     set.call(el, ''); el.dispatchEvent(new Event('input', {bubbles:true}));
-    set.call(el, '10,99');  // substitua pelo valor real
+    set.call(el, '10,99');  // replace with the actual value
     el.dispatchEvent(new Event('input', {bubbles:true}));
     el.dispatchEvent(new Event('change', {bubbles:true}));
-    return el.value;  // deve retornar "R$ 10,99"
+    return el.value;  // should return "R$ 10,99"
   }
   ```
-- **Descrição** (`Descrição do serviço*`): `descricao` truncada a 250 chars.
+- **Description** (`Descrição do serviço*`): `descricao` truncated to 250 chars.
 
-**Tipo de serviço** (`select-list-services`) **e Categoria** (`select-list-categories`): leia as opções reais do `<select>` no snapshot. Case-fold e compare com `descricao` e `codigo_servico`. Se houver match razoável, selecione com `browser_select_option`. Se ambíguo, anote as top-3 opções para mostrar na confirmação (passo 6). A Categoria costuma ter poucas opções (ex.: "Outras", "Sistemas de Pagamento") — escolha "Outras" se nenhuma for específica.
+**Service type** (`select-list-services`) **and Category** (`select-list-categories`): read the actual options from the `<select>` in the snapshot. Case-fold and compare against `descricao` and `codigo_servico`. If there's a reasonable match, select it with `browser_select_option`. If ambiguous, note the top-3 options to show in the confirmation (step 6). Category usually has few options (e.g., "Outras" / "Other", "Sistemas de Pagamento" / "Payment Systems") — choose "Outras" ("Other") if none is specific.
 
-## Passo 6 — Confirmar antes de registrar
+## Step 6 — Confirm before registering
 
-**Re-checar duplicidade** (TOCTOU): repita a busca do passo 3. Se a NF aparecer agora → reporte duplicata e encerre.
+**Re-check for duplicates** (TOCTOU): repeat the search from step 3. If the NF now appears → report duplicate and end.
 
-`browser_snapshot` — verifique o estado do form. Se a sessão expirou ou o form está em estado inesperado: re-autentique (passo 2) e re-preencha (passos 4–5). **Nunca submeta sobre form stale.**
+`browser_snapshot` — check the form's state. If the session expired or the form is in an unexpected state: re-authenticate (step 2) and re-fill (steps 4–5). **Never submit over a stale form.**
 
-Antes de confirmar, **leia de volta os valores reais do form** (via `browser_evaluate` lendo os `.value` dos campos) — confirme que o que será enviado bate com o extraído.
+Before confirming, **read back the actual values from the form** (via `browser_evaluate`, reading the fields' `.value`) — confirm that what will be submitted matches what was extracted.
 
-Use `AskUserQuestion`. **O resumo completo vai no próprio texto da pergunta (`question`)** — não apenas em `annotations`/`description`. O usuário precisa ver todos os campos diretamente no card da pergunta. Inclua, um por linha:
+Use `AskUserQuestion`. **The full summary goes in the question text itself (`question`)** — not just in `annotations`/`description`. The user needs to see all fields directly in the question card. Include, one per line:
 
 ```
-Confirma o registro desta NF tomada?
+Confirm registering this received NF?
 
-• CNPJ:          <cnpj formatado XX.XXX.XXX/XXXX-XX>
-• Prestador:     <razao_social>
-• Data emissão:  <data_emissao>
-• Número:        <numero>   Série: <serie ou —>
-• Valor:         R$ <X.XXX,XX>
-• Tipo serviço:  <selecionado>
-• Categoria:     <selecionada>
-• Descrição:     <descricao>
-• Competência:   <MM/AAAA> (<mês atual — sem reabertura | mês passado — ATENÇÃO: reabertura/taxa>)
+• CNPJ:          <formatted CNPJ XX.XXX.XXX/XXXX-XX>
+• Provider:      <razao_social>
+• Issue date:    <data_emissao>
+• Number:        <numero>   Series: <serie or —>
+• Value:         R$ <X,XXX.XX>
+• Service type:  <selected>
+• Category:      <selected>
+• Description:   <descricao>
+• Period:        <MM/YYYY> (<current month — no reopening | past month — WARNING: reopening/fee>)
 
-⚠️ Campos extraídos por regex (revisar): [lista campos frágeis, ou "nenhum"]
+⚠️ Fields extracted via regex (review): [list of fragile fields, or "none"]
 ```
 
-Opções:
-- "Confirmar e registrar"
-- "Corrigir campo"
-- "Abortar"
+Options:
+- "Confirm and register"
+- "Fix a field"
+- "Abort"
 
-Se "Corrigir campo": use `AskUserQuestion` para perguntar qual campo e o novo valor, atualize no form e volte ao início deste passo.
+If "Fix a field": use `AskUserQuestion` to ask which field and the new value, update it in the form, and return to the start of this step.
 
-Se "Abortar": `browser_close`, encerre reportando "Registro abortado pelo usuário."
+If "Abort": `browser_close`, end reporting "Registration aborted by the user."
 
-## Passo 7 — Registrar e verificar
+## Step 7 — Register and verify
 
-Clique no botão *Registrar nota* (identifique pelo snapshot — fica desabilitado até o form estar válido).
+Click the *Registrar nota* ("Register invoice") button (identify it from the snapshot — it stays disabled until the form is valid).
 
-`browser_snapshot` → verifique o resultado.
+`browser_snapshot` → check the result.
 
-### Dialog "Reabertura do mês contábil"
+### "Reabertura do mês contábil" ("Reopening the accounting month") dialog
 
-Ao registrar uma NF de **competência já fechada** (mês contábil passado), o Contabilizei abre o dialog **"Reabertura do mês contábil"** — informa uma **taxa única** (≈R$ 21,90 Simples / R$ 54,90 Lucro Presumido por mês fora do prazo) e **transfere ao usuário** a responsabilidade por multas/juros. Botões: "Cancelar" e "Aceitar reabertura e registrar nota".
+When registering an NF for an **already-closed period** (a past accounting month), Contabilizei opens the **"Reabertura do mês contábil"** dialog — it informs a **one-time fee** (≈R$ 21,90 Simples / R$ 54,90 Lucro Presumido per month out of deadline) and **shifts to the user** the responsibility for fines/interest. Buttons: "Cancelar" ("Cancel") and "Aceitar reabertura e registrar nota" ("Accept reopening and register invoice").
 
-> **Não confunda DOM com ativo.** Esse dialog é um componente Vue que aparece no snapshot **montado mas se auto-oculta** (via transição CSS) para NF do mês atual (competência aberta). Uma checagem de visibilidade **instantânea dá falso positivo** — pega o modal mid-mount com `opacity` transicionando (`offsetParent` ainda truthy, `opacity` 1→0).
+> **Don't confuse DOM presence with active.** This dialog is a Vue component that appears in the snapshot **mounted but self-hides** (via a CSS transition) for an NF in the current month (open period). An **instantaneous** visibility check gives a **false positive** — it catches the modal mid-mount with `opacity` transitioning (`offsetParent` still truthy, `opacity` going 1→0).
 >
-> Por isso: ao entrar em `/registrar`, **espere o settle** (`browser_wait_for {time: 2}`) **antes** de checar. Depois confirme visibilidade via `data-testid="modal-reopening-month-accounting"`:
+> So: when entering `/registrar`, **wait for it to settle** (`browser_wait_for {time: 2}`) **before** checking. Then confirm visibility via `data-testid="modal-reopening-month-accounting"`:
 >
 > ```
 > browser_evaluate:
@@ -263,18 +263,18 @@ Ao registrar uma NF de **competência já fechada** (mês contábil passado), o 
 > }
 > ```
 >
-> Se `active === false`, **ignore o dialog** — competência no prazo, registro segue normal sem taxa (o app inclusive confirma: "prazo máximo é dia 05 do mês seguinte").
+> If `active === false`, **ignore the dialog** — the period is on time, registration proceeds normally without a fee (the app itself even confirms: "prazo máximo é dia 05 do mês seguinte" / "the deadline is the 5th of the following month").
 
-Se o dialog estiver **realmente visível** (NF de mês passado):
-- Use `AskUserQuestion` para surfacer ao usuário: a taxa exata exibida + a transferência de responsabilidade por multas/juros.
-- Só clique "Aceitar reabertura e registrar nota" com consentimento explícito.
-- Se "Abortar": clique "Cancelar", `browser_close`, encerre.
+If the dialog is **actually visible** (NF from a past month):
+- Use `AskUserQuestion` to surface to the user: the exact fee shown + the shift of responsibility for fines/interest.
+- Only click "Aceitar reabertura e registrar nota" ("Accept reopening and register invoice") with explicit consent.
+- If "Abort": click "Cancelar" ("Cancel"), `browser_close`, end.
 
-Após resolver o dialog (ou se ele não apareceu), `browser_snapshot` → verifique o resultado:
-- **Sucesso** (redirecionou para listagem ou exibe confirmação): reporte "NF registrada com sucesso."
-- **Erro visível no formulário**: reporte o erro, ofereça corrigir ou abortar via `AskUserQuestion`.
-- **Estado ambíguo** (snapshot não confirma nem nega): reporte "Resultado inconclusivo — verifique a listagem do Contabilizei para confirmar se a NF foi registrada."
+After resolving the dialog (or if it didn't appear), `browser_snapshot` → check the result:
+- **Success** (redirected to the listing or shows a confirmation): report "NF registered successfully."
+- **Visible error on the form**: report the error, offer to fix or abort via `AskUserQuestion`.
+- **Ambiguous state** (snapshot neither confirms nor denies): report "Inconclusive result — check the Contabilizei listing to confirm whether the NF was registered."
 
 `browser_close`
 
-Reporte final em uma linha: `✅ NF registrada` / `ℹ️ Já existia` / `⚠️ Abortada` / `❓ Inconclusivo`.
+Final report in one line: `✅ NF registered` / `ℹ️ Already existed` / `⚠️ Aborted` / `❓ Inconclusive`.

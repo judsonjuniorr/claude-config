@@ -1,12 +1,12 @@
 ---
-description: (herow) Executa um plano de .claude/plans/<slug>/ em uma worktree isolada — implementa, revisa, testa, commita/pusha e abre o PR
-argument-hint: [caminho ou slug do plano — default: plano mais recente em .claude/plans/]
+description: (herow) Executes a plan from .claude/plans/<slug>/ in an isolated worktree — implements, reviews, tests, commits/pushes, and opens the PR
+argument-hint: [plan path or slug — default: most recent plan in .claude/plans/]
 effort: medium
 ---
 
-## Model check (contexto 1M)
+## Model check (1M context)
 
-O blocker real não é o *tier* (Sonnet vs Opus) e sim o **contexto 1M**: o toggle de 1M é global da sessão e herdado por comandos/subagents. Este comando **não fixa modelo** — herda o modelo padrão da sessão; numa sessão 1M ele roda como `<modelo>[1m]` e falha com `API Error: Usage credits required for 1M context` se não houver créditos. Detecte isso pelo sufixo `[1m]`:
+The real blocker isn't the *tier* (Sonnet vs Opus) but **1M context**: the 1M toggle is session-global and inherited by commands/subagents. This command **does not pin a model** — it inherits the session's default model; in a 1M session it runs as `<model>[1m]` and fails with `API Error: Usage credits required for 1M context` if there are no credits. Detect this by the `[1m]` suffix:
 
 ```bash
 python3 -c "
@@ -21,110 +21,110 @@ print(model)
 " 2>/dev/null
 ```
 
-- Se o output **termina em `[1m]`** (ex.: `claude-sonnet-4-6[1m]`): a sessão está em contexto 1M (cobrado). Avise em 1 linha que esta invocação herda 1M e vai falhar por falta de créditos, e ofereça os dois caminhos:
-  - **Trocar para contexto padrão** (recomendado p/ este comando — roda sem créditos): `/model` → escolha um modelo **não-`[1m]`**, ou reinicie já executando o plano (substitua `<plano>` pelo argumento real resolvido acima):
+- If the output **ends in `[1m]`** (e.g. `claude-sonnet-4-6[1m]`): the session is in 1M context (billed). Warn in 1 line that this invocation inherits 1M and will fail for lack of credits, and offer the two paths:
+  - **Switch to standard context** (recommended for this command — runs without credits): `/model` → pick a **non-`[1m]`** model, or restart already running the plan (replace `<plan>` with the actual argument resolved above):
 
     ```
-    claude --model claude-sonnet-4-6 "/herow-dev:execute <plano>"
+    claude --model claude-sonnet-4-6 "/herow-dev:execute <plan>"
     ```
-  - **Manter 1M** (só se o trabalho exige Opus + 1M de propósito): rode `/usage-credits` para ligar os créditos.
-- Se o output for **vazio/indeterminado**: **não avise** (fail open — o check é só advisory; a maioria das sessões corretas cai aqui).
-- Caso contrário (modelo de contexto padrão): siga sem avisar.
+  - **Keep 1M** (only if the work genuinely needs Opus + 1M): run `/usage-credits` to turn on credits.
+- If the output is **empty/indeterminate**: **don't warn** (fail open — the check is advisory only; most correct sessions land here).
+- Otherwise (standard-context model): proceed without warning.
 
-> Não bloqueie em nenhum caso. Este comando não fixa modelo no frontmatter — herda o modelo padrão da sessão; em contexto padrão roda normalmente. O aviso acima só importa quando a sessão está em 1M.
+> Don't block in any case. This command does not pin a model in the frontmatter — it inherits the session's default model; in standard context it runs normally. The warning above only matters when the session is in 1M.
 
 ---
 
-Você vai **executar** um plano já definido. Caminho/slug (vazio = resolva o plano mais recente, ver abaixo):
+You are going to **execute** an already-defined plan. Path/slug (empty = resolve the most recent plan, see below):
 
 **$ARGUMENTS**
 
-Roda no modelo padrão da sessão. Trate o plano como contrato: não invente escopo, não refatore além do listado.
+Runs on the session's default model. Treat the plan as a contract: don't invent scope, don't refactor beyond what's listed.
 
-## Resolução do caminho
+## Path resolution
 
-O layout atual é **um diretório por plano**: `.claude/plans/<slug>/` com `plan.md`, `state.json`, `source.md` (opcional) e `artifacts/`. Resolva nesta ordem:
+The current layout is **one directory per plan**: `.claude/plans/<slug>/` with `plan.md`, `state.json`, `source.md` (optional), and `artifacts/`. Resolve in this order:
 
-1. **Argumento explícito.** Se foi passado um argumento:
-   - se for um diretório (`.claude/plans/<slug>/` ou `.claude/plans/<slug>`), o plano é `<dir>/plan.md`;
-   - se for um slug simples, resolva para `.claude/plans/<slug>/plan.md`;
-   - se for um caminho de arquivo, use-o literalmente.
-2. **Sem argumento — plano mais recente:** liste os diretórios `.claude/plans/*/` que **contêm `plan.md`** (diretórios sem `plan.md` são blueprints em andamento — ignore) e escolha o de nome mais recente (o nome começa com o timestamp UTC, então ordenação por nome = ordem cronológica). Se houver mais de um candidato recente e ambíguo, **confirme com o usuário** (`AskUserQuestion`) antes de seguir.
-3. **Fallback legado (somente leitura).** Se nada foi encontrado em `.claude/plans/`, procure o layout flat antigo em `.plans/`: use `.plans/latest.txt` se existir, senão o `.plans/*.md` mais recente por mtime **excluindo `*.source.md` e `*.state.json`**. Outros repos migram sob demanda; **planos novos são sempre gravados no layout novo** — nunca escreva de volta em `.plans/`.
-4. Se nem o layout novo nem o legado tiverem um plano, **pare** e avise: "Nenhum plano encontrado. Rode `/herow-dev:blueprint` primeiro."
-5. **Carregue o state.json correspondente:** `.claude/plans/<slug>/state.json` (layout novo) ou `.plans/<ID>.state.json` (fallback legado) — contém o registro (gerado pelo hook) de quais skills rodaram e quais artefatos cada uma criou. **Se não existir, não pare:** avise em 1 linha e siga usando o "Resumo executável" do plano como fonte.
-6. Mostre em 1 linha qual plano + state foi escolhido antes de seguir.
-7. **Mostre o checklist de cobertura do blueprint** (se o state.json existe): compare `skills[].skill` com a lista canônica — `office-hours`, `plan-ceo-review`, `plan-eng-review`, `plan-design-review` (condicional UI), `plan-devex-review` (condicional API/SDK/docs), `spec` (opcional) — e exiba cada etapa como ✅ executada / ⬜ não executada / ➖ não aplicável. **Apenas exibição**, sem perguntar nada: lacunas de review já foram oferecidas interativamente no `/herow-dev:blueprint`; aqui servem só pra deixar visível a cobertura do plano antes de implementar.
+1. **Explicit argument.** If an argument was passed:
+   - if it's a directory (`.claude/plans/<slug>/` or `.claude/plans/<slug>`), the plan is `<dir>/plan.md`;
+   - if it's a plain slug, resolve it to `.claude/plans/<slug>/plan.md`;
+   - if it's a file path, use it literally.
+2. **No argument — most recent plan:** list the `.claude/plans/*/` directories that **contain `plan.md`** (directories without `plan.md` are in-progress blueprints — ignore them) and pick the one with the most recent name (the name starts with the UTC timestamp, so name ordering = chronological order). If there's more than one recent, ambiguous candidate, **confirm with the user** (`AskUserQuestion`) before proceeding.
+3. **Legacy fallback (read-only).** If nothing is found in `.claude/plans/`, look for the old flat layout in `.plans/`: use `.plans/latest.txt` if it exists, otherwise the most recent `.plans/*.md` by mtime **excluding `*.source.md` and `*.state.json`**. Other repos migrate on demand; **new plans are always written to the new layout** — never write back to `.plans/`.
+4. If neither the new layout nor the legacy one has a plan, **stop** and warn: "No plan found. Run `/herow-dev:blueprint` first."
+5. **Load the corresponding state.json:** `.claude/plans/<slug>/state.json` (new layout) or `.plans/<ID>.state.json` (legacy fallback) — contains the record (generated by the hook) of which skills ran and which artifacts each one created. **If it doesn't exist, don't stop:** warn in 1 line and proceed using the plan's "Executable summary" as the source.
+6. Show in 1 line which plan + state was chosen before proceeding.
+7. **Show the blueprint coverage checklist** (if state.json exists): compare `skills[].skill` against the canonical list — `office-hours`, `plan-ceo-review`, `plan-eng-review`, `plan-design-review` (conditional on UI), `plan-devex-review` (conditional on API/SDK/docs), `spec` (optional) — and show each step as ✅ executed / ⬜ not executed / ➖ not applicable. **Display only**, no questions asked: review gaps were already offered interactively in `/herow-dev:blueprint`; here they're just to make the plan's coverage visible before implementing.
 
-## Idioma dos artefatos gerados
+## Language of generated artifacts
 
 All generated code, comments, commit messages, and documentation must be in English, even when the blueprint, questions, or user input are in Portuguese — unless the user explicitly requests otherwise.
 
-## Integração graphify (busca/exploração)
+## graphify integration (search/exploration)
 
-As skills do gstack não usam graphify sozinhas — você é responsável por isso:
+gstack skills don't use graphify on their own — you're responsible for that:
 
-- **Exploração:** ao ler os arquivos de código a tocar, se `graphify-out/graph.json` existe na worktree, **prefira `graphify query "<pergunta>"`** e `graphify path "<A>" "<B>"` a grep amplo. Se não existe e o repo é grande, ofereça `/herow-extras:graphify-install`.
-- **Após implementar (antes do gate de validação):** rode `graphify update .` na worktree para manter o grafo coerente.
+- **Exploration:** when reading the code files to touch, if `graphify-out/graph.json` exists in the worktree, **prefer `graphify query "<question>"`** and `graphify path "<A>" "<B>"` over broad grep. If it doesn't exist and the repo is large, offer `/herow-extras:graphify-install`.
+- **After implementing (before the validation gate):** run `graphify update .` in the worktree to keep the graph in sync.
 
-## Isolamento em worktree (obrigatório)
+## Worktree isolation (mandatory)
 
-Todo o desenvolvimento acontece numa **git worktree dedicada**, nunca no working tree principal.
+All development happens in a **dedicated git worktree**, never in the main working tree.
 
-1. **Branch base = branch atual do repositório.** Capture-a antes de tudo: `git rev-parse --abbrev-ref HEAD`. É contra ela que o PR será aberto no final. **Se a base for ambígua** (HEAD destacado, ou `git rev-parse` não retornar uma branch nomeada), use `AskUserQuestion` para confirmar a branch base — ofereça a detectada/`main` como opção recomendada.
-2. **Defina o slug e o tipo** seguindo Conventional Commits:
-   - O slug vem do **nome do diretório do plano** (`.claude/plans/<SLUG>/`), removendo o prefixo de timestamp `YYYYMMDD-HHMMSS-`. No fallback legado (`.plans/<ID>.md`), vem do nome do arquivo.
-   - O `<tipo>` é inferido do conteúdo do plano: `feat` (nova funcionalidade), `fix` (correção de bug), `refactor` (reestruturação sem mudança de comportamento), `chore` (manutenção/config), `docs` (documentação). Na dúvida entre dois, use o que melhor descreve o objetivo principal.
-   - Ex: plano `dark-mode-eager-quilt` (nova feature) → tipo `feat`, branch `feat/dark-mode-eager-quilt`.
-3. **Garanta que `.claude/worktree/` está no `.gitignore`** do repo (adicione a linha se faltar) — a worktree não deve ser versionada.
-4. **Crie a worktree** em `.claude/worktree/<slug>` com uma branch nova baseada na branch atual:
-   `git worktree add .claude/worktree/<slug> -b <tipo>/<slug> <branch-base>`
-   - O `<slug>` do diretório é o mesmo slug do plano.
-   - Se a worktree ou a branch já existem, **pare** e avise — outra execução pode estar em andamento.
-5. **`cd` para `.claude/worktree/<slug>`** e faça toda a implementação, `/review` e `/qa` lá dentro.
+1. **Base branch = the repository's current branch.** Capture it before anything else: `git rev-parse --abbrev-ref HEAD`. The PR will be opened against it at the end. **If the base is ambiguous** (detached HEAD, or `git rev-parse` doesn't return a named branch), use `AskUserQuestion` to confirm the base branch — offer the detected branch/`main` as the recommended option.
+2. **Define the slug and the type** following Conventional Commits:
+   - The slug comes from the **plan directory name** (`.claude/plans/<SLUG>/`), stripping the `YYYYMMDD-HHMMSS-` timestamp prefix. In the legacy fallback (`.plans/<ID>.md`), it comes from the file name.
+   - The `<type>` is inferred from the plan's content: `feat` (new feature), `fix` (bug fix), `refactor` (restructuring with no behavior change), `chore` (maintenance/config), `docs` (documentation). When torn between two, use whichever best describes the main objective.
+   - Ex: plan `dark-mode-eager-quilt` (new feature) → type `feat`, branch `feat/dark-mode-eager-quilt`.
+3. **Ensure `.claude/worktree/` is in the repo's `.gitignore`** (add the line if missing) — the worktree must not be versioned.
+4. **Create the worktree** at `.claude/worktree/<slug>` with a new branch based on the current branch:
+   `git worktree add .claude/worktree/<slug> -b <type>/<slug> <base-branch>`
+   - The directory `<slug>` is the same as the plan's slug.
+   - If the worktree or branch already exist, **stop** and warn — another execution may be in progress.
+5. **`cd` into `.claude/worktree/<slug>`** and do all the implementation, `/review`, and `/qa` there.
 
-Isso garante que execuções concorrentes nunca pisem no mesmo working tree e que a base do PR seja sempre a branch onde o `/herow-dev:execute` foi disparado.
+This ensures concurrent executions never step on the same working tree, and that the PR base is always the branch where `/herow-dev:execute` was triggered.
 
-## Sequência obrigatória
+## Mandatory sequence
 
-1. **Ler o plano** completo.
-2. **Ler os artefatos do gstack referenciados** na seção "Artefatos do gstack" do plano (design doc, CEO/eng/design/devex reviews). Estes contêm o raciocínio completo por trás das decisões — não pule. Se algum não existir mais, use o "Resumo executável" do plano como fallback e siga.
-3. **Confirmar entendimento em 3 linhas** (objetivo + nº de passos + subagent recomendado). Sem pedir aprovação.
-4. **Implementar passo a passo:**
-   - Para cada passo, execute a mudança e rode a **verificação** do passo.
-   - Se falhar: corrija e re-rode (máx 3 tentativas). Se exceder, pare e reporte qual passo travou.
-   - Use o subagent indicado no plano para a stack específica. Explore com graphify (ver acima).
-   - Ao terminar a implementação, rode `graphify update .` na worktree.
-5. **`/review`** — aplique auto-fixes. Máx 3 ciclos até zero findings críticos.
-6. **`/qa`** — contra ambiente local/staging detectado. Corrija bugs. Máx 3 ciclos.
-7. **Gate de validação** (garante que a branch sobe funcional; complementa o `/review` e `/qa`, não os substitui). Rode nesta ordem, **na worktree**, detectando os comandos pelo `package.json`/config da stack (npm/pnpm/yarn, Makefile, etc.):
-   - **Lint com auto-fix** — ex.: `eslint --fix`, `biome check --write`, `ruff --fix`. Commite os fixes automáticos.
-   - **Type-check** quando disponível — ex.: `tsc --noEmit`, `vue-tsc`, `mypy`.
-   - **Tests** — a suíte do projeto (`vitest run`, `jest`, `pytest`, etc.).
-   - **Build** — ex.: `next build`, `vite build`, `tsc -b`.
-   - Pule de forma explícita (e registre no output) qualquer etapa que o projeto não tenha. Para etapas que existem: corrija e re-rode até passar (máx 3 ciclos por etapa). Se uma etapa continuar falhando, **não abra o PR** — pare e reporte qual etapa travou.
-8. **Commit + push + PR** — só se o gate de validação passou inteiro (a partir da worktree, na branch `<tipo>/<slug>`):
-   - Commit seguindo Conventional Commits, com push da branch.
-   - Abra o PR **contra a branch base** capturada no passo 1 do isolamento.
-   - Use o fluxo `github-ops` para commit/push/PR (não pré-inspecione com `git status`/`diff`/`log`).
-9. **Limpeza da worktree** — só depois do PR aberto com sucesso:
-   - Volte ao working tree principal (`cd` de volta ao repo raiz).
-   - `git worktree remove .claude/worktree/<slug>` (use `--force` apenas se necessário; a branch permanece no PR).
-   - Se a remoção falhar, reporte e deixe a worktree intacta — não force às cegas.
+1. **Read the full plan.**
+2. **Read the gstack artifacts referenced** in the plan's "gstack Artifacts" section (design doc, CEO/eng/design/devex reviews). These contain the full reasoning behind the decisions — don't skip them. If one no longer exists, use the plan's "Executable summary" as a fallback and proceed.
+3. **Confirm understanding in 3 lines** (objective + number of steps + recommended subagent). No approval needed.
+4. **Implement step by step:**
+   - For each step, make the change and run the step's **verification**.
+   - If it fails: fix and re-run (max 3 attempts). If exceeded, stop and report which step got stuck.
+   - Use the subagent indicated in the plan for the specific stack. Explore with graphify (see above).
+   - When implementation is done, run `graphify update .` in the worktree.
+5. **`/review`** — apply auto-fixes. Max 3 cycles until zero critical findings.
+6. **`/qa`** — against the detected local/staging environment. Fix bugs. Max 3 cycles.
+7. **Validation gate** (ensures the branch ships functional; complements `/review` and `/qa`, doesn't replace them). Run in this order, **in the worktree**, detecting the commands from the stack's `package.json`/config (npm/pnpm/yarn, Makefile, etc.):
+   - **Lint with auto-fix** — e.g. `eslint --fix`, `biome check --write`, `ruff --fix`. Commit the automatic fixes.
+   - **Type-check** when available — e.g. `tsc --noEmit`, `vue-tsc`, `mypy`.
+   - **Tests** — the project's suite (`vitest run`, `jest`, `pytest`, etc.).
+   - **Build** — e.g. `next build`, `vite build`, `tsc -b`.
+   - Explicitly skip (and log in the output) any step the project doesn't have. For steps that exist: fix and re-run until they pass (max 3 cycles per step). If a step keeps failing, **don't open the PR** — stop and report which step got stuck.
+8. **Commit + push + PR** — only if the validation gate passed entirely (from the worktree, on the `<type>/<slug>` branch):
+   - Commit following Conventional Commits, pushing the branch.
+   - Open the PR **against the base branch** captured in step 1 of the isolation section.
+   - Use the `github-ops` flow for commit/push/PR (don't pre-inspect with `git status`/`diff`/`log`).
+9. **Worktree cleanup** — only after the PR is successfully opened:
+   - Return to the main working tree (`cd` back to the repo root).
+   - `git worktree remove .claude/worktree/<slug>` (use `--force` only if needed; the branch stays on the PR).
+   - If removal fails, report it and leave the worktree intact — don't force it blindly.
 
-## Output final
+## Final output
 
-- ✅ Passos completados (X de Y)
-- 🌿 Branch: `<tipo>/<slug>` (base: `<branch-base>`)
-- 🧪 Gate de validação — lint / type-check / tests / build (passou ou pulado, por etapa)
-- 📋 Critérios de aceite — quais passam/falham
-- 🔗 **PR aberto:** `<url>`
-- 🧹 Worktree `.claude/worktree/<slug>` removida
+- ✅ Completed steps (X of Y)
+- 🌿 Branch: `<type>/<slug>` (base: `<base-branch>`)
+- 🧪 Validation gate — lint / type-check / tests / build (passed or skipped, per step)
+- 📋 Acceptance criteria — which pass/fail
+- 🔗 **PR opened:** `<url>`
+- 🧹 Worktree `.claude/worktree/<slug>` removed
 
-## Regras
+## Rules
 
-- **Não exceda o escopo** do plano. Anote pendências, siga.
-- **Não modifique arquivos fora da lista** "Arquivos a tocar" sem necessidade óbvia.
-- **Todo trabalho dentro da worktree** — nunca edite o working tree principal.
-- **Não abra o PR com o gate vermelho.** Lint/type-check/tests/build que existem têm de passar; a revisão de código acontece no PR, não localmente.
-- **Remova a worktree só depois do PR aberto.** Se algo falhar antes do PR, deixe a worktree para inspeção.
+- **Don't exceed the plan's scope.** Note pending items, keep going.
+- **Don't modify files outside the** "Files to touch" **list** without an obvious need.
+- **All work inside the worktree** — never edit the main working tree.
+- **Don't open the PR with a red gate.** Lint/type-check/tests/build that exist must pass; code review happens on the PR, not locally.
+- **Only remove the worktree after the PR is opened.** If something fails before the PR, leave the worktree for inspection.

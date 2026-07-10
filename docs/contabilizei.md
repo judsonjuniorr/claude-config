@@ -1,30 +1,30 @@
 # contabilizei
 
-Comandos para registrar notas fiscais no Contabilizei via automação headless.
+Commands to register invoices (notas fiscais) in Contabilizei via headless automation.
 
-## `/contabilizei:nf-tomada <arquivo>`
+## `/contabilizei:nf-tomada <file>`
 
-Registra uma **NF tomada** (nota fiscal de serviço recebida) a partir de um PDF ou XML local.
+Registers a **received NF** (nota fiscal, an incoming service invoice) from a local PDF or XML.
 
-**O que faz:**
-1. Extrai os dados da nota via script Python (PDF multi-município defensivo ou XML ABRASF).
-2. Faz login headless no Contabilizei; lê o código de acesso automaticamente do Gmail.
-3. Checa duplicidade pela listagem da UI (CNPJ + série + número).
-4. Resolve o prestador (existente ou novo cadastro).
-5. Preenche o formulário de registro.
-6. **Pausa para confirmação** antes de enviar — ação fiscal difícil de reverter.
-7. Reporta o resultado.
+**What it does:**
+1. Extracts the invoice data via a Python script (defensive multi-municipality PDF parsing or ABRASF XML).
+2. Performs a headless login into Contabilizei; reads the access code automatically from Gmail.
+3. Checks for duplicates via the UI listing (CNPJ + series + number).
+4. Resolves the service provider (existing or new registration).
+5. Fills in the registration form.
+6. **Pauses for confirmation** before submitting — a fiscal action that's hard to reverse.
+7. Reports the result.
 
-**Quando usar:** sempre que receber uma NF de serviço que precisa ser lançada no Contabilizei.
+**When to use:** whenever you receive a service invoice that needs to be registered in Contabilizei.
 
-**Pré-requisitos:**
-- macOS Keychain (usado para guardar a senha — nunca fica em disco).
-- MCP `playwright-headless` configurado e ativo na sessão Claude Code.
-- MCP `Gmail` configurado e autenticado (`mcp__claude_ai_Gmail__*`).
-- Python 3 com `pdfplumber` (instalado automaticamente pelo `setup.sh`).
+**Prerequisites:**
+- macOS Keychain (used to store the password — never kept on disk).
+- MCP `playwright-headless` configured and active in the Claude Code session.
+- MCP `Gmail` configured and authenticated (`mcp__claude_ai_Gmail__*`).
+- Python 3 with `pdfplumber` (installed automatically by `setup.sh`).
 
-**Dados locais em `~/finance/contabilizei/`** — este diretório **nunca é commitado** no repositório. Contém:
-- `.config` — email de login (modo `600`).
-- `extracted/` — JSONs e textos extraídos das notas (modo `600`), dados fiscais/PII.
+**Local data in `~/finance/contabilizei/`** — this directory is **never committed** to the repository. It contains:
+- `.config` — login email (mode `600`).
+- `extracted/` — JSONs and texts extracted from invoices (mode `600`), fiscal/PII data.
 
-Limpe `extracted/` periodicamente; os arquivos contêm dados de terceiros.
+Clean up `extracted/` periodically; the files contain third-party data.
