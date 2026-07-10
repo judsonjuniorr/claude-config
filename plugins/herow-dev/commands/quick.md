@@ -46,6 +46,10 @@ Você vai executar uma mudança pequena/média de ponta a ponta usando o pipelin
 3. **Não pule etapas.** A ordem importa para evitar retrabalho.
 4. **Todo o desenvolvimento acontece numa worktree isolada** (ver abaixo) — nunca edite o working tree principal.
 
+## Idioma dos artefatos gerados
+
+All generated code, comments, commit messages, and documentation must be in English, even when the blueprint, questions, or user input are in Portuguese — unless the user explicitly requests otherwise.
+
 ## Integração graphify (busca/exploração)
 
 As skills do gstack não usam graphify sozinhas — você é responsável por isso:

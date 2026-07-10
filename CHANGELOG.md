@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0.0] - 2026-07-10
+
+### Added
+- **One-directory-per-plan layout** for `herow-dev` plan persistence. Each plan now lives in `.claude/plans/<slug>/` holding `plan.md`, `state.json`, optional `source.md`, and an `artifacts/` subdir for everything that plan's orchestration produces — replacing the flat `.plans/<name>.md` + `.plans/<name>.state.json` files that lived side by side at the `.plans/` root. Anticipates Claude Code's own community-requested project-scoped `.claude/plans/` convention (anthropics/claude-code#14866) and mirrors GitHub Spec Kit's per-feature `specs/<feature>/` directories.
+- **Session-scoped tracking marker.** `blueprint-track.sh` now binds the active plan to the session via `.claude/plans/.active-<session_id>` (read from the hook payload's `session_id`, claimed by the blueprint command via `$CLAUDE_SESSION_ID`). Concurrent Claude Code sessions in the same repo — the normal workflow — can now each run a blueprint without colliding, and the hook never records one session's skill calls into another session's plan.
+- **Idempotent gitignore guard** in `blueprint.md`: appends `.claude/plans/` to the global `core.excludesfile` and the repo `.gitignore` only if missing, keeping the legacy `.plans/` entry. `.claude/plans/` exemption added to `doc-file-warning.sh` so orchestration `.md` writes under a plan dir don't raise a permission prompt.
+
+### Changed
+- `blueprint.md` / `execute.md` rewritten for the new layout: `mkdir` (without `-p`) claims the plan directory as an atomic uniqueness guard; `plan.md` is written once at consolidation (its absence marks an in-flight plan); the shared `latest.txt` pointer is gone — `execute` resolves an explicit slug/path or the newest plan directory containing `plan.md`, with a read-only fallback to the legacy flat `.plans/` layout (other repos migrate on demand; new plans are always written in the new layout).
+- `blueprint-track.sh` scopes artifact detection to the plan's own `artifacts/` dir (fast, immune to unrelated repo/worktree churn, and no longer self-pollutes), writes `state.json` atomically (temp file + `os.replace`), and normalizes recorded skill names by stripping the plugin namespace so the coverage checklist matches reliably.
+- Added the language rule to `blueprint`, `execute`, `quick`, and `create-prd`: all generated code, comments, commit messages, and documentation must be in English even when the input is in Portuguese, unless the user explicitly requests otherwise.
+- Migrated this repo's existing 7 plans into the new layout and removed the empty `.plans/` directory.
+
+### Fixed
+- **Cross-session state contamination** — the previous hook keyed only on a repo-global `.plans/.active` with no session identity, so any concurrent session's skill calls (proven: `github-ops` entries leaked into planning-only state files) appended into whatever plan was active. The session-scoped marker eliminates this.
+- **`state.json` corruption and lost updates** — the old in-place truncating read-modify-write could leave torn/half-written JSON that poisoned every later run under `set -eu`; writes are now atomic, a corrupt file is preserved as `state.json.corrupt` (not silently discarded) with tracking continuing, and a bounded `mkdir` lock serializes the stack pop + state update so concurrent PRE/POST pairs within a session can't lose a record.
+- **`.plans/*.md` mtime fallback hazards** — a `<name>.source.md` sibling could shadow the real plan, and an in-flight empty plan file could be executed as garbage. Resolution now targets a fixed `plan.md` name and skips directories without it.
+
 ## [0.3.0.0] - 2026-07-06
 
 ### Added

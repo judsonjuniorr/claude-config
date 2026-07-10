@@ -13,6 +13,8 @@ Turn a rough idea into a Product Requirements Document by **brainstorming the in
 
 **Core principle:** A PRD answers *what* and *why*, never *how*. Capture user problems, scope, and success measures — leave implementation to engineering. **Never include time estimates or timelines.** Never invent evidence, metrics, or personas — if it's unknown after asking, it's an open question, not a fact.
 
+**Language:** All generated code, comments, commit messages, and documentation — including the PRD itself — must be in English, even when the questions or user input are in Portuguese, unless the user explicitly requests otherwise.
+
 ## Step 1 — Seed
 
 - Read `$ARGUMENTS` as the working title / one-line idea. If empty, ask the user for it with `AskUserQuestion` (one short round) before continuing.

@@ -1,6 +1,6 @@
 ---
-description: (herow) Executa um plano de .plans/ em uma worktree isolada — implementa, revisa, testa, commita/pusha e abre o PR
-argument-hint: [caminho do plano — default .plans/latest]
+description: (herow) Executa um plano de .claude/plans/<slug>/ em uma worktree isolada — implementa, revisa, testa, commita/pusha e abre o PR
+argument-hint: [caminho ou slug do plano — default: plano mais recente em .claude/plans/]
 effort: medium
 ---
 
@@ -35,22 +35,30 @@ print(model)
 
 ---
 
-Você vai **executar** um plano já definido. Caminho:
+Você vai **executar** um plano já definido. Caminho/slug (vazio = resolva o plano mais recente, ver abaixo):
 
-**${ARGUMENTS:-.plans/latest}**
+**$ARGUMENTS**
 
 Roda no modelo padrão da sessão. Trate o plano como contrato: não invente escopo, não refatore além do listado.
 
 ## Resolução do caminho
 
-1. Se foi passado argumento, use-o literalmente.
-2. Se não foi passado:
-   - Se `.plans/latest.txt` existe, leia o caminho dele.
-   - Senão, liste `.plans/*.md` ordenado por mtime e use o mais recente.
-   - Se `.plans/` não existe ou está vazio, **pare** e avise: "Nenhum plano encontrado. Rode `/herow-dev:blueprint` primeiro."
-3. Carregue também o `.plans/<ID>.state.json` correspondente — contém o registro completo (gerado pelo hook) de quais skills rodaram e quais artefatos cada uma criou. **Se não existir, não pare:** avise em 1 linha e siga usando o "Resumo executável" do plano como fonte (mesmo fallback do passo 2 da sequência).
-4. Mostre em 1 linha qual plano + state foi escolhido antes de seguir.
-5. **Mostre o checklist de cobertura do blueprint** (se o state.json existe): compare `skills[].skill` com a lista canônica — `office-hours`, `plan-ceo-review`, `plan-eng-review`, `plan-design-review` (condicional UI), `plan-devex-review` (condicional API/SDK/docs), `spec` (opcional) — e exiba cada etapa como ✅ executada / ⬜ não executada / ➖ não aplicável. **Apenas exibição**, sem perguntar nada: lacunas de review já foram oferecidas interativamente no `/herow-dev:blueprint`; aqui servem só pra deixar visível a cobertura do plano antes de implementar.
+O layout atual é **um diretório por plano**: `.claude/plans/<slug>/` com `plan.md`, `state.json`, `source.md` (opcional) e `artifacts/`. Resolva nesta ordem:
+
+1. **Argumento explícito.** Se foi passado um argumento:
+   - se for um diretório (`.claude/plans/<slug>/` ou `.claude/plans/<slug>`), o plano é `<dir>/plan.md`;
+   - se for um slug simples, resolva para `.claude/plans/<slug>/plan.md`;
+   - se for um caminho de arquivo, use-o literalmente.
+2. **Sem argumento — plano mais recente:** liste os diretórios `.claude/plans/*/` que **contêm `plan.md`** (diretórios sem `plan.md` são blueprints em andamento — ignore) e escolha o de nome mais recente (o nome começa com o timestamp UTC, então ordenação por nome = ordem cronológica). Se houver mais de um candidato recente e ambíguo, **confirme com o usuário** (`AskUserQuestion`) antes de seguir.
+3. **Fallback legado (somente leitura).** Se nada foi encontrado em `.claude/plans/`, procure o layout flat antigo em `.plans/`: use `.plans/latest.txt` se existir, senão o `.plans/*.md` mais recente por mtime **excluindo `*.source.md` e `*.state.json`**. Outros repos migram sob demanda; **planos novos são sempre gravados no layout novo** — nunca escreva de volta em `.plans/`.
+4. Se nem o layout novo nem o legado tiverem um plano, **pare** e avise: "Nenhum plano encontrado. Rode `/herow-dev:blueprint` primeiro."
+5. **Carregue o state.json correspondente:** `.claude/plans/<slug>/state.json` (layout novo) ou `.plans/<ID>.state.json` (fallback legado) — contém o registro (gerado pelo hook) de quais skills rodaram e quais artefatos cada uma criou. **Se não existir, não pare:** avise em 1 linha e siga usando o "Resumo executável" do plano como fonte.
+6. Mostre em 1 linha qual plano + state foi escolhido antes de seguir.
+7. **Mostre o checklist de cobertura do blueprint** (se o state.json existe): compare `skills[].skill` com a lista canônica — `office-hours`, `plan-ceo-review`, `plan-eng-review`, `plan-design-review` (condicional UI), `plan-devex-review` (condicional API/SDK/docs), `spec` (opcional) — e exiba cada etapa como ✅ executada / ⬜ não executada / ➖ não aplicável. **Apenas exibição**, sem perguntar nada: lacunas de review já foram oferecidas interativamente no `/herow-dev:blueprint`; aqui servem só pra deixar visível a cobertura do plano antes de implementar.
+
+## Idioma dos artefatos gerados
+
+All generated code, comments, commit messages, and documentation must be in English, even when the blueprint, questions, or user input are in Portuguese — unless the user explicitly requests otherwise.
 
 ## Integração graphify (busca/exploração)
 

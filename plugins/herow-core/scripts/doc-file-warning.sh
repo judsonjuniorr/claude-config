@@ -30,6 +30,13 @@ case "$abs" in
   *) exit 0 ;;         # outside the repo — allow
 esac
 
+# Allow plan orchestration artifacts. The herow-dev per-plan layout writes plan.md,
+# source.md, and research/agent notes under .claude/plans/<slug>/ (gitignored, local) —
+# never prompt on those, or every artifact write would interrupt the blueprint flow.
+case "$abs" in
+  "$repo_root"/.claude/plans/*) exit 0 ;;
+esac
+
 # Allow conventional repo docs that are expected to exist.
 base="$(basename "$FILE")"
 shopt -s nocasematch 2>/dev/null || true
