@@ -27,7 +27,7 @@ brew_pkg python3 python    # python formula provides python3
 brew_pkg node   node        # provides node + npm
 brew_pkg bun    bun
 
-# uv: official installer (not always in brew), used by graphify/headroom installs
+# uv: official installer (not always in brew), used by the graphify install
 if have uv; then emit ok dep-uv present
 else
   info install-uv "curl -LsSf https://astral.sh/uv/install.sh | sh"
@@ -36,7 +36,7 @@ else
     || emit err dep-uv "uv install failed"
 fi
 
-# python >= 3.10 guard (headroom requirement)
+# python >= 3.10 guard (required by the stack's Python tooling)
 if have python3; then
   if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)' 2>/dev/null; then
     emit ok python-version "$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"

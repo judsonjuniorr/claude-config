@@ -11,7 +11,6 @@ ck()  { if eval "$2" >/dev/null 2>&1; then echo "pass|$1|$3"; PASS=$((PASS+1)); 
 # stack tools work
 ck rtk        'have rtk && rtk gain'                 "rtk gain ok"          "rtk gain failed"
 ck graphify   'have graphify && graphify --version'  "graphify ok"          "graphify missing"
-ck headroom   'have headroom'                         "headroom present"     "headroom missing"
 ck gstack     '[ -d "${GSTACK_DIR}/.git" ]'          "gstack cloned"        "gstack not installed"
 ck organizze  'have organizze && organizze --version' "organizze ok"        "organizze missing"
 
