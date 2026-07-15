@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0.0] - 2026-07-15
+
+### Added
+- **`/herow-dev:ux-audit`** — new command that walks a live user flow with Playwright MCP as a real user (typed input, triggered actions, observed results — not a static code read), gates on console/network/axe-core a11y/perf hard thresholds, and produces a ranked findings report with reproduction steps, evidence, and a suspected `file:line` per finding. Adapted from [jezweb/claude-skills](https://github.com/jezweb/claude-skills)' `ux-audit` skill: retargeted to Playwright MCP only (this repo forbids the gstack `browse` skill and `mcp__claude-in-chrome__*` tools globally), condensed from its ~15 cross-referenced reference files into one self-contained command, and given a `--quick`/`--deep` depth control the source skill didn't have. Includes an interaction-manifest requirement (no logged real interaction = verdict `Incomplete`, never rounded up to Pass) and an optional `--fix` loop that patches Critical/High findings and re-verifies just the affected step.
+
 ## [0.4.0.0] - 2026-07-10
 
 ### Added
