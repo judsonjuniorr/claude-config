@@ -1,4 +1,4 @@
-"""Tests for tokens.py — headroom hook + MCP stash moves. No real config.
+"""Tests for tokens.py — MCP stash moves. No real config.
 
 The MCP-move apply edits ~/.claude.json + mcp-stash.json directly (no shell-out),
 backing up each first.
@@ -13,73 +13,6 @@ from _base import DoctorTestCase
 
 import _doctor  # noqa: E402
 import tokens  # noqa: E402
-
-HEADROOM = "/x/.local/bin/headroom init hook ensure --profile init-user --marker m"
-
-
-def _settings_with_headroom(in_pre=True, in_session=True):
-    pre = [
-        {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo graphify"}]},
-        {
-            "matcher": "Bash",
-            "hooks": [{"type": "command", "command": "rtk hook claude"}],
-        },
-    ]
-    if in_pre:
-        pre.append(
-            {"matcher": "Bash", "hooks": [{"type": "command", "command": HEADROOM}]}
-        )
-    session = []
-    if in_session:
-        session.append(
-            {
-                "matcher": "startup|resume",
-                "hooks": [{"type": "command", "command": HEADROOM}],
-            }
-        )
-    return {"hooks": {"PreToolUse": pre, "SessionStart": session}}
-
-
-class TestHeadroomRedundancy(DoctorTestCase):
-    def _settings(self, obj):
-        return self.write_json(_doctor.settings_path(), obj)
-
-    def test_warn_when_in_both(self):
-        self._settings(_settings_with_headroom(in_pre=True, in_session=True))
-        self.assertEqual(
-            self.run_check(tokens.check_headroom_hook_redundancy)["status"], "warn"
-        )
-
-    def test_apply_removes_pre_keeps_others_and_session(self):
-        self._settings(_settings_with_headroom(in_pre=True, in_session=True))
-        self.assertTrue(tokens.apply_headroom_hook_redundancy())
-        s = json.loads(_doctor.settings_path().read_text())
-        pre = s["hooks"]["PreToolUse"]
-        self.assertEqual(len(pre), 2)  # graphify + rtk survive
-        cmds = [h["command"] for m in pre for h in m["hooks"]]
-        self.assertNotIn(HEADROOM, cmds)
-        # SessionStart copy intact
-        self.assertEqual(len(s["hooks"]["SessionStart"]), 1)
-        # now PASS + idempotent
-        self.assertEqual(
-            self.run_check(tokens.check_headroom_hook_redundancy)["status"], "pass"
-        )
-        self.assertFalse(tokens.apply_headroom_hook_redundancy())
-
-    def test_sole_copy_in_pre_is_pass_and_apply_refuses(self):
-        self._settings(_settings_with_headroom(in_pre=True, in_session=False))
-        self.assertEqual(
-            self.run_check(tokens.check_headroom_hook_redundancy)["status"], "pass"
-        )
-        self.assertFalse(
-            tokens.apply_headroom_hook_redundancy()
-        )  # never delete the only copy
-
-    def test_absent_is_pass(self):
-        self._settings(_settings_with_headroom(in_pre=False, in_session=True))
-        self.assertEqual(
-            self.run_check(tokens.check_headroom_hook_redundancy)["status"], "pass"
-        )
 
 
 class TestMcpStashMoves(DoctorTestCase):
@@ -119,11 +52,7 @@ class TestMcpStashMoves(DoctorTestCase):
         self.assertFalse(tokens.apply_playwright_headed_active())
 
     def test_malformed_hooks_and_servers_do_not_crash(self):
-        # hooks as a list, mcpServers as a list — checks must degrade, never raise
-        self.write_json(_doctor.settings_path(), {"hooks": ["oops"]})
-        self.assertEqual(
-            self.run_check(tokens.check_headroom_hook_redundancy)["status"], "pass"
-        )
+        # mcpServers as a list — checks must degrade, never raise
         self.write_json(_doctor.claude_json_path(), {"mcpServers": ["oops"]})
         self.assertEqual(self.run_check(tokens.check_grafana_active)["status"], "pass")
         self.assertFalse(tokens.apply_grafana_active())
