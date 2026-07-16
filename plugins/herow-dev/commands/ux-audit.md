@@ -1,5 +1,5 @@
 ---
-description: (herow) Walk a live user flow with Playwright MCP as a real user, gate on console/network/a11y/perf, and produce a ranked, reproducible UX findings report — with an optional fix-and-verify loop.
+description: (herow) Walk a live user flow with Playwright MCP as a real user and deliver a complete, detailed document on what to improve and how to improve the flow's usability — with an optional fix-and-verify loop.
 argument-hint: <task scenario / user flow> [url] [--quick|--deep] [--fix]
 allowed-tools: Bash, Read, Write, Glob, Grep, mcp__playwright-headless, mcp__playwright
 effort: high
@@ -11,6 +11,8 @@ effort: high
 
 Walk a live app **as a real user performing a specific task** — typing, clicking, watching results — not a static code read. A result without real interaction (typed input, triggered action, observed outcome) is not a pass; it's `Incomplete`.
 
+**The deliverable is a document, not a badge.** The output of this command is a complete, detailed write-up of what's wrong with the informed flow and exactly how to fix it — a plan a developer or designer can pick up and act on. The interaction manifest, hard gates, and verdict in the steps below exist to keep that document honest (proof a real walkthrough happened, not a guess dressed up as a report) — they are not themselves the point of the exercise.
+
 ## STEP 1 — Parse `$ARGUMENTS`
 
 - **Task scenario / user flow** (required). Free text describing the job, e.g. "sign up, add a payment method, and complete checkout" or "create a new patient and book them for surgery." If missing, ask: *"What's the user flow to audit? Describe it like a support ticket — the task, not the screens."*
@@ -19,7 +21,7 @@ Walk a live app **as a real user performing a specific task** — typing, clicki
   - `--quick` — walkthrough + hard gates only (console/network/layout), single viewport, ~5 min.
   - `--deep` — adds the responsive sweep (375/768/1024/1920), axe-core + perf budget, and the Phase 5 stress passes.
   - default (**Standard**, no flag) — walkthrough + hard gates + axe-core + perf on one representative route, plus a quick 375px check.
-- `--fix` — after the report, patch Critical/High findings and re-verify (STEP 7). Without it, still *offer* the loop at the end.
+- `--fix` — after the document, patch Critical/High findings and re-verify (STEP 8). Without it, still *offer* the loop at the end.
 
 If no URL was given: look for a running dev server (`package.json` `dev`/`start` script + `lsof -i :PORT` on common ports — 3000, 5173, 8080, 4321, 8000) or a deployed URL in `CLAUDE.md`/`README.md`. Ask if neither resolves.
 
@@ -116,15 +118,15 @@ Run whichever apply to the flow, one line each in the report:
 5. **Destructive confidence** — for any delete/send/publish/pay step: is the confirmation copy specific, styled as dangerous, and is there an undo? **Ask the user before actually triggering a real destructive action.**
 6. **Round-trip integrity** — for any A→B→A flow (list → detail → back), does A reflect the change made on B without a manual refresh? This is the single biggest "the app looks empty when I go back" bug source.
 
-## STEP 7 — Verdict & report
+## STEP 7 — Write the improvement document
 
-Verdict is exactly one of:
-- **Pass** — hard gates all green, Interaction Manifest complete, Critical = 0, High = 0.
-- **Conditional Pass** — hard gates green, Critical = 0, High = 0, but Medium/Low findings exist.
-- **Fail** — any Critical/High finding or a red hard gate.
-- **Incomplete** — the manifest is missing required entries, or a phase was skipped without saying so. Never round this up to Pass because "it looked fine."
+Write to `docs/ux-audit-<YYYY-MM-DD>-<flow-slug>.md` (get the date via `Bash`: `date +%F`). Write incrementally as you go through Steps 4-6 — don't try to reconstruct everything from memory at the end. The document has five required sections, in order. Every one of them must exist and have real content; a document missing a section is incomplete, not done.
 
-Write the report to `docs/ux-audit-<YYYY-MM-DD>-<flow-slug>.md` (get the date via `Bash`: `date +%F`):
+### 1. Executive Summary (3-5 sentences)
+
+Plain language, no jargon. What flow was tested, as whom. The overall state of the experience. The two or three things that matter most. The single highest-leverage change — the one fix that, if nothing else got done, would move the needle most.
+
+### 2. Health Snapshot (compact — proof, not the point)
 
 ```
 VERDICT: <Pass / Conditional Pass / Fail / Incomplete>
@@ -134,26 +136,43 @@ Depth: <quick / standard / deep>
 Hard gates: console errors [N] · warnings [N] · network 5xx [N] · 403/404 [N] · layout collapse [N] · axe Critical [N] · axe Serious [N]
 Performance (/<route>): LCP [N]s · CLS [N]
 Findings: Critical [N] · High [N] · Medium [N] · Low [N]
-
-TOP fixes (ranked by impact × ease):
- 1. [id] title — why this edges out the others
- 2. ...
 ```
 
-Each finding:
+Verdict is exactly one of:
+- **Pass** — hard gates all green, Interaction Manifest complete, Critical = 0, High = 0.
+- **Conditional Pass** — hard gates green, Critical = 0, High = 0, but Medium/Low findings exist.
+- **Fail** — any Critical/High finding or a red hard gate.
+- **Incomplete** — the manifest is missing required entries, or a phase was skipped without saying so. Never round this up to Pass because "it looked fine."
+
+### 3. What to Improve, and How (the core of the document — one entry per finding, ranked by impact)
+
+Every finding answers both halves — what's broken AND the concrete plan to fix it. A finding with only the "what" is a bug report, not an improvement document; write the "how" with the same care.
 
 ```
 [severity-letter+N] Title
-Surface: <route/screen>              Persona: <who>
+Surface: <route/screen>                    Persona: <who>
+What's wrong: <the problem, in plain language, from the persona's point of view>
+Why it matters: <the UX cost — confusion, lost trust, a stalled task, an abandoned flow — tied to this persona, not a generic "bad practice" citation>
 Reproduce: 1. ... 2. ... 3. ...
-Observed: <what happened>
-Expected: <what should happen>
 Evidence: <screenshot path(s)> · <console/network excerpt>
 Suspected location: <file:line>
-Smallest fix: <concrete, committable — never "consider" or "improve">
+How to fix it: <the concrete change — specific enough to hand to a developer. If there's a genuine tradeoff between two reasonable approaches, name both and recommend one; don't hide the decision.>
+Effort: <S (hours) / M (a day or two) / L (needs its own plan)>
 ```
 
-Close with **one paragraph, no bullets, no template**: if this flow were a physical object, would you want to hand it to someone? What's it like to actually live with, not just complete once. This is the one place a holistic judgment call is the point — don't hedge it into a checklist.
+No reproduction + evidence + suspected `file:line` = the finding is dropped, not published as a vague "consider improving X." "How to fix it" must be committable, never "consider" or "improve" or "look into."
+
+### 4. Improvement Roadmap (how to sequence the work)
+
+Group every finding from Section 3 into exactly one bucket — this is what turns a findings list into an actionable plan:
+
+- **Quick Wins** — Effort S/M, ship this week. Copy fixes, single-component changes, CSS/token tweaks.
+- **Structural** — Effort L, or touches multiple files/routes/shared components. Needs its own scoped piece of work.
+- **Advanced Polish** — real but lowest-leverage: micro-interactions, edge-case refinement, nice-to-haves that don't block the task.
+
+### 5. Hold This In Your Hands (closing paragraph)
+
+**One paragraph, no bullets, no template.** If this flow were a physical object, would you want to hand it to someone? What's it like to actually live with, not just complete once. This is the one place a holistic judgment call is the point — don't hedge it into a checklist.
 
 ## STEP 8 — Fix-and-verify
 
