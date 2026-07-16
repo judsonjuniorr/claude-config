@@ -20,20 +20,20 @@ Scripts live at `${CLAUDE_PLUGIN_ROOT}/scripts/`:
 
 Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/detect.sh"`. Parse the records and show a compact inventory in four groups:
 - **Deps**: git/brew/python3/uv/node/npm/bun — `installed` vs `missing`.
-- **Stack**: rtk / graphify / headroom / gstack / organizze — `installed` or `missing`.
+- **Stack**: rtk / graphify / gstack / organizze — `installed` or `missing`.
 - **Removal candidates** (`remove|…`) and **Token optimizations** (`opt|…`) — relevant only to the install branch below.
 
 ## Step 2 — Install / repair branch (AskUserQuestion gate)
 
-If any **stack tool is `missing`** (rtk/graphify/headroom/gstack/organizze), or detect surfaced removal/opt candidates, ask with `AskUserQuestion`:
+If any **stack tool is `missing`** (rtk/graphify/gstack/organizze), or detect surfaced removal/opt candidates, ask with `AskUserQuestion`:
 - **Run install/repair now** — bootstrap the stack, then continue to the audit.
 - **Audit only** — skip install; audit whatever exists.
 
 Doctor never installs silently. If **Run install/repair** is chosen, execute the installer sequence (idempotent — re-running no-ops what's already done):
 
 1. **Confirm removals** (`AskUserQuestion`, one Yes per group) for each `remove|…` group detect found — OMEGA surfaces, loose duplicate `blueprint|quick|execute` commands/hooks, stray memory/token MCP servers. Nothing is removed without approval. Collect approved tokens (`omega`, `loose`, `stray:<key>`).
-2. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/ensure-deps.sh"` — installs missing deps; if it reports python3 < 3.10, stop and tell the user to upgrade before headroom.
-3. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` — gstack clone+setup, rtk/graphify verify, headroom install, `organizze` CLI install (brew cask, curl fallback — used by `herow-finance`'s Organizze read path). Then **ask the headroom mode** (`AskUserQuestion`, all force telemetry OFF): **MCP tools (safe)** → `headroom-wrap.sh mcp`; **Durable init (Recommended)** → `headroom-wrap.sh init` (can break Pro/Max OAuth, backed up, needs restart); **Proxy wrap (legacy)** → `headroom-wrap.sh wrap`. Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/headroom-wrap.sh" <mode>`.
+2. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/ensure-deps.sh"` — installs missing deps; if it reports python3 < 3.10, stop and tell the user to upgrade before continuing.
+3. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` — gstack clone+setup, rtk/graphify verify, `organizze` CLI install (brew cask, curl fallback — used by `herow-finance`'s Organizze read path).
 4. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/token-guard.sh"` — safe defaults, no approval needed (`model: opusplan`, `advisorModel: opus`, `effortLevel: high`, `autoCompact: true`, removes any `CLAUDE_CODE_SUBAGENT_MODEL` pin, pins `ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-4-8` and `ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5`).
 5. **Model pin picker** — lets the user choose which Opus and Sonnet to pin for `opusplan` (overrides the safe defaults written by token-guard above):
    1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup/model-pin.py" --list`. Parse the output lines (`family|id|label`); split into `opus` and `sonnet` candidate **model IDs** (3 each, most recent first). Only these exact IDs are valid choices — never substitute free text.
@@ -53,7 +53,7 @@ Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/doctor/audit.py"`. It prints `{"summ
 
 The checks:
 - **security** — `permissions_deny` (settings.json must deny reads of `.env`/credentials/secrets/`mcp-stash.json`), `plaintext_secrets` (mcp-stash.json must use `${VAR}` refs, not literal tokens).
-- **tokens** — `headroom_hook_redundancy` (headroom init hook duplicated in PreToolUse + SessionStart), `playwright_headed_active` + `grafana_active` (heavy MCP servers that should be stashed on-demand).
+- **tokens** — `playwright_headed_active` + `grafana_active` (heavy MCP servers that should be stashed on-demand).
 - **hygiene** — `gstack_bak`, `claude_md_backups`, `language_rules_paths`.
 
 ## Step 4 — Present findings (grouped)
@@ -81,7 +81,7 @@ For each approved id, show its `fix_cmd` and its `diff` again (these came from t
 For each approved id, run its `fix_cmd` **verbatim** (each is `python3 "…/scripts/doctor/<script>.py" --apply <id>`). Report each `ok|applied|<id>` or `ok|noop|<id>`, and list the `.bak` files written. Surface any `info|…` lines the scripts print. Special follow-ups:
 - **`plaintext_secrets`**: the script prints `info|export-needed|<VAR>` lines and the `.bak` path (the only place the real values survive, chmod 600). Tell the user to add `export <VAR>=…` for each to `~/.zshrc` (reading the value from that `.bak`) and **fully restart Claude Code** — `${VAR}` is resolved at MCP server spawn, so until then those servers won't start.
 - **`playwright_headed_active` / `grafana_active`**: a server was moved to the stash — remind the user to restart Claude Code; restore later with `~/.claude/mcp-restore.sh <name>`.
-- **`headroom_hook_redundancy`** / **`permissions_deny`**: settings.json changed — restart Claude Code to pick up hook/permission changes.
+- **`permissions_deny`**: settings.json changed — restart Claude Code to pick up permission changes.
 
 ## Step 8 — Re-verify + final report
 

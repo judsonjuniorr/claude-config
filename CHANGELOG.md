@@ -2,7 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.4.1.0] - 2026-07-15
+
+### Removed
+- **headroom integration** — the `headroom-ai` third-party CLI is no longer bundled: `scripts/setup/headroom-wrap.sh` deleted, `install-stack.sh`/`detect.sh`/`verify.sh` no longer install/detect/verify it, the `headroom_hook_redundancy` doctor check removed from `tokens.py`, and all install-flow prose in `commands/doctor.md`/`README.md` updated accordingly.
 
 ## [0.5.0.0] - 2026-07-15
 
