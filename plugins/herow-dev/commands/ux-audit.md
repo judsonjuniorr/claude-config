@@ -7,8 +7,6 @@ effort: high
 
 # UX Audit
 
-> Adapted from [jezweb/claude-skills](https://github.com/jezweb/claude-skills)' `ux-audit` skill: condensed into a single command, retargeted to Playwright MCP only (this repo's global rule forbids the gstack `browse` skill and `mcp__claude-in-chrome__*` tools), and given an explicit `--quick`/`--deep` depth control the source skill didn't have.
-
 Walk a live app **as a real user performing a specific task** — typing, clicking, watching results — not a static code read. A result without real interaction (typed input, triggered action, observed outcome) is not a pass; it's `Incomplete`.
 
 **The deliverable is a document, not a badge.** The output of this command is a complete, detailed write-up of what's wrong with the informed flow and exactly how to fix it — a plan a developer or designer can pick up and act on. The interaction manifest, hard gates, and verdict in the steps below exist to keep that document honest (proof a real walkthrough happened, not a guess dressed up as a report) — they are not themselves the point of the exercise.
