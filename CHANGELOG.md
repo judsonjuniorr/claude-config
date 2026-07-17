@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0.0] - 2026-07-17
+
+### Added
+- **Mandatory pre-push validation gate** across the herow-dev push/finalize commands. New shared spec `plugins/herow-dev/reference/pre-push-gate.md` is the single source of truth for the gate — lint (auto-fix) → type-check (if present) → tests → build, each existing step must pass 100% (absent steps skipped + logged, never faked) — plus a load-bearing anti-cheat clause (no skip/delete/disable tests, `--passWithNoTests`, `|| true`, blanket `eslint-disable`/`# type: ignore`/`@ts-nocheck`, or `--no-verify`; stop + report over hacking the gate) and a pre-existing-failure policy (fix untouched-file failures too, isolated in a `chore: fix pre-existing gate failures` commit; stop + report if large/unrelated). Wired into `execute.md` (reconciles the old step-7 gate and the "don't touch files outside scope" rule with an explicit gate carve-out), `quick.md` (gate before the external `/ship`), `git/pr.md` (**verify-only** — detects red and directs the user to `execute`/`quick`, since it has no `Edit`/`Write`), and `git/fix-conflicts.md` (replaces the weak "suggest tests" line with a real fix-loop gate; still never auto-commits/pushes).
+
 ## [0.4.1.0] - 2026-07-15
 
 ### Removed
