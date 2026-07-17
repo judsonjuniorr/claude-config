@@ -2,7 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.1.0] - 2026-07-15
+## [0.6.0.0] - 2026-07-17
+
+### Added
+- **herow-dev pull-latest hook** — a new `UserPromptSubmit` hook (`plugins/herow-dev/scripts/pull-latest.sh`, registered in `plugins/herow-dev/hooks/hooks.json`) fast-forwards the current branch to its upstream (`git pull --ff-only`) on the main tree **before** `/herow-dev:blueprint`, `/herow-dev:quick`, or `/herow-dev:execute` runs, so planning and implementation always start on the freshest code. It fires only on those three commands (silent and zero-cost otherwise) and is entirely fail-open: `HEROW_SKIP_PULL=1` opt-out (checked first), plus not-a-repo/detached-HEAD/no-upstream/offline/diverged paths each print an actionable one-line reason and continue — it never blocks a command (always exits 0) and never rewrites local commits (`--ff-only`). Bounded by a 20s hook `timeout`. Each of the three command files carries a prose note tying the invisible behavior back to the docs.
 
 ### Removed
 - **headroom integration** — the `headroom-ai` third-party CLI is no longer bundled: `scripts/setup/headroom-wrap.sh` deleted, `install-stack.sh`/`detect.sh`/`verify.sh` no longer install/detect/verify it, the `headroom_hook_redundancy` doctor check removed from `tokens.py`, and all install-flow prose in `commands/doctor.md`/`README.md` updated accordingly.

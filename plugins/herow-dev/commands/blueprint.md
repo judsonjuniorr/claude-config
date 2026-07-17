@@ -14,6 +14,7 @@ Description:
 
 ## Initial setup (do this first, in order)
 
+0. **Pull latest first (fail-open, automatic).** A `UserPromptSubmit` hook (`scripts/pull-latest.sh`) fast-forwards the current branch to its upstream (`git pull --ff-only`) on the main tree **before** this command runs, so planning always reflects the freshest code. It's fail-open (offline/detached/no-upstream/diverged all warn and continue, never block) and opt-out via `HEROW_SKIP_PULL=1`. You don't invoke it — just be aware the base is already fresh.
 1. `mkdir -p .claude/plans` and sweep dead markers from old sessions (inert, but they accumulate): `find .claude/plans -maxdepth 1 -name '.active-*' -mtime +7 -delete 2>/dev/null || true`
 2. **Ensure `.claude/plans/` is gitignored (idempotent).** Run the guard below — it appends `.claude/plans/` to git's global excludesfile (only if missing) and to the repo's `.gitignore` (only if missing), **keeping** the legacy `.plans/` line:
 
