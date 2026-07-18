@@ -74,9 +74,15 @@ Implementation, `/review`, `/qa`, and `/ship` all run in a **dedicated git workt
 3. **Implementation** — execute the plan. Use graphify to explore (see above) and the appropriate subagent (`fullstack-developer`, `python-pro`, `mobile-developer`, etc.) depending on the stack touched. When done, run `graphify update .`.
 4. **Review** — run `/review`. Apply auto-fixes. Re-run until zero critical findings.
 5. **QA** — run `/qa` pointing at the detected local/staging environment. Fix bugs found. Re-run until it passes.
-6. **Ship** — run `/ship` to open the PR **against the base branch** captured in step 1 of the isolation section.
-7. **Worktree cleanup** — only after the PR is opened: return to the repo root (`cd`) and `git worktree remove .claude/worktree/<slug>` (the branch stays on the PR). If removal fails, report it and leave the worktree intact — don't force it blindly.
+6. **Pre-push validation gate** — before shipping, the project must be **100% green**. The canonical steps, anti-cheat forbidden list, and pre-existing-failure policy live in **`${CLAUDE_PLUGIN_ROOT}/reference/pre-push-gate.md`** — read it; the terse checklist is inlined here so you can act without chasing the link. In the worktree, detecting the commands from the stack (`package.json`/`Makefile`/`pyproject.toml`/`pom.xml`/`go.mod`/etc.), run in order:
+   - **Lint with auto-fix** (`eslint --fix`, `biome check --write`, `ruff --fix`) — commit the auto-fixes → **Type-check** if present (`tsc --noEmit`, `mypy`) → **Tests** (`vitest run`, `pytest`, …) → **Build** (`next build`, `vite build`, …).
+   - Each step that **exists must pass 100%**; skip + log any absent step — **never fake one green** (no `--passWithNoTests`). Fix and re-run failures (max 3 cycles per step).
+   - **Anti-cheat (load-bearing):** fix the real problem — **never** skip/delete/disable tests, append `|| true`, add blanket `eslint-disable`/`# type: ignore`/`@ts-nocheck`, or push with `--no-verify`. Pre-existing (untouched-file) failures must also be fixed to reach 100%, in a **separate labeled commit** `chore: fix pre-existing gate failures`; if large/unrelated, **stop and report** instead.
+   - If the gate can't be made honestly green in ≤3 cycles per step, **stop — do not run `/ship`**.
+   - > `/ship` is an external gstack skill this repo can't gate directly; running this gate **before** `/ship` is the enforceable seam.
+7. **Ship** — run `/ship` to open the PR **against the base branch** captured in step 1 of the isolation section. Only proceed if the pre-push validation gate (step 6) is fully green.
+8. **Worktree cleanup** — only after the PR is opened: return to the repo root (`cd`) and `git worktree remove .claude/worktree/<slug>` (the branch stays on the PR). If removal fails, report it and leave the worktree intact — don't force it blindly.
 
 ## Final output
 
-Report in up to 6 lines: what was done, branch (`<type>/<slug>`, base), PR link, any known pending items, and the status of the gstack steps in 1 line — `autoplan / review / qa / ship`, each marked ✅ executed, ⬜ skipped (with reason), or ❌ failed.
+Report in up to 6 lines: what was done, branch (`<type>/<slug>`, base), PR link, any known pending items, and the status of the gstack steps in 1 line — `autoplan / review / qa / gate / ship`, each marked ✅ executed, ⬜ skipped (with reason), or ❌ failed. For `gate`, surface the per-step result (lint / type-check / test / build: ✅ pass · ➖ absent · ❌ stuck).

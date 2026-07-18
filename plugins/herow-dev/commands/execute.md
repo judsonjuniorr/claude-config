@@ -97,12 +97,14 @@ This ensures concurrent executions never step on the same working tree, and that
    - When implementation is done, run `graphify update .` in the worktree.
 5. **`/review`** — apply auto-fixes. Max 3 cycles until zero critical findings.
 6. **`/qa`** — against the detected local/staging environment. Fix bugs. Max 3 cycles.
-7. **Validation gate** (ensures the branch ships functional; complements `/review` and `/qa`, doesn't replace them). Run in this order, **in the worktree**, detecting the commands from the stack's `package.json`/config (npm/pnpm/yarn, Makefile, etc.):
+7. **Pre-push validation gate** (ensures the branch ships functional; complements `/review` and `/qa`, doesn't replace them). The canonical gate steps, anti-cheat forbidden list, and pre-existing-failure policy live in **`${CLAUDE_PLUGIN_ROOT}/reference/pre-push-gate.md`** — read it; the terse checklist is inlined here so you can act without chasing the link. Run in this order, **in the worktree**, detecting the commands from the stack (`package.json`/`Makefile`/`pyproject.toml`/`pom.xml`/`go.mod`/etc.):
    - **Lint with auto-fix** — e.g. `eslint --fix`, `biome check --write`, `ruff --fix`. Commit the automatic fixes.
    - **Type-check** when available — e.g. `tsc --noEmit`, `vue-tsc`, `mypy`.
    - **Tests** — the project's suite (`vitest run`, `jest`, `pytest`, etc.).
    - **Build** — e.g. `next build`, `vite build`, `tsc -b`.
-   - Explicitly skip (and log in the output) any step the project doesn't have. For steps that exist: fix and re-run until they pass (max 3 cycles per step). If a step keeps failing, **don't open the PR** — stop and report which step got stuck.
+   - Each step that **exists must pass 100%**; skip (and log in the output) any step the project genuinely lacks — **never fake an absent step green** (no `--passWithNoTests`). For steps that exist: fix and re-run until they pass (max 3 cycles per step). If a step keeps failing, **don't open the PR** — stop and report which step got stuck.
+   - **Anti-cheat (load-bearing):** reach green by fixing the real problem — **never** skip/delete/disable tests, append `|| true`, add blanket `eslint-disable`/`# type: ignore`/`@ts-nocheck`, or push with `--no-verify`. See the shared spec for the full list.
+   - **Pre-existing (untouched-file) failures** must also be fixed to reach 100%, but isolated in a **separate labeled commit** `chore: fix pre-existing gate failures`. If the pre-existing breakage is large or unrelated, **stop and report** ("base branch was already red: …") instead of absorbing an unbounded diff.
 8. **Commit + push + PR** — only if the validation gate passed entirely (from the worktree, on the `<type>/<slug>` branch):
    - Commit following Conventional Commits, pushing the branch.
    - Open the PR **against the base branch** captured in step 1 of the isolation section.
@@ -116,7 +118,7 @@ This ensures concurrent executions never step on the same working tree, and that
 
 - ✅ Completed steps (X of Y)
 - 🌿 Branch: `<type>/<slug>` (base: `<base-branch>`)
-- 🧪 Validation gate — lint / type-check / tests / build (passed or skipped, per step)
+- 🧪 Pre-push validation gate — lint / type-check / tests / build (✅ pass · ➖ absent · ❌ stuck, per step)
 - 📋 Acceptance criteria — which pass/fail
 - 🔗 **PR opened:** `<url>`
 - 🧹 Worktree `.claude/worktree/<slug>` removed
@@ -124,7 +126,7 @@ This ensures concurrent executions never step on the same working tree, and that
 ## Rules
 
 - **Don't exceed the plan's scope.** Note pending items, keep going.
-- **Don't modify files outside the** "Files to touch" **list** without an obvious need.
+- **Don't modify files outside the** "Files to touch" **list** without an obvious need. **Exception:** fixes required to pass the pre-push validation gate (step 7) — including pre-existing failures in files this change didn't touch — are **exempt** from this rule; isolate those pre-existing fixes in the separate labeled commit described in step 7.
 - **All work inside the worktree** — never edit the main working tree.
-- **Don't open the PR with a red gate.** Lint/type-check/tests/build that exist must pass; code review happens on the PR, not locally.
+- **Don't open the PR with a red gate.** The pre-push validation gate (step 7) — lint/type-check/tests/build that exist — must pass 100%, reached honestly per the anti-cheat clause in `${CLAUDE_PLUGIN_ROOT}/reference/pre-push-gate.md`; never hack the gate to open the PR. Code review happens on the PR, not locally.
 - **Only remove the worktree after the PR is opened.** If something fails before the PR, leave the worktree for inspection.
