@@ -81,6 +81,35 @@ Reference these in the PR body if they exist.
 
 ---
 
+## Phase 2.5 — PRE-PUSH VALIDATION GATE (verify-only)
+
+Before pushing, run the **pre-push validation gate** to confirm the project is **100% green**.
+This command is **verify-only** — its
+tools are `Bash, Read` (no `Edit`/`Write`), so it **runs the gate to detect red but does not
+fix**. The canonical steps + anti-cheat rules live in
+`${CLAUDE_PLUGIN_ROOT}/reference/pre-push-gate.md`.
+
+Detect the stack's commands (`package.json`/`Makefile`/`pyproject.toml`/`pom.xml`/`go.mod`/…)
+and run, in order, only the steps that exist:
+
+1. **Lint** (no auto-fix here — verify-only): `eslint`, `biome check`, `ruff check`.
+2. **Type-check** if present: `tsc --noEmit`, `mypy`.
+3. **Tests**: `vitest run`, `jest`, `pytest`, `go test ./...`, …
+4. **Build**: `next build`, `vite build`, `tsc -b`, …
+
+An absent step is skipped + logged (not a failure); a step that exists must pass 100%.
+
+**If any step fails, STOP — do not push.** Report which step is red with its output and tell the
+user:
+
+> Pre-push validation gate failed at `<step>`. `git:pr` is verify-only and does not fix. Run
+> `/herow-dev:execute` or `/herow-dev:quick` (they have `Edit`/`Write` and will fix the gate,
+> including pre-existing failures) before creating the PR.
+
+Only when the gate is fully green, proceed to Phase 3.
+
+---
+
 ## Phase 3 — PUSH
 
 ```bash

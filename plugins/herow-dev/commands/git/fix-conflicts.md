@@ -143,11 +143,33 @@ Use the history from 5.1 to classify each hunk:
 Once every file is `add`ed:
 
 1. Run `git status` and confirm there are no more `Unmerged paths`.
-2. Present the user with a per-file list:
+2. **Regenerate any lockfiles first** (per the Step 5.3 rule) — run the package manager
+   (`npm install`, `pnpm install`, `yarn`, `poetry lock`, …) so the tree is consistent before
+   the gate runs.
+3. **Pre-push validation gate (mandatory).** Run the pre-push validation gate before declaring
+   the merge ready to finalize — the merged tree must be **100% green**. Canonical steps +
+   anti-cheat rules:
+   `${CLAUDE_PLUGIN_ROOT}/reference/pre-push-gate.md`. This command has `Edit`/`Write`, so run
+   the **full fix-loop** — detect the stack's commands and run, in order, the steps that exist:
+   - **Lint with auto-fix** (`eslint --fix`, `biome check --write`, `ruff --fix`) → **Type-check**
+     if present (`tsc --noEmit`, `mypy`) → **Tests** (`vitest run`, `pytest`, …) → **Build**
+     (`next build`, `vite build`, …).
+   - Each existing step must pass 100% (skip + log absent ones — never fake green with
+     `--passWithNoTests`). Fix failures — including ones the merge surfaced in untouched files —
+     and re-run (max 3 cycles per step).
+   - **Anti-cheat (load-bearing):** fix the real problem — **never** skip/delete/disable tests,
+     append `|| true`, add blanket `eslint-disable`/`# type: ignore`/`@ts-nocheck`, or push with
+     `--no-verify`. If the gate can't be made honestly green in ≤3 cycles per step, **STOP** and
+     report which step is stuck — do not declare the merge ready.
+4. Present the user with a per-file list:
    - What each side was trying to do (with commit hashes).
    - Which decision was made and why.
-3. Suggest the user run the project's test/lint suite before finalizing.
-4. **Do not commit or push automatically.** Show the final command they can run:
+5. **Stage the gate's changes into the merge.** The regenerated lockfiles (6.2) and the gate's
+   auto-fixes (6.3) are edited *after* the last `git add`, so they sit in the working tree
+   **unstaged** — a plain `git commit --no-edit` would commit the merged index without them and
+   silently discard the green you just achieved. Stage them first: `git add -A` (then re-confirm
+   `git status` is clean of unstaged changes).
+6. **Do not commit or push automatically.** Show the final command they can run:
    ```
    git commit --no-edit     # keeps the default merge message
    ```
