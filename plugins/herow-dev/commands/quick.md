@@ -61,6 +61,8 @@ gstack skills don't use graphify on their own — you're responsible for that:
 
 Implementation, `/review`, `/qa`, and `/ship` all run in a **dedicated git worktree** at `.claude/worktree/<slug>`, never in the main working tree.
 
+> **Base is already fresh.** A `UserPromptSubmit` hook (`scripts/pull-latest.sh`) fast-forwards the current branch to its upstream (`git pull --ff-only`, fail-open) on the main tree **before** this command runs — so the base branch is up to date at `git worktree add` time and the worktree branches off the freshest code. Opt out with `HEROW_SKIP_PULL=1`.
+
 1. **Base branch = the repository's current branch.** Capture it before anything else: `git rev-parse --abbrev-ref HEAD`. The PR will be opened against it. **If the base is ambiguous** (detached HEAD, or `git rev-parse` doesn't return a named branch), use `AskUserQuestion` to confirm the base branch — offer the detected branch/`main` as the recommended option.
 2. **Slug + type (Conventional Commits).** Kebab-case slug from the description (max 40 chars). `<type>` inferred from the description: `feat` (new feature), `fix` (fix), `refactor`, `chore`, `docs`.
 3. **Ensure `.claude/worktree/` is in the repo's `.gitignore`** (add the line if missing) — the worktree isn't versioned.

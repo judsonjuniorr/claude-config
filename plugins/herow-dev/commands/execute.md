@@ -71,6 +71,8 @@ gstack skills don't use graphify on their own — you're responsible for that:
 
 All development happens in a **dedicated git worktree**, never in the main working tree.
 
+> **Base is already fresh.** A `UserPromptSubmit` hook (`scripts/pull-latest.sh`) fast-forwards the current branch to its upstream (`git pull --ff-only`, fail-open) on the main tree **before** this command runs — so the base branch captured in step 1 is up to date at `git worktree add` time and the worktree branches off the freshest code. Opt out with `HEROW_SKIP_PULL=1`.
+
 1. **Base branch = the repository's current branch.** Capture it before anything else: `git rev-parse --abbrev-ref HEAD`. The PR will be opened against it at the end. **If the base is ambiguous** (detached HEAD, or `git rev-parse` doesn't return a named branch), use `AskUserQuestion` to confirm the base branch — offer the detected branch/`main` as the recommended option.
 2. **Define the slug and the type** following Conventional Commits:
    - The slug comes from the **plan directory name** (`.claude/plans/<SLUG>/`), stripping the `YYYYMMDD-HHMMSS-` timestamp prefix. In the legacy fallback (`.plans/<ID>.md`), it comes from the file name.
