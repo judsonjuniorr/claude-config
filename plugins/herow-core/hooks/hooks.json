@@ -5,7 +5,16 @@
         "matcher": "startup|clear|compact",
         "hooks": [
           { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/rules-inject.sh\"", "timeout": 10 },
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/update-check.sh\"", "timeout": 10 }
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/update-check.sh\"", "timeout": 10 },
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/graphify-inject.sh\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/graphify-freshen.sh\"", "timeout": 10 }
         ]
       }
     ],
@@ -26,6 +35,12 @@
         "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/github-ops/hooks/git-guard.sh\"", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob|Bash",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/graphify-nudge.sh\"", "timeout": 10 }
         ]
       }
     ],
