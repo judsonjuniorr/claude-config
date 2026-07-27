@@ -87,8 +87,9 @@ End-to-end bootstrap for [graphify](https://github.com/safishamsi/graphify) insi
 3. Generates a stack-tuned `.graphifyignore` with a generic base block plus stack-specific entries (e.g. `node_modules/`, `__pycache__/`, `target/`).
 4. Appends the recommended graphify block to `.gitignore` (keeps `graph.json`, `GRAPH_REPORT.md`, `graph.html`, and `.graphify_labels.json` versioned; ignores caches and local metadata).
 5. Runs the `graphify` skill to build (or update) the knowledge graph.
-6. Optionally stages, commits, and pushes the resulting changes.
-7. Prints a concise summary.
+6. Installs append-safe `post-merge`/`post-checkout` git hooks so the graph auto-refreshes on `git pull` and branch switches, even when Claude Code isn't running.
+7. Optionally stages, commits, and pushes the resulting changes.
+8. Prints a concise summary.
 
 **Allowed tools**: `Bash`, `Read`, `Write`, `Edit`, `AskUserQuestion`, `Skill`.
 
