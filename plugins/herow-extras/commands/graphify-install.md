@@ -244,7 +244,146 @@ Afterwards, confirm that `graphify-out/graph.json` exists. If it doesn't, warn t
 
 ---
 
-## Step 6 — Offer commit & push
+## Step 6 — Install git freshness hooks (post-merge, post-checkout)
+
+The graph goes stale after a `git pull` or branch switch. Install two small,
+append-safe git hooks so the graph refreshes even when Claude Code isn't running.
+These complement (not replace) graphify's own `graphify hook install` (post-commit) —
+that one is offered separately by the `graphify` skill itself; this step only covers
+post-merge/post-checkout.
+
+Both hooks share one rule: **never clobber an existing hook.** Before writing, check
+for the sentinel `# >>> graphify auto-refresh` in the target file (`grep -F` if it
+exists). If present, skip that hook and print "git hook already installed — skipping."
+If the target file doesn't exist, create it with a `#!/bin/sh` shebang. If it exists
+without the sentinel, **append** the block to the end (preceded by a blank line) —
+never overwrite.
+
+Both blocks additionally require `graphify-out/manifest.json` to exist — not just
+`graph.json` — before running. `manifest.json` is gitignored (Step 4), so a fresh
+`git worktree add` checkout has `graph.json` (committed) but no `manifest.json`.
+Worktrees **share** the main repo's `.git/hooks` (git resolves them to the common
+dir), and `git worktree add` fires `post-checkout` with `$3 = 1` — so without this
+guard, every `/herow-dev:quick`/`/herow-dev:execute` worktree creation would kick
+off a `graphify update` inside a disposable tree. This mirrors the same guard in
+the herow-core `graphify-freshen.sh` backstop (Part B1) — keep the two in agreement.
+
+Both hooks must take the **same lock** `graphify-freshen.sh` uses
+(`graphify-out/.graphify_update.lock`) — not a hook-local lock — so a git-triggered
+refresh and a session-triggered refresh can never race on `graph.json`/`manifest.json`
+concurrently. Reclaim is gated on **PID liveness**, not a fixed time window: a flat
+TTL would risk stealing the lock from a `graphify update` that's simply still
+running (large repo, LLM-backed semantic pass, slow API) and spawning a second
+concurrent update with no coordination between them. The lock instead records the
+backgrounded job's PID and is only reclaimed once `kill -0 <pid>` confirms that
+process is actually dead (a 30s grace window covers the brief gap between `mkdir`
+and the PID being written). A `graphify-out/.graphify_update.failcount` file tracks
+consecutive failures and backs off (linear, capped at 30 min) instead of retrying a
+persistently-broken `graphify update` on every single pull/checkout.
+
+The guard-and-refresh body below is **identical in both hooks** (only the outer
+condition differs — post-checkout adds the `$3 = 1` branch-checkout check) and
+mirrors `graphify-freshen.sh` exactly, including its `|| true` guards after every
+`read` — this block gets appended to an arbitrary pre-existing hook file that may
+have `set -e`, and a `read` returning non-zero on a short/malformed file must not
+abort the whole hook. Embed it verbatim in place of `<REFRESH_BLOCK>`:
+
+```sh
+LOCK=graphify-out/.graphify_update.lock
+FAILFILE=graphify-out/.graphify_update.failcount
+SKIP=0
+if [ -f "$FAILFILE" ]; then
+  FAILCOUNT=0; LAST_FAIL=0
+  read FAILCOUNT LAST_FAIL < "$FAILFILE" 2>/dev/null || true
+  case "$FAILCOUNT" in (*[!0-9]*|'') FAILCOUNT=0 ;; esac
+  case "$LAST_FAIL" in (*[!0-9]*|'') LAST_FAIL=0 ;; esac
+  if [ "$FAILCOUNT" -ge 3 ]; then
+    BACKOFF=$((FAILCOUNT * 60)); [ "$BACKOFF" -gt 1800 ] && BACKOFF=1800
+    NOW=$(date +%s)
+    [ $((NOW - LAST_FAIL)) -ge "$BACKOFF" ] || SKIP=1
+  fi
+fi
+if [ "$SKIP" = "0" ]; then
+  if mkdir "$LOCK" 2>/dev/null; then
+    :
+  else
+    OWNER_PID=""
+    [ -f "$LOCK/pid" ] && OWNER_PID=$(cat "$LOCK/pid" 2>/dev/null || true)
+    case "$OWNER_PID" in (*[!0-9]*|'') OWNER_PID="" ;; esac
+    if [ -n "$OWNER_PID" ] && kill -0 "$OWNER_PID" 2>/dev/null; then
+      SKIP=1
+    else
+      STARTED=0
+      [ -f "$LOCK/started_at" ] && STARTED=$(cat "$LOCK/started_at" 2>/dev/null || echo 0)
+      case "$STARTED" in (*[!0-9]*|'') STARTED=0 ;; esac
+      NOW2=$(date +%s)
+      if [ "$STARTED" -gt 0 ] && [ $((NOW2 - STARTED)) -gt 30 ]; then
+        rm -rf "$LOCK" 2>/dev/null
+        mkdir "$LOCK" 2>/dev/null || SKIP=1
+      else
+        SKIP=1
+      fi
+    fi
+  fi
+fi
+if [ "$SKIP" = "0" ]; then
+  date +%s > "$LOCK/started_at" 2>/dev/null
+  nohup sh -c '
+    if graphify update >graphify-out/.graphify_update.log 2>&1 </dev/null; then
+      git rev-parse HEAD > graphify-out/.graphify_head 2>/dev/null
+      rm -f graphify-out/.graphify_update.failcount
+    else
+      count=0
+      [ -f graphify-out/.graphify_update.failcount ] && { read count _ < graphify-out/.graphify_update.failcount 2>/dev/null || true; }
+      case "$count" in (*[!0-9]*|"") count=0 ;; esac
+      count=$((count + 1))
+      printf "%s %s\n" "$count" "$(date +%s)" > graphify-out/.graphify_update.failcount 2>/dev/null
+    fi
+    rm -rf graphify-out/.graphify_update.lock 2>/dev/null
+  ' >/dev/null 2>&1 </dev/null &
+  echo $! > "$LOCK/pid" 2>/dev/null
+fi
+```
+
+**`.git/hooks/post-merge`** (fires after `git pull` / `git merge`):
+
+```sh
+
+# >>> graphify auto-refresh (installed by /graphify-install) >>>
+if [ -f graphify-out/graph.json ] && [ -f graphify-out/manifest.json ] && command -v graphify >/dev/null 2>&1; then
+<REFRESH_BLOCK>
+fi
+# <<< graphify auto-refresh <<<
+```
+
+**`.git/hooks/post-checkout`** (fires after `git checkout`/branch switch — git passes
+`$3 = 1` for a branch checkout, `$3 = 0` for a plain file checkout; only act on the
+former):
+
+```sh
+
+# >>> graphify auto-refresh (installed by /graphify-install) >>>
+if [ "$3" = "1" ] && [ -f graphify-out/graph.json ] && [ -f graphify-out/manifest.json ] && command -v graphify >/dev/null 2>&1; then
+<REFRESH_BLOCK>
+fi
+# <<< graphify auto-refresh <<<
+```
+
+After writing, `chmod +x` both files. Everything above uses only POSIX `sh` (no
+bashisms) since an existing hook file may not have a bash shebang. `graphify update`
+is incremental and AST-only for code changes (no LLM call), so this stays fast;
+output is redirected to `graphify-out/.graphify_update.log` (already covered by the
+`.graphify_*` gitignore glob from Step 4) so it never surfaces as noise. On success
+it also stamps `graphify-out/.graphify_head`, which keeps the herow-core
+`graphify-freshen.sh` UserPromptSubmit backstop quiet afterward (it only re-triggers
+when its own stored HEAD is behind).
+
+If `.git/hooks/` doesn't exist (unlikely, but possible in a bare or partial repo),
+skip silently — don't fail the install.
+
+---
+
+## Step 7 — Offer commit & push
 
 Show the current status:
 
@@ -262,10 +401,10 @@ Use `AskUserQuestion`:
   - "Do nothing"
 
 ### If "Do nothing"
-Do not run `git add`. Proceed to Step 7.
+Do not run `git add`. Proceed to Step 8.
 
 ### If "No, just leave them staged"
-Only do the selective stage (below), **without commit**. Proceed to Step 7.
+Only do the selective stage (below), **without commit**. Proceed to Step 8.
 
 ### If committing (with or without push)
 
@@ -314,7 +453,7 @@ git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
 
 ---
 
-## Step 7 — Final summary
+## Step 8 — Final summary
 
 Print a short summary in English:
 
@@ -326,6 +465,7 @@ Files created/updated:
   - .graphifyignore
   - .gitignore (graphify block)
   - graphify-out/ (initial graph)
+  - .git/hooks/post-merge, post-checkout (auto-refresh on pull/branch switch)
 
 Commit: <SHA or "not created">
 Push:   <done / no remote / skipped>
@@ -336,4 +476,5 @@ Next steps:
   /graphify --update     # incremental update
 ```
 
-Keep the summary lean — don't repeat the whole pipeline.
+Keep the summary lean — don't repeat the whole pipeline. Only list a hook line if
+it was actually installed (not skipped as already-present).
