@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0.0] - 2026-07-31
+
+### Added
+- **`/herow-core:setup-claude`** — new command that authors **personal, non-committed project instructions** (`CLAUDE.local.md`) or team-shared ones (`CLAUDE.md`), the counterpart to the built-in `/init`: `/init` writes a codebase overview, this writes a **friction log** for the user (role, sandbox URLs/test accounts, workflow quirks, always-on preferences, repo landmines). Modeled on `doctor.md`'s gated safety envelope + `profile.md`'s AskUserQuestion interview. Key properties: an embedded **optimization policy** (every line must be non-discoverable *and* change how Claude operates — no directory trees / stack summaries / generic filler; prune stale lines on re-run rather than append-only); a runtime opt-in that hard-filters the optional **skills** (`.claude/skills/*/SKILL.md`) and **hooks** (`.claude/settings.json`, handed to the built-in `update-config` skill) phases; and a privacy guard that **resolves `git config --global core.excludesfile` at runtime** (never a hardcoded home path — CI forbids `/Users/` under `plugins/`) to confirm/add the `CLAUDE.local.md` ignore entry to the **global** excludes — never the committed project `.gitignore`, which would defeat a personal file. Detects git worktrees and offers the documented `@~/.claude/<project>-instructions.md` import-stub pattern so personal notes survive across worktrees. Writes **no repo-side `.bak`** (git covers `CLAUDE.md`; a `.bak` would trip doctor's `claude_md_backups` hygiene check) — diff-preview + explicit confirm is the safety mechanism. Scoped to the two project-root files; never touches the global `~/.claude/CLAUDE.md`.
+
 ## [0.7.0.0] - 2026-07-27
 
 ### Added
