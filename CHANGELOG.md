@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1.0] - 2026-08-05
+
+### Added
+- **Memory-management review lane** (`herow-dev`) — `python-reviewer` and `react-reviewer` each gain a
+  dedicated `HIGH` lane covering leaks, retention, and unbounded growth, since the only prior coverage
+  anywhere in the config was a single generic bullet in `herow-core`'s `code-reviewer`. Python:
+  unbounded materialization (`.read()`/`.readlines()`/`list(cursor)` without generators/`chunksize=`/lazy
+  frames), unbounded `@lru_cache`/module-global caches (including `@lru_cache` on a method pinning
+  `self`), retention via long-lived `global`s, unregistered callbacks, or stored `except ... as e`
+  tracebacks, unreleased file/socket/DB/subprocess resources, missing `__slots__` at high object
+  cardinality, unbounded `asyncio.Queue`/task sets, and long-lived server state (module globals,
+  unclosed SQLAlchemy sessions, unpaginated cursors) — plus `tracemalloc`/`memray`/`objgraph` diagnostics
+  and FastAPI/Django-specific checks. React: effect cleanup reframed as retention across
+  listeners/observers/timers/sockets/subscriptions (flagging StrictMode's double-mount as the fast way
+  to catch a missing one), fetches without `AbortController`, undisposed third-party instances
+  (map/chart/editor/player), `createObjectURL` without `revokeObjectURL`, detached-DOM refs, unbounded
+  client state (append-only lists/buffers), caches that never evict (module `Map`s, `gcTime: Infinity`),
+  and per-request module state in RSC/Node — plus a heap-snapshot/DevTools/`jest --detect-leaks`
+  diagnostics addition and a new scope-table row so the lane is unambiguously owned by `react-reviewer`
+  rather than falling to `typescript-reviewer`. `/herow-dev:code:review` now documents this as a
+  required lane for any `.py`/`.tsx`/`.jsx` diff, tags surviving memory findings with a 🧠 marker in the
+  report and count line, and warns (`⚠️ memory lane skipped — <agent> unavailable`) instead of silently
+  dropping the check when the availability guard fires.
+
+### Changed
+- **`/herow-dev:code:review` second opinion now prefers the `advisor` tool** over Codex/Agy/a Claude
+  subagent when the session has it available (it's availability-gated, not shell-probed, and falls
+  through silently to `which codex` otherwise) — `advisor` forwards the review's entire transcript
+  (diff, every dispatched agent's findings, the DEDUPE & RANK reasoning) to a stronger reviewer model
+  rather than a summary, and is already pinned to `advisorModel: opus` by `token-guard.sh`. Because
+  `advisor` takes no parameters, the sanitized findings JSON and CONFIRM/DISPUTE/ESCALATE prompt are now
+  emitted as the turn immediately before calling it, and its prose reply is mapped onto finding IDs
+  rather than parsed as guaranteed JSON. Documented honestly: since `advisor` forwards the whole
+  transcript, the Step 3 sanitization doesn't fully cover this channel — the original diff and every
+  agent's raw findings are already in what gets forwarded, unlike the Codex/Agy/subagent channels
+  which only ever see the sanitized copy.
+- **`--fix` no longer dead-ends the working tree.** FIX now runs before FINISH (Local Mode: REPORT →
+  FIX → FINISH; PR Mode: REPORT → FIX → FINISH & ACT) so the *Finish — choose an action* prompt can
+  offer a third option — commit + push the applied fixes via the `github-ops` skill's `ship.sh` —
+  alongside the existing "keep on screen" and "submit a review" options. `ship.sh` has no
+  default-branch guard of its own (it pushes to whatever's checked out, and `github-ops`'s own hook
+  pre-allows its invocations with no prompt), so the option's own instructions now check the current
+  branch first and create a feature branch before delegating whenever the working tree is sitting on
+  the repo's default branch. A non-interactive `--fix` run that skips the prompt now always prints a
+  commit/push suggestion instead of leaving the tree dirty with no next step.
+
 ## [0.8.0.0] - 2026-07-31
 
 ### Added
