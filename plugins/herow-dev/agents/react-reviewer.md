@@ -21,6 +21,7 @@ You are a senior React engineer reviewing React component code for correctness, 
 | **Accessibility (semantic HTML, ARIA, focus, labels)** | **react-reviewer** |
 | **Render performance, memo discipline, Suspense placement** | **react-reviewer** |
 | **Server Action input validation, env var leaks via `NEXT_PUBLIC_*`** | **react-reviewer** |
+| **Memory lifecycle — cleanup, retention, unbounded client state** | **react-reviewer** |
 
 For a JSX/TSX PR, invoke both agents. For a pure `.ts` change with no React imports, invoke only `typescript-reviewer`.
 
@@ -87,13 +88,40 @@ You DO NOT refactor or rewrite code — you report findings only.
 - **`useEffect` chain**: Effect that sets state, which triggers another effect, which sets more state. Refactor to derive during render or consolidate.
 - **Initializing state from a prop without `key`**: Component does not reset when the prop changes; fix with `key={propValue}` on the parent.
 
+### HIGH -- Memory Lifecycle and Retention
+
+The "Effect missing cleanup" bullet above (HIGH — Hook Correctness) and the first item below are
+the same defect seen from two angles (correctness vs. retention) — report it once, under whichever
+framing fits the finding, not twice.
+
+- **Effect without cleanup**: `addEventListener`, `setInterval`/`setTimeout` chains,
+  `requestAnimationFrame`, `IntersectionObserver`/`ResizeObserver`/`MutationObserver`, `matchMedia`,
+  WebSocket, `EventSource`, or store subscriptions started in `useEffect` with no teardown returned.
+  React 18 StrictMode's double-mount duplicates any listener whose cleanup is missing — a fast way to
+  spot it in dev.
+- **Fetch without `AbortController`**: an in-flight request (and the closure holding its response
+  handler) outlives the component after unmount.
+- **Third-party instances not disposed**: map/chart/editor/player objects (Leaflet, Chart.js, Monaco,
+  video players) constructed in an effect without a matching `.destroy()`/`.dispose()` in cleanup.
+- **Object URLs and media not released**: `URL.createObjectURL` without a paired `revokeObjectURL`;
+  large base64/Blob payloads held in state longer than needed.
+- **Detached DOM via refs**: refs holding DOM nodes or large payloads never nulled on unmount.
+- **Unbounded client state**: infinite-scroll lists, chat/log/event buffers, or `useState` arrays that
+  only ever append — window and prune instead (pairs with the "Missing virtualization" note below,
+  which is about DOM node count as much as scroll performance).
+- **Caches that never evict**: a module-level `Map`/object keyed by id, TanStack Query/SWR configured
+  with `gcTime: Infinity`, or a `useMemo` cache with an unbounded key space.
+- **Server-side module state (RSC/Node)**: per-request data stored in a module-level variable leaks
+  across requests — `React.cache()` is per-request, a module `Map` is not.
+
 ### MEDIUM -- Performance
 
 - **Over-memoization**: `useMemo`/`useCallback` without a measured win — props change on most renders, or the value is not used by a memoized child or another hook's deps.
 - **New object/function inline as prop to memoized child**: Defeats `React.memo`.
 - **Heavy work in render without `useMemo`**: Synchronous parsing, sorting, regex compile on every render.
 - **Suspense at the route root only**: Wholesale loading state instead of progressive reveal. Push boundaries closer to the data.
-- **Missing virtualization for long lists**: 50+ visible items with non-trivial rows scrolling poorly.
+- **Missing virtualization for long lists**: 50+ visible items with non-trivial rows scrolling poorly
+  and inflating DOM node count.
 - **`useContext` for high-frequency value**: All consumers re-render on every change.
 
 ### MEDIUM -- Forms
@@ -122,6 +150,11 @@ npx eslint . --ext .tsx,.jsx --rule 'react-hooks/exhaustive-deps: error'
 npx eslint . --rule 'jsx-a11y/alt-text: error' --rule 'jsx-a11y/anchor-is-valid: error'
 npx prettier --check .
 npm audit                                             # supply-chain advisories
+
+# Memory
+jest --detect-leaks                                   # basic leak detection in tests
+# Chrome DevTools: heap snapshot + "Detached elements" pane; Performance monitor
+# (JS heap size / DOM node count / listener count) for live retention checks.
 ```
 
 If `eslint-plugin-react-hooks` or `eslint-plugin-jsx-a11y` is not in the project, recommend installing during the review.
@@ -149,7 +182,7 @@ Always include the file path and line number. Quote the offending snippet when i
 ## Related
 
 - Agents: `typescript-reviewer` (generic TS/JS, invoked alongside on `.tsx`/`.jsx`), `security-reviewer` (project-wide audit)
-- Authoring rules (the canonical source the lanes above map onto — `herow-core/rules/react/`): `coding-style.md`, `patterns.md`, `performance.md`, `security.md`, `testing.md`. The review lanes here are the review-time checklist; consult these files for the authoring guidance behind each check rather than re-copying it.
+- Authoring rules (the canonical source the lanes above map onto — `herow-core/rules/react/`): `coding-style.md`, `patterns.md`, `performance.md`, `security.md`, `testing.md`. The review lanes here are the review-time checklist; consult these files for the authoring guidance behind each check rather than re-copying it. `performance.md` owns re-render/bundle cost; the Memory Lifecycle lane above owns retention.
 
 ---
 
