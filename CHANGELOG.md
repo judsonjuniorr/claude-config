@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.2.0] - 2026-08-17
+
+### Fixed
+- **github-ops read-only commands no longer trigger permission prompts** (`herow-core`) — `gh`/`glab`
+  read-only calls made through the skill's own scripts (`pr.sh view`, `inspect.sh`, `repo.sh runs`,
+  etc.) were falling through to a confirmation prompt instead of the intended silent allow; `gh api`/
+  `glab api` GET requests, several read-only verbs (`gh status`, `repo list`, `label/cache/variable/
+  secret/gist list`, `browse`, `--version`, `glab mr checks`, `glab pipeline list`), an `rtk proxy`
+  prefix, and a quoted `>`/`<` inside a GitHub search qualifier (`created:>2024-01-01`) all hit the
+  same gap. All now auto-allow as designed.
+- **Fixed an over-eager permission denial** — the attribution guard (which blocks any Claude Code/
+  Anthropic reference from landing in a commit or PR/MR body) could be tripped by unrelated commands
+  that merely shared a substring with its flag/verb checks, denying things like `rg -m 1 "claude code"
+  CHANGELOG.md`, `find . -mtime -1 | grep anthropic`, and `gh pr reviews 42 --repo anthropics/claude-
+  code`. The check is now scoped to commands that actually touch git/gh/glab and matched with real
+  word boundaries.
+- **Fixed an under-eager permission allow** — `gh api -X delete ...` (lowercase HTTP method) was
+  silently auto-approved as read-only instead of being caught as a write.
+
+### Added
+- Regression test suite for the github-ops permission guard (105 cases) committed alongside the fix.
+
 ## [0.8.1.0] - 2026-08-05
 
 ### Added
