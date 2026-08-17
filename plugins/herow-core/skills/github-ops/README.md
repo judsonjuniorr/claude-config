@@ -47,15 +47,16 @@ github-ops/
 │   ├── issue.sh          # create | list | view | close | comment
 │   └── repo.sh           # info | releases | runs | workflow-run
 └── hooks/
-    ├── git-guard.sh      # PreToolUse/Bash — nudge raw mutations → scripts
-    └── git-guard.sh      # (registered via the herow-core plugin hooks.json)
+    ├── git-guard.sh      # PreToolUse/Bash — auto-allow read-only, ask on mutations
+    └── tests/
+        └── test_git_guard.py  # regression suite for git-guard.sh
 ```
 
 ### Hooks (registered by the herow-core plugin)
 
 The herow-core plugin registers the git-guard hook automatically when enabled (see `plugins/herow-core/hooks/hooks.json`). It is optional — the scripts work without it.
 
-- **`git-guard`** (`PreToolUse`/`Bash`, severity `ask`) — intercepts raw **mutation/PR** commands (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci`) and prompts with the matching script. Read-only `git status`/`diff`/`log` are left to RTK's proxy (no overlap); calls that already run `github-ops/scripts/` pass through silently.
+- **`git-guard`** (`PreToolUse`/`Bash`) — two-tier: read-only `gh`/`glab` calls are **auto-allowed outright, no prompt**. `gh`: `pr view/list/diff/checks/status/checkout/reviews`, `issue view/list/status`, `release view/list/download`, `run view/list/watch/download`, `workflow view/list`, `repo view/list`, `label/cache/variable/secret/gist/extension list`, `browse`, `status`, `auth status`, `--version`, `search`. `glab`: `mr view/list/diff/checkout/checks`, `issue view/list`, `release view/list`, `ci view/list/status/trace`, `pipeline list`, `repo view`, `auth status`. Plus read-only `gh api`/`glab api` GETs, and read-only invocations of the skill's own scripts — `inspect.sh`, `commit-msg.sh`, `pr|issue|repo.sh view|list|checks|diff|info|releases|runs`. Everything else that mutates (`git commit`/`git push`, `gh|glab pr`/`issue`/`release`/`run`/`ci` writes) surfaces an `ask` nudging toward the matching script. Read-only `git status`/`diff`/`log` are left to RTK's proxy (no overlap); an `rtk proxy`/`rtk` prefix is stripped before matching either tier. Independently of both tiers, the hook hard-blocks any Claude Code/Anthropic attribution reference (`Co-Authored-By: Claude`, `Generated with Claude Code`, `Claude-Session:`, `claude.ai/code`) from landing in a commit or PR/MR message, scoped to commands that actually carry one.
 
 ## Output format
 
