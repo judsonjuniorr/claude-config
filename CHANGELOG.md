@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.2.0] - 2026-08-17
+
+### Fixed
+- **github-ops read-only commands no longer trigger permission prompts** (`herow-core`) — `gh`/`glab`
+  read-only calls made through the skill's own scripts (`pr.sh view`, `inspect.sh`, `repo.sh runs`,
+  etc.) were falling through to a confirmation prompt instead of the intended silent allow; `gh api`/
+  `glab api` GET requests, several read-only verbs (`gh status`, `repo list`, `label/cache/variable/
+  secret/gist/extension list`, `browse`, `--version`, `glab mr checks`, `glab pipeline list`), an `rtk
+  proxy` prefix, and a quoted `>`/`<` inside a GitHub search qualifier (`created:>2024-01-01`) all hit
+  the same gap. All now auto-allow as designed.
+- **Fixed an over-eager permission denial** — the attribution guard (which blocks any Claude Code/
+  Anthropic reference from landing in a commit or PR/MR body) ran unscoped on every Bash command, not
+  just git/gh/glab ones, so it could be tripped by any command that merely contained a matching
+  substring, denying things like `rg -m 1 "claude code" CHANGELOG.md`, `find . -mtime -1 | grep
+  anthropic`, and `gh pr reviews 42 --repo anthropics/claude-code`. The check is now scoped to
+  commands that actually touch git/gh/glab and carry a message/body flag or mutating verb, matched
+  with real word boundaries.
+- **Fixed an under-eager permission allow** — `gh api -X delete ...` (lowercase HTTP method) was
+  silently auto-approved as read-only instead of being caught as a write.
+- **Fixed a path-traversal gap in the `/tmp` redirect tolerance** — `gh pr view 42 >
+  /tmp/../../../etc/passwd` matched the "tolerated redirect to /tmp" pattern (which never excluded
+  `..` or `/`) and was silently auto-allowed. The tolerated form is now restricted to a flat filename
+  under `/tmp` — a legitimate `> /tmp/out.txt` still auto-allows, a traversal target no longer does.
+- **Fixed the attribution guard skipping relative-path/bare wrapper-script invocations** — the new
+  scoping only recognized a github-ops script by the literal `github-ops/scripts/` path substring, so
+  `bash scripts/ship.sh -m "...Co-Authored-By: Claude"` or a bare `issue.sh comment ...` (relative
+  path, symlink, PATH resolution) skipped the check entirely. For `issue.sh`, which has no
+  attribution-scrubbing of its own, this hook was the *only* defense against an attribution string
+  landing in a real GitHub issue/comment. Wrapper scripts are now also recognized by basename.
+
+### Added
+- Regression test suite for the github-ops permission guard (110 cases, expanded from 105 after
+  adversarial review) committed alongside the fix.
+
 ## [0.8.1.0] - 2026-08-05
 
 ### Added
