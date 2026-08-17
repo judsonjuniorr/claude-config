@@ -32,25 +32,38 @@ CMD="${CMD#rtk }"
 # words "anthropic" or "claude code", e.g. `gh pr view 42 --repo
 # anthropics/claude-code` or `rg "claude code" CHANGELOG.md`.
 #
-# Two boundary bugs, fixed: (1) a bare substring match on `-m`/verb names
+# Three boundary bugs, fixed: (1) a bare substring match on `-m`/verb names
 # collided with unrelated flags/verbs sharing the same text — `rg -m 1
 # "claude code" x`, `find . -mtime -1`, and `gh pr reviews` (vs `gh pr
 # review`) all tripped the old glob and got wrongly denied. Flags and verbs
 # are now matched with real word boundaries via grep -E. (2) the flag/verb
 # check must only run at all when the command actually touches
 # git/gh/glab/a github-ops script — a message-shaped flag on an unrelated
-# tool must never reach this far.
+# tool must never reach this far. (3) "a github-ops script" must be
+# recognized by BASENAME, not only by the literal `github-ops/scripts/`
+# path substring — `bash scripts/ship.sh -m "...Co-Authored-By: Claude"` or
+# a bare `issue.sh comment ...` (relative path, symlink, PATH resolution)
+# used to skip this check entirely, and issue.sh has no scrub_body_file
+# call of its own, so that gap was the ONLY defense for issue bodies/
+# comments, not belt-and-suspenders. Deliberately broad: any repo's own
+# unrelated same-named script now also gets extra scrutiny here — an
+# over-denial false positive is the safe direction for a hard-deny gate.
 attr_relevant=0
 case "$CMD" in
-  *git\ *|*gh\ *|*glab\ *|*github-ops/scripts/*)
+  *git\ *|*gh\ *|*glab\ *|*github-ops/scripts/*) attr_candidate=1 ;;
+  *) attr_candidate=0 ;;
+esac
+if [ "$attr_candidate" = 0 ] && printf '%s' "$CMD" | grep -qE '(^|[[:space:]/])(ship|pr|issue|repo|commit-msg)\.sh("|'"'"')?([[:space:]]|$)'; then
+  attr_candidate=1
+fi
+if [ "$attr_candidate" = 1 ]; then
     if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-m|--message|--body|--body-file|--description)([[:space:]=]|$)'; then
       attr_relevant=1
     fi
     if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(git commit|gh pr (create|edit|comment|review)|gh issue (create|comment)|gh release (create|edit)|glab mr (create|update|note)|glab issue (create|note))([[:space:]]|$)'; then
       attr_relevant=1
     fi
-    ;;
-esac
+fi
 if [ "$attr_relevant" = 1 ] && printf '%s' "$CMD" | grep -qiE 'co-authored-by:[[:space:]]*claude|anthropic|generated with \[?claude code|🤖[[:space:]]*generated with|claude-session:|claude\.ai/code|claude code'; then
   reason="github-ops: refusing — never add a Claude Code / Anthropic reference (Co-Authored-By: Claude, 'Generated with Claude Code', a Claude-Session: footer, or a claude.ai/code link) to commits or PRs. Remove it and retry."
   python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'deny','permissionDecisionReason':sys.argv[1]}}))" "$reason"
@@ -107,7 +120,15 @@ if [ "$all_safe" = 1 ]; then
     s="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$s" ] || continue
     s="${s#rtk proxy }"; s="${s#rtk }"           # treat `rtk [proxy] <cmd>` like <cmd>
-    s="$(printf '%s' "$s" | sed -E 's/[[:space:]]*>>?[[:space:]]*\/tmp\/[^[:space:]]+[[:space:]]*$//')"  # tolerate redirect to /tmp only
+    # Tolerate a redirect to /tmp only — restricted to a FLAT filename (no `/`
+    # allowed in the character class), not `[^[:space:]]+`. The looser form
+    # let `/tmp/../../../etc/passwd` match as a "tolerated /tmp target" and
+    # get auto-allowed: `..` and `/` were never excluded, so the trailing-`$`
+    # match still covered the whole traversal string. A flat filename can
+    # still be a pre-planted symlink to somewhere sensitive — that residual
+    # is accepted (this hook is a heuristic UX guard, not a sandbox) — but it
+    # closes the demonstrated traversal and any symlinked-subdirectory path.
+    s="$(printf '%s' "$s" | sed -E 's/[[:space:]]*>>?[[:space:]]*\/tmp\/[A-Za-z0-9._-]+[[:space:]]*$//')"
     # Any residual `>`/`<` is checked on a de-quoted copy: a real shell redirect
     # never sits inside quotes, but a GitHub search qualifier does (`--search
     # "created:>2024-01-01"`). ro_re/safe_re match a PREFIX and would ignore a

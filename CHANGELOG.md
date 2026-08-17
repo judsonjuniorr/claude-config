@@ -21,9 +21,20 @@ All notable changes to this project will be documented in this file.
   with real word boundaries.
 - **Fixed an under-eager permission allow** — `gh api -X delete ...` (lowercase HTTP method) was
   silently auto-approved as read-only instead of being caught as a write.
+- **Fixed a path-traversal gap in the `/tmp` redirect tolerance** — `gh pr view 42 >
+  /tmp/../../../etc/passwd` matched the "tolerated redirect to /tmp" pattern (which never excluded
+  `..` or `/`) and was silently auto-allowed. The tolerated form is now restricted to a flat filename
+  under `/tmp` — a legitimate `> /tmp/out.txt` still auto-allows, a traversal target no longer does.
+- **Fixed the attribution guard skipping relative-path/bare wrapper-script invocations** — the new
+  scoping only recognized a github-ops script by the literal `github-ops/scripts/` path substring, so
+  `bash scripts/ship.sh -m "...Co-Authored-By: Claude"` or a bare `issue.sh comment ...` (relative
+  path, symlink, PATH resolution) skipped the check entirely. For `issue.sh`, which has no
+  attribution-scrubbing of its own, this hook was the *only* defense against an attribution string
+  landing in a real GitHub issue/comment. Wrapper scripts are now also recognized by basename.
 
 ### Added
-- Regression test suite for the github-ops permission guard (105 cases) committed alongside the fix.
+- Regression test suite for the github-ops permission guard (110 cases, expanded from 105 after
+  adversarial review) committed alongside the fix.
 
 ## [0.8.1.0] - 2026-08-05
 
