@@ -26,7 +26,9 @@ def run(cmd):
 # Placeholder script root — the hook matches on the `github-ops/scripts/<name>`
 # path suffix, not an absolute prefix, so this doesn't need to be a real path.
 root = "/x/skills/github-ops/scripts"
-ATTR1 = "Co-Authored-By" + ": Claude"  # split so this file doesn't itself read as a footer
+ATTR1 = (
+    "Co-Authored-By" + ": Claude"
+)  # split so this file doesn't itself read as a footer
 ATTR2 = "generated with " + "claude" + " code"
 ATTR3 = "claude" + " code"
 
@@ -185,12 +187,18 @@ def report(title, cases, expect_fn):
 
 def main():
     results = [
-        report("MUST ALLOW (regression)", must_allow_regression, lambda d: d == "allow"),
+        report(
+            "MUST ALLOW (regression)", must_allow_regression, lambda d: d == "allow"
+        ),
         report("MUST ALLOW (newly fixed)", must_allow_fixed, lambda d: d == "allow"),
         report("MUST NOT ALLOW", must_not_allow, lambda d: d != "allow"),
         report("MUST NOT DENY", must_not_deny, lambda d: d != "deny"),
         report("MUST DENY", must_deny, lambda d: d == "deny"),
-        report("MUST BAIL (perf gate, exact NO-DECISION)", must_bail_perf_gate, lambda d: d == "NO-DECISION"),
+        report(
+            "MUST BAIL (perf gate, exact NO-DECISION)",
+            must_bail_perf_gate,
+            lambda d: d == "NO-DECISION",
+        ),
     ]
     total = sum(
         len(x)
