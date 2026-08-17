@@ -146,7 +146,7 @@ must_not_allow = [
     # Adversarial-review Finding 2: the /tmp-redirect tolerance must not
     # treat a path-traversal target as a plain tolerated /tmp filename.
     "gh pr view 42 > /tmp/../../../etc/passwd-test",
-    "gh pr diff 16 > /tmp/../../Users/x/.ssh/id_rsa.pub",
+    "gh pr diff 16 > /tmp/../../home/x/.ssh/id_rsa.pub",
 ]
 
 must_not_deny = [
