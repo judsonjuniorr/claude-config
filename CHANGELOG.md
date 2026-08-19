@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0.0] - 2026-08-18
+
+### Added
+- **Always-on destructive-operation confirmation hook** (`herow-core`) — a new PreToolUse guard
+  (`destructive-guard.sh`, `Bash|Write` matcher) surfaces a permission prompt before an irreversible
+  Bash command or a `Write` that overwrites an existing non-empty file, closing a real gap:
+  `~/.claude/settings.json` runs `defaultMode: auto` with no `ask` rules at all, so `rm -rf` and
+  friends previously ran without confirmation, and gstack's own `/careful` skill only covers this
+  when explicitly invoked in a session (its own docs: "To deactivate, end the conversation or start
+  a new one") — it's off by default, which is exactly when a mistake happens. The new hook is
+  always-on, no invocation step. Covers six Bash families — file deletion (`rm`/`rmdir`/`unlink`/
+  `find -delete`/`shred`/`truncate`/`dd of=`), irreversible git ops (`clean -f`, `reset --hard`,
+  `checkout -- .`, `branch -D`, `push --force`, `stash drop/clear`, `worktree remove --force`,
+  `reflog expire`, `gc --prune`, `filter-branch`/`filter-repo`), destructive SQL (`DROP`/`TRUNCATE`/
+  `DELETE FROM`), datastore/ORM resets (Redis `FLUSHALL`, Mongo `.drop()`/`deleteMany`, Prisma
+  `migrate reset`, Supabase `db reset`, Rails `db:drop`, Alembic `downgrade base`), cloud/infra
+  destroy (`terraform destroy`, `kubectl delete`, `aws s3 rm --recursive`, `docker system prune`,
+  …), and remote-repo deletion (`gh repo delete`, `gh api -X DELETE`, `gh secret delete`) — plus the
+  `Write`-overwrite case. Command-name matching is case-insensitive; an `rm`-target allowlist (build/
+  dep artifacts, `*.pyc`/`*.log`/`*.tmp`, `/tmp`/`$TMPDIR`) requires *every* target in a multi-target
+  command to qualify before staying silent, never just one. 68 test cases (run under both Homebrew
+  bash 5 and macOS's stock `/bin/bash` 3.2) pin the behavior.
+- Adversarial review before merge caught and fixed four real bypasses that would otherwise have
+  shipped silently: a `command` value containing an embedded newline (any heredoc or multi-step
+  script — routine, non-adversarial Claude output) truncated the parsed command to its first line and
+  corrupted the file-path field, defeating the guard entirely for that call; command-name matching
+  was case-sensitive against a case-insensitive trigger gate, so `RM -rf` slipped through where
+  `rm -rf` was caught; `unlink` and the git-history-erasure trio (`reflog expire`, `gc --prune`,
+  `filter-branch`/`filter-repo`) had no coverage at all. Accepted, documented limitations (not fixed,
+  by design — this is a heuristic UX guard, not a sandbox): command indirection (`sh -c`, `xargs`,
+  a leading `\`, variable/function wrapping) defeats the `^command` anchors; the build/dep allowlist
+  matches by directory name anywhere in the resolved path, so a coincidentally-named directory gets
+  the same pass as a real build artifact; and a shell `: > file` truncation followed by a `Write` to
+  the same path is invisible to the stateless overwrite check.
+
 ## [0.8.2.0] - 2026-08-17
 
 ### Fixed
