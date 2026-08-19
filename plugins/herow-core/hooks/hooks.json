@@ -38,6 +38,12 @@
         ]
       },
       {
+        "matcher": "Bash|Write",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/destructive-guard.sh\"", "timeout": 10 }
+        ]
+      },
+      {
         "matcher": "Grep|Glob|Bash",
         "hooks": [
           { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/graphify-nudge.sh\"", "timeout": 10 }
