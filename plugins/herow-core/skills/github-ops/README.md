@@ -159,17 +159,30 @@ Output is `type|scope|description`. Format it as `feat(api): update retry.ts` if
 
 ### `pr.sh` — pull requests / merge requests
 
-**Create PR (body generated from the diff)**
+**Create PR (body generated from the diff) — draft by default**
 ```bash
 $ bash github-ops/scripts/pr.sh create
 pr|142|https://github.com/org/repo/pull/142
+draft|true
+pr-url|https://github.com/org/repo/pull/142
 ```
 
-**Create draft PR with custom title**
+The user marks it ready manually — never automatically:
 ```bash
-$ bash github-ops/scripts/pr.sh create --draft --title "WIP: oauth flow"
-pr|143|https://github.com/org/repo/pull/143
+$ bash github-ops/scripts/pr.sh ready 142
+pr|142|ready
 ```
+
+**Create a ready (non-draft) PR with custom title**
+```bash
+$ bash github-ops/scripts/pr.sh create --no-draft --title "feat: oauth flow"
+pr|143|https://github.com/org/repo/pull/143
+draft|false
+pr-url|https://github.com/org/repo/pull/143
+```
+
+If the repo rejects `--draft` outright (drafts not supported/enabled), `create` retries once as
+ready and emits `warn|draft-unsupported|created as ready` on stderr instead of failing.
 
 **Edit a PR** (`--title`, `--body`/`--body-file`, `--add-label`, `--remove-label` — same params as `gh pr edit`; `--body` also works on `create`)
 ```bash
@@ -364,6 +377,8 @@ pr-url|https://github.com/org/repo/pull/new/feature/retry
 
 $ bash github-ops/scripts/pr.sh create
 pr|144|https://github.com/org/repo/pull/144
+draft|true
+pr-url|https://github.com/org/repo/pull/144
 
 $ bash github-ops/scripts/pr.sh checks 144
 test|in_progress|...
@@ -399,7 +414,9 @@ $ bash github-ops/scripts/issue.sh list --label bug | wc -l
 | `same-branch` | Tried to create a PR from `main` into `main` | switch branches |
 | `push-failed` | `git push` failed | check stderr |
 | `create-failed` | `gh pr create` failed | check stderr |
+| `warn|draft-unsupported` | (warning, not an error) repo rejected `--draft`; PR was created ready instead | none — informational |
 | `merge-failed` | merge rejected | check branch protections |
+| `ready-failed` | `pr.sh ready` failed | check stderr |
 | `dispatch-failed` | workflow doesn't exist | verify `--workflow` |
 | `bad-arg` / `bad-sub` | unknown flag | check usage |
 

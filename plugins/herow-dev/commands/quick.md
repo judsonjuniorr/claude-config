@@ -83,8 +83,14 @@ Implementation, `/review`, `/qa`, and `/ship` all run in a **dedicated git workt
    - If the gate can't be made honestly green in ≤3 cycles per step, **stop — do not run `/ship`**.
    - > `/ship` is an external gstack skill this repo can't gate directly; running this gate **before** `/ship` is the enforceable seam.
 7. **Ship** — run `/ship` to open the PR **against the base branch** captured in step 1 of the isolation section. Only proceed if the pre-push validation gate (step 6) is fully green.
+   - **Convert the PR to draft immediately after `/ship` reports it.** `/ship` (gstack) always
+     creates a ready-for-review PR and we don't edit gstack — so once it prints the PR number,
+     run `gh pr ready --undo <num>` (GitHub) or `glab mr update <num> --draft` (GitLab). This
+     matches this repo's house rule (`github-ops`): every PR is a draft until the user marks it
+     ready. If the conversion command itself fails, report that plainly — don't leave it silently
+     ready.
 8. **Worktree cleanup** — only after the PR is opened: return to the repo root (`cd`) and `git worktree remove .claude/worktree/<slug>` (the branch stays on the PR). If removal fails, report it and leave the worktree intact — don't force it blindly.
 
 ## Final output
 
-Report in up to 6 lines: what was done, branch (`<type>/<slug>`, base), PR link, any known pending items, and the status of the gstack steps in 1 line — `autoplan / review / qa / gate / ship`, each marked ✅ executed, ⬜ skipped (with reason), or ❌ failed. For `gate`, surface the per-step result (lint / type-check / test / build: ✅ pass · ➖ absent · ❌ stuck).
+Report in up to 6 lines: what was done, branch (`<type>/<slug>`, base), the **full draft PR URL** (never a bare `#<number>`), any known pending items, and the status of the gstack steps in 1 line — `autoplan / review / qa / gate / ship`, each marked ✅ executed, ⬜ skipped (with reason), or ❌ failed. For `gate`, surface the per-step result (lint / type-check / test / build: ✅ pass · ➖ absent · ❌ stuck).

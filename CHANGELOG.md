@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0.0] - 2026-08-24
+
+### Changed
+- **PRs/MRs are now created as drafts by default** across the marketplace's one real PR-creation
+  chokepoint, `github-ops`'s `pr.sh create` — the user marks a PR ready manually, never the agent.
+  `--draft` is kept as a back-compat no-op; `--no-draft` (alias `--ready`) is the explicit opt-out.
+  A new `pr.sh ready <num>` subcommand (`gh pr ready` / `glab mr update --ready`) exists for the
+  user to invoke, but `github-ops`/`SKILL.md` now hard-rules that the agent never calls it on its
+  own initiative, and never ready-then-merges a draft without asking first.
+- **Draft rejection no longer fails the create.** If a repo doesn't support `--draft` (GitHub) or
+  the installed `glab` doesn't support the flag (GitLab, retried once via a `Draft: ` title
+  prefix), `pr.sh create` retries once as a ready PR and emits `warn|draft-unsupported` instead of
+  erroring out.
+- **The full PR URL is always returned**, never just a number: `pr.sh create` now also emits
+  `draft|<true|false>` and an explicit `pr-url|<url>` line (in addition to the existing
+  `pr|<num>|<url>`), and every consumer (`/herow-dev:git:pr`, `/herow-dev:execute`,
+  `/herow-dev:quick`) was updated to surface that full URL in its final output.
+- `/herow-dev:git:pr` now routes PR creation through `github-ops`'s `pr.sh` (preserving its
+  template-composed body via `--body-file`) instead of hand-rolling `gh pr create` directly.
+- `/herow-dev:quick` — which ends by delegating to gstack's `/ship` (a third-party skill this repo
+  doesn't own or gate) — now converts the ready PR `/ship` opens into a draft immediately after,
+  since `/ship` itself always creates one ready-for-review.
+
 ## [0.9.0.0] - 2026-08-18
 
 ### Added

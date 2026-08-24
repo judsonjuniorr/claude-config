@@ -1,18 +1,20 @@
 ---
 description: (herow) Create a GitHub PR from current branch — discovers templates, analyzes commits, pushes, and creates with CI status check.
-argument-hint: "[base-branch] [--draft] (default base: main)"
+argument-hint: "[base-branch] [--no-draft] (default base: main; PRs are drafts unless --no-draft)"
 allowed-tools: Bash, Read
 effort: medium
 ---
 
 # Create Pull Request
 
-**Input**: `$ARGUMENTS` — optional base branch name and/or flags (e.g., `--draft`).
+**Input**: `$ARGUMENTS` — optional base branch name and/or flags (e.g., `--no-draft`).
 
 **Parse `$ARGUMENTS`**:
-- Extract any recognized flags (`--draft`)
+- Extract any recognized flags (`--no-draft`)
 - Treat remaining non-flag text as the base branch name
 - Default base branch to `main` if none specified
+- **PRs are always created as drafts unless `--no-draft` is passed.** This is a `github-ops`
+  house rule — never opt out on your own initiative.
 
 ---
 
@@ -159,13 +161,22 @@ Fill in each section using commit and file analysis. Preserve all template secti
 
 ### Create the PR
 
+Use the `github-ops` skill's `pr.sh create` — never call `gh pr create` directly (per
+`github-ops/SKILL.md`; that skill's own `${CLAUDE_PLUGIN_ROOT}` resolves `scripts/pr.sh`).
+Write the composed PR body (template-filled or the "Without Template" markdown above, whichever
+applies) to a temp file and pass it via `--body-file` — **do not** omit `--body-file` and let
+`pr.sh` fall back to its own auto-generated body, or this command's richer body (with `## Files
+Changed` / `## Related Issues`) is silently lost.
+
 ```bash
-gh pr create \
+pr.sh create \
   --title "<PR title>" \
   --base <base-branch> \
-  --body "<PR body>"
-  # Add --draft if --draft flag was parsed
+  --body-file <tmpfile with composed PR body>
+  # --no-draft only if the --no-draft flag was parsed; otherwise the PR is created as a draft
 ```
+
+This prints `pr|<num>|<url>`, `draft|<true|false>`, and `pr-url|<url>`.
 
 ---
 
@@ -183,6 +194,7 @@ gh pr checks --json name,status,conclusion 2>/dev/null || true
 ```
 PR #<number>: <title>
 URL: <url>
+Draft: yes/no
 Branch: <head> → <base>
 Changes: +<additions> -<deletions> across <changedFiles> files
 
@@ -191,7 +203,7 @@ CI Checks: <status summary or "pending" or "none configured">
 Next steps:
   - gh pr view <number> --web   → open in browser
   - /code:review <number>       → review the PR
-  - gh pr merge <number>        → merge when ready
+  - gh pr ready <number>        → mark ready for review (you decide when)
 ```
 
 ---

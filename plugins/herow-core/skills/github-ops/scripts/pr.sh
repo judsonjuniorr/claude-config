@@ -9,14 +9,17 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 require_repo
 CLI="$(pick_cli)"
 SUB="${1:-}"
-[ -n "$SUB" ] || die "usage" "pr.sh create [--base B]|edit|list|view|merge|checks|diff"
+[ -n "$SUB" ] || die "usage" "pr.sh create [--base B]|ready|edit|list|view|merge|checks|diff"
 shift || true
 
 cmd_create() {
-  local draft=0 title="" body_file="" body="" base=""
+  # Draft by default: the user marks it ready manually (pr.sh ready <num>).
+  # --draft is accepted as a no-op for back-compat; --no-draft/--ready opt out.
+  local draft=1 title="" body_file="" body="" base=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --draft) draft=1; shift ;;
+      --no-draft|--ready) draft=0; shift ;;
       --title) title="$2"; shift 2 ;;
       --body) body="$2"; shift 2 ;;
       --body-file) body_file="$2"; shift 2 ;;
@@ -55,17 +58,69 @@ cmd_create() {
   if [ "$CLI" = "gh" ]; then
     local args=(--title "$title" --body-file "$body_file" --base "$base" --head "$head")
     [ "$draft" = "1" ] && args+=(--draft)
-    local url; url="$(gh pr create "${args[@]}")" || die "create-failed" "gh"
+    local out; out="$(mktemp)"
+    if ! gh pr create "${args[@]}" >"$out" 2>&1; then
+      if [ "$draft" = "1" ]; then
+        # Some repos reject --draft (plan/feature gated). Retry once ready,
+        # don't guess at gh's exact error wording — any failure while
+        # draft was on gets one blind retry without it.
+        draft=0
+        args=(--title "$title" --body-file "$body_file" --base "$base" --head "$head")
+        if ! gh pr create "${args[@]}" >"$out" 2>&1; then
+          cat "$out" >&2; die "create-failed" "gh"
+        fi
+        echo "warn|draft-unsupported|created as ready" >&2
+      else
+        cat "$out" >&2; die "create-failed" "gh"
+      fi
+    fi
+    local url; url="$(grep -oE 'https?://[^ ]+/pull/[0-9]+' "$out" | head -1)"
     local num; num="$(echo "$url" | grep -oE '[0-9]+$')"
     echo "pr|$num|$url"
+    [ "$draft" = "1" ] && echo "draft|true" || echo "draft|false"
+    echo "pr-url|$url"
   else
     local args=(--title "$title" --description "$(cat "$body_file")" --target-branch "$base" --source-branch "$head")
     [ "$draft" = "1" ] && args+=(--draft)
-    glab mr create "${args[@]}" >/tmp/.glab-out 2>&1 || { cat /tmp/.glab-out >&2; die "create-failed" "glab"; }
+    if ! glab mr create "${args[@]}" >/tmp/.glab-out 2>&1; then
+      if [ "$draft" = "1" ]; then
+        # glab's --draft support varies by version; the version-proof
+        # signal is a "Draft: " title prefix. Retry once that way before
+        # falling back to plain + warn.
+        args=(--title "Draft: $title" --description "$(cat "$body_file")" --target-branch "$base" --source-branch "$head")
+        if glab mr create "${args[@]}" >/tmp/.glab-out 2>&1; then
+          local url; url="$(grep -oE 'https?://[^ ]+/merge_requests/[0-9]+' /tmp/.glab-out | head -1)"
+          local num; num="$(echo "$url" | grep -oE '[0-9]+$')"
+          echo "pr|$num|$url"
+          echo "draft|true"
+          echo "pr-url|$url"
+          return
+        fi
+        args=(--title "$title" --description "$(cat "$body_file")" --target-branch "$base" --source-branch "$head")
+        if ! glab mr create "${args[@]}" >/tmp/.glab-out 2>&1; then
+          cat /tmp/.glab-out >&2; die "create-failed" "glab"
+        fi
+        echo "warn|draft-unsupported|created as ready" >&2
+      else
+        cat /tmp/.glab-out >&2; die "create-failed" "glab"
+      fi
+    fi
     local url; url="$(grep -oE 'https?://[^ ]+/merge_requests/[0-9]+' /tmp/.glab-out | head -1)"
     local num; num="$(echo "$url" | grep -oE '[0-9]+$')"
     echo "pr|$num|$url"
+    [ "$draft" = "1" ] && echo "draft|true" || echo "draft|false"
+    echo "pr-url|$url"
   fi
+}
+
+cmd_ready() {
+  local num="${1:-}"; [ -n "$num" ] || die "usage" "pr.sh ready <num>"
+  if [ "$CLI" = "gh" ]; then
+    gh pr ready "$num" >/dev/null 2>&1 || die "ready-failed" "$num"
+  else
+    glab mr update "$num" --ready >/dev/null 2>&1 || die "ready-failed" "$num"
+  fi
+  echo "pr|$num|ready"
 }
 
 cmd_edit() {
@@ -236,6 +291,7 @@ cmd_diff() {
 
 case "$SUB" in
   create) cmd_create "$@" ;;
+  ready)  cmd_ready "$@" ;;
   edit)   cmd_edit "$@" ;;
   list)   cmd_list "$@" ;;
   view)   cmd_view "$@" ;;

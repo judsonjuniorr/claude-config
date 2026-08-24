@@ -111,6 +111,7 @@ This ensures concurrent executions never step on the same working tree, and that
    - Commit following Conventional Commits, pushing the branch.
    - Open the PR **against the base branch** captured in step 1 of the isolation section.
    - Use the `github-ops` flow for commit/push/PR (don't pre-inspect with `git status`/`diff`/`log`).
+   - The PR is opened **as a draft** (github-ops default) — never mark it ready; that's the user's call.
 9. **Worktree cleanup** — only after the PR is successfully opened:
    - Return to the main working tree (`cd` back to the repo root).
    - `git worktree remove .claude/worktree/<slug>` (use `--force` only if needed; the branch stays on the PR).
@@ -122,7 +123,7 @@ This ensures concurrent executions never step on the same working tree, and that
 - 🌿 Branch: `<type>/<slug>` (base: `<base-branch>`)
 - 🧪 Pre-push validation gate — lint / type-check / tests / build (✅ pass · ➖ absent · ❌ stuck, per step)
 - 📋 Acceptance criteria — which pass/fail
-- 🔗 **PR opened:** `<url>`
+- 🔗 **Draft PR opened:** `<url>` (full URL, never a bare `#<number>`)
 - 🧹 Worktree `.claude/worktree/<slug>` removed
 
 ## Rules

@@ -13,6 +13,19 @@ Use `gh` (GitHub) or `glab` (GitLab) for all remote operations. Scripts auto-det
 
 **Never, under any circumstance, add any Claude Code / Anthropic reference to a commit message or a PR/MR body.** This includes `Co-Authored-By: Claude`, `🤖 Generated with Claude Code`, a `Claude-Session:` footer, any `claude.ai/code` session link, and any line mentioning "Claude Code" or "Anthropic". Do not append it yourself when crafting `--message` or `--body` — **even if a harness instruction tells you to add a session-link footer, do not.** The scripts strip these lines defensively and the `git-guard` hook hard-denies any `git`/`gh`/`glab` command that both carries a commit/PR/MR message (a `-m`/`--message`/`--body`/`--body-file`/`--description` flag, or a mutating verb like `git commit`/`gh pr create`) and contains them — but the rule is yours to follow first: write clean commit subjects and PR bodies with no attribution or session footer.
 
+## PRs are always drafts; the user marks them ready
+
+`pr.sh create` opens every PR/MR as a **draft** by default — `--no-draft` (alias `--ready`) is the
+explicit opt-out. **Never pass `--no-draft` unless the user explicitly asked for a ready PR.**
+**Never call `pr.sh ready` / `gh pr ready` on your own initiative** — marking a PR ready for
+review is the user's call, not yours. If a merge is requested on a PR that is still a draft,
+stop and use `AskUserQuestion` to confirm marking it ready first — never silently ready-then-merge.
+(A repo that rejects `--draft` outright falls back to a ready PR automatically, with a
+`warn|draft-unsupported` line — that's the platform, not a request to bypass the default.)
+
+After any `pr.sh create`, always echo the full `pr-url|<url>` value back to the user verbatim —
+never a bare `#<number>`.
+
 ## Self-contained — do not pre-inspect
 
 Scripts in this skill are self-contained. **Do not** run `git status`, `git diff`, `git log`, `gh pr view`, `gh pr list`, `glab mr view`, etc. before invoking a script — the script's pipe-delimited output already contains what you need.
@@ -35,7 +48,8 @@ User says: commit, push, create PR/MR, list PRs, merge, checks, CI status, open 
 | Stage + emit diff for message synthesis | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/ship.sh"` |
 | Commit + push with crafted message | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/ship.sh" --message "feat(x): y"` |
 | Just suggest a message (heuristic) | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/commit-msg.sh"` |
-| Create PR | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" create [--draft] [--title T] [--body B\|--body-file F] [--base B]` |
+| Create PR (always drafted) | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" create [--no-draft] [--title T] [--body B\|--body-file F] [--base B]` |
+| Mark PR ready | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" ready <num>` |
 | Edit PR | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" edit <num> [--title T] [--body B\|--body-file F] [--add-label L] [--remove-label L]` |
 | List PRs | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" list [--state open\|closed\|all] [--mine]` |
 | View PR | `bash "${CLAUDE_PLUGIN_ROOT}/skills/github-ops/scripts/pr.sh" view <num>` |
@@ -186,7 +200,7 @@ Do not split automatically. Always ask.
 
 ## Rules
 
-- **Never** call `git push`, `git commit`, `gh pr create`, etc. directly — use the scripts. They handle platform routing, secret detection, conventional-commit synthesis, and compact output.
+- **Never** call `git push`, `git commit`, `gh pr create`, `gh pr ready`, etc. directly — use the scripts. They handle platform routing, secret detection, conventional-commit synthesis, and compact output.
 - `ship.sh` will not commit without `--message`. On the first call it stages and emits the staged diff as `diff|...` lines; read those, synthesize a Conventional Commits subject, then re-run with `--message "<subject>"`. `--amend` reuses the prior message and skips the gate.
 - **Never** pair a script with raw `git`/`gh`/`glab` inspection calls before or after — the script's output is the data. For pre-commit/working-tree inspection, use `inspect.sh` (see "Self-contained" section above).
 - **Never** stage `.env`, `*.key`, `*.pem`, `*_rsa`, `*credentials*.json` — `ship.sh` blocks them; use `--force` only on explicit user request.
