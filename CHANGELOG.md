@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0.0] - 2026-08-27
+
+### Added
+- **`/herow-dev:fix-cves`** — new command that finds and fixes dependency CVEs end-to-end.
+  Detects the repo's ecosystem(s) (Node/TS: npm/pnpm/yarn/bun; Python: uv/poetry/pip) — cumulative,
+  so a monorepo with both is handled in one run — then collects advisories via each ecosystem's
+  native audit tool (falling back to `osv-scanner` when unavailable), triages by severity and
+  direct-vs-transitive, and resolves each group's *minimum* patched version plus whether reaching
+  it crosses a breaking change (Context7 → GitHub releases → the dependency's own CHANGELOG).
+  Applies fixes one group at a time behind a human confirmation gate — direct bumps to the owning
+  manifest, transitive-only advisories via the ecosystem's override mechanism (`overrides` /
+  `pnpm.overrides` / `resolutions` / uv `constraint-dependencies` / a poetry pin / a pip
+  `constraints.txt` entry), which is where most real advisories live and where a naive
+  implementation would incorrectly report "no fix available". Runs a **baseline** validation pass
+  before any change (so pre-existing red is never blamed on the upgrade) and the full
+  lint/type-check/test/build gate after each group, explicitly overriding `github-ops`'s
+  deps-only-changes-skip-checks rule since a CVE fix is precisely the case that needs regression
+  proof. A stuck regression reverts (lockfile **and** reinstall, not just the file) and lands in a
+  "needs human" bucket rather than blocking the rest of the run. Reports Fixed / No patch
+  available / Needs human, then gates push + draft PR behind a final confirmation. New shared
+  reference `plugins/herow-dev/reference/cve-ecosystems.md` holds the per-ecosystem command
+  matrix. Scope is third-party dependencies only — first-party code security stays with
+  `/security-review` and the `security-reviewer` agent.
+
 ## [0.10.0.0] - 2026-08-24
 
 ### Changed
