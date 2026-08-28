@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.1.0] - 2026-08-28
+
+### Fixed
+- **`github-ops`'s `git-guard` hook no longer prompts for non-destructive `gh`/`glab` writes.**
+  `gh pr ready/comment/review/reopen/lock/unlock/update-branch`, `gh issue
+  comment/reopen/pin/unpin/transfer/lock/unlock/develop`, `gh release upload`, `gh run rerun`,
+  `gh workflow run/enable/disable`, the `glab` equivalents, and the matching `github-ops`
+  script verbs (`pr.sh ready`, `issue.sh comment`, `repo.sh workflow-run`) are now auto-allowed,
+  same tier as the existing read-only fast-allow. The destructive/identity-shaping verbs the
+  user chose to keep confirmation on — `create`, `edit`, `close`, `delete`, `cancel`, `merge`,
+  and `glab`'s `update` — still surface an `ask`.
+- **Adversarial review of a quote-fragmentation fix for the above surfaced, and fixed, a real
+  permission-bypass regression** before it shipped: an earlier attempt at also letting a quoted
+  `--body`/`--message` containing `;`/`|`/`&`/newline auto-allow (instead of fragmenting into
+  segments that fall to `ask`) went through 4 review cycles, each of which found a live bypass
+  in a smarter version of the transform — raw quote-count parity, then per-type count with
+  backslash-adjacency, then a full linear quote-state scanner, then that scanner narrowed to
+  bail on backslash/`$'` (defeated via bash's `#` end-of-line comments). Rather than a 5th
+  scanner, the feature was removed: `git-guard.sh` now splits directly on the raw command like
+  every other check in the file. A quoted body with an embedded delimiter still falls to `ask`
+  (known, documented, deliberately accepted gap) rather than risk a wrongful `allow`.
+
 ## [0.11.0.0] - 2026-08-27
 
 ### Added
