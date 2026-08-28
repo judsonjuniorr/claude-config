@@ -1,11 +1,26 @@
 #!/usr/bin/env bash
 # github-ops PreToolUse/Bash guard.
-# Read-only gh/glab commands (view/list/diff/status/checks/...) — including via
-# the skill's own read-only scripts (inspect.sh, commit-msg.sh, pr/issue/repo.sh
-# view|list|checks|diff|info|releases|runs) — are ALLOWED outright, no
-# permission prompt. Only write/mutating PR/issue/release/CI commands surface a
-# confirmation ("ask") that nudges toward the github-ops scripts. Raw git
-# commit/push are left alone (normal permission rules); read-only git
+# Three tiers on gh/glab:
+#   1. Read-only (view/list/diff/status/checks/...) — ALLOWED outright, no
+#      prompt. Covers the skill's own scripts too when called with a
+#      read-only verb (inspect.sh, commit-msg.sh, pr.sh view|list|checks|diff,
+#      issue.sh view|list, repo.sh info|releases|runs) — see script_allow_re.
+#   2. Non-destructive writes (pr ready/comment/review/reopen/lock/unlock/
+#      update-branch, issue comment/reopen/pin/unpin/transfer/lock/unlock/
+#      develop, release upload, run rerun, workflow run/enable/disable, and the
+#      glab equivalents) — also ALLOWED outright, no prompt. See write_allow_re
+#      for the exact verb list. The skill's own scripts get the same tier for
+#      the equivalent verb (pr.sh ready, issue.sh comment, repo.sh
+#      workflow-run) — see script_allow_re.
+#   3. Destructive/identity-shaping writes on gh pr/issue/release/run/workflow
+#      and glab mr/issue/ci/release (create, edit, close, delete, cancel,
+#      merge, and glab's update) — surface a confirmation ("ask") that nudges
+#      toward the matching github-ops script. A destructive verb on a gh/glab
+#      command family this hook doesn't classify (secret, cache, label, gist,
+#      repo, api, …) gets no decision from this hook at all — normal Bash
+#      permission rules apply, un-gated. See the `suggest` case at the bottom
+#      for the exact family list this tier covers.
+# Raw git commit/push are left alone (normal permission rules); read-only git
 # (status/diff/log) is RTK's own hook — so no overlap.
 # Never blocks hard, never errors.
 
@@ -96,11 +111,19 @@ ro_re='^(gh ((pr (view|list|diff|checks|status|checkout|reviews))|(issue (view|l
 # of an auto-allow. Conservative direction, not a bug.
 api_re='^(gh|glab) api([[:space:]]|$)'
 api_write_re='(^|[[:space:]])(-X|--method)[[:space:]=]*(POST|PUT|PATCH|DELETE)([[:space:]]|$)|(^|[[:space:]])(-f|--field|--raw-field|--input)([[:space:]=]|$)'
-# Read-only invocations of the skill's own scripts — treated as a read-only
-# segment just like ro_re, so a compound command mixing a read-only script call
-# with a mutating one (`pr.sh view 42; ship.sh --message x`) is NOT allowed:
-# every segment must independently qualify.
-script_ro_re='github-ops/scripts/(inspect|commit-msg)\.sh"?([[:space:]]|$)|github-ops/scripts/(pr|issue|repo)\.sh"?[[:space:]]+(view|list|checks|diff|info|releases|runs)([[:space:]]|$)'
+# Non-destructive gh/glab writes (single segment) — allowed outright, same tier
+# as ro_re. Deliberately EXCLUDES create/edit/close/delete/cancel/merge/update:
+# those stay behind the `ask` at the bottom. Boundary group at the end
+# (`([[:space:]]|$)`) is required so e.g. `pr review` doesn't prefix-match
+# `pr reviews` (already read-only, in ro_re) or vice versa.
+write_allow_re='^(gh ((pr (ready|comment|review|reopen|lock|unlock|update-branch))|(issue (comment|reopen|pin|unpin|transfer|lock|unlock|develop))|(release (upload))|(run (rerun))|(workflow (run|enable|disable)))|glab ((mr (note|approve|revoke|rebase|todo|subscribe|unsubscribe))|(issue (note|reopen|subscribe|unsubscribe))|(release (upload))|(ci (retry|run|trigger))))([[:space:]]|$)'
+# Read-only/non-destructive invocations of the skill's own scripts — treated
+# the same as ro_re/write_allow_re, so a compound command mixing an allowed
+# script call with a mutating one (`pr.sh view 42; ship.sh --message x`) is
+# NOT allowed: every segment must independently qualify. Verb list is
+# per-script (not a shared alternation) so e.g. `repo.sh comment` — not a real
+# repo.sh subcommand — never accidentally qualifies via issue.sh's list.
+script_allow_re='github-ops/scripts/(inspect|commit-msg)\.sh"?([[:space:]]|$)|github-ops/scripts/pr\.sh"?[[:space:]]+(view|list|checks|diff|ready)([[:space:]]|$)|github-ops/scripts/issue\.sh"?[[:space:]]+(view|list|comment)([[:space:]]|$)|github-ops/scripts/repo\.sh"?[[:space:]]+(info|releases|runs|workflow-run)([[:space:]]|$)'
 # Safe inspector/pipe-target helpers (read-only or temp-only).
 # Deliberately EXCLUDES tee/sed/awk: they write files (`tee FILE`, `sed -i`, awk
 # redirection) and would let a write smuggle into an auto-allowed chain.
@@ -109,12 +132,34 @@ script_ro_re='github-ops/scripts/(inspect|commit-msg)\.sh"?([[:space:]]|$)|githu
 # arbitrary execution.
 safe_re='^(cat|head|tail|wc|less|more|jq|grep|egrep|fgrep|rg|sort|uniq|cut|tr|column|nl|echo|printf|true|git (branch|log|diff|status|show|rev-parse))( |$)'
 
-all_safe=1; has_ro=0
+all_safe=1; has_gh=0
 # Bail on ALL substitution — `$(...)`, backticks, AND process substitution
 # `<(...)` / `>(...)` — any of which hides an arbitrary command inside an
 # otherwise read-only-looking chain (e.g. `gh pr diff 1 > /tmp/x; cat <(rm -rf y)`).
 case "$CHK" in *'$('*|*'`'*|*'<('*|*'>('*) all_safe=0 ;; esac
 if [ "$all_safe" = 1 ]; then
+  # NOTE: a quoted `--body`/`--message` containing `;`/`|`/`&` or an embedded
+  # newline (e.g. `gh pr comment 42 --body "a; b"`) still fragments into
+  # segments here and sinks an otherwise write-tier-eligible command to
+  # `ask` — a real UX gap, deliberately left unfixed. Four straight
+  # cycles of adversarial review each broke a successively "smarter"
+  # quote-aware pre-split transform meant to close it (raw quote-count
+  # parity; per-type count + backslash-adjacency; a full linear quote-state
+  # scanner; the same scanner narrowed to bail on any backslash or `$'`) —
+  # the last of those four was defeated via bash's unquoted `#`
+  # end-of-line comments, which the scanner had no concept of and which
+  # contain neither a backslash nor `$'`, so it passed the narrowed
+  # precondition and still let a `#'` ... real-newline ... `#'` construct
+  # mask a live command separator as "inside quotes". Every fix closed one
+  # bash-grammar hole and opened a smaller one; reimplementing enough of
+  # bash's tokenizer to be safe is the wrong bar for a heuristic UX guard.
+  # Reimplementing correctly would mean handling comments, brace expansion,
+  # arithmetic expansion, and whatever construct review cycle five would
+  # find — an open-ended commitment for a cosmetic classification nicety.
+  # So this hook does not attempt it: segments are split directly on raw
+  # `$CHK`, matching every other read-only/write-tier check in this file,
+  # and a delimiter-bearing quoted argument correctly falls through to
+  # `ask` (safe direction) rather than risk a wrongful `allow`.
   oldIFS="$IFS"; IFS='|&;'$'\n'; set -f          # split on | & ; (covers || &&) and newlines; disable globbing
   for seg in $CHK; do
     s="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -140,17 +185,18 @@ if [ "$all_safe" = 1 ]; then
       # -i: HTTP method tokens are conventionally uppercase but gh/glab don't
       # enforce that on the CLI arg — `-X delete` must be caught too.
       if printf '%s' "$s" | grep -qEi "$api_write_re"; then all_safe=0; break; fi
-      has_ro=1; continue
+      has_gh=1; continue
     fi
-    if printf '%s' "$s" | grep -qE "$ro_re"; then has_ro=1; continue; fi
+    if printf '%s' "$s" | grep -qE "$ro_re"; then has_gh=1; continue; fi
+    if printf '%s' "$s" | grep -qE "$write_allow_re"; then has_gh=1; continue; fi
     if printf '%s' "$s" | grep -qE "$safe_re"; then continue; fi
-    if printf '%s' "$s" | grep -qE "$script_ro_re"; then has_ro=1; continue; fi
+    if printf '%s' "$s" | grep -qE "$script_allow_re"; then has_gh=1; continue; fi
     all_safe=0; break
   done
   IFS="$oldIFS"; set +f
 fi
-if [ "$all_safe" = 1 ] && [ "$has_ro" = 1 ]; then
-  python3 -c "import json; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'allow','permissionDecisionReason':'github-ops: read-only command — no confirmation needed.'}}))"
+if [ "$all_safe" = 1 ] && [ "$has_gh" = 1 ]; then
+  python3 -c "import json; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','permissionDecision':'allow','permissionDecisionReason':'github-ops: gh/glab command allowed without confirmation.'}}))"
   exit 0
 fi
 
