@@ -133,7 +133,7 @@ must_no_decision_nondestructive = [
     # Verbatim repro of the reported prompt: a read-only `gh pr list` piped to
     # python3 (not in safe_re) got an `ask` suggesting pr.sh, which is
     # unrelated to a list command.
-    'gh pr list --author @me --state open --json number,title,headRefName,baseRefName --limit 50 2>&1 '
+    "gh pr list --author @me --state open --json number,title,headRefName,baseRefName --limit 50 2>&1 "
     '| python3 -c "import json,sys; d=json.load(sys.stdin); '
     "[print(p['number'], '|', p['title']) for p in d]\"",
     "gh pr view 42 | bat",
