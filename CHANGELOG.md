@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.1.1] - 2026-09-02
+
+### Fixed
+- **`github-ops`'s `git-guard` hook no longer asks about read-only/non-destructive `gh`/`glab`
+  commands that merely fail its fast-allow check.** The `ask` tier used to trigger on command
+  *family* alone (`gh pr *`, `gh issue *`, ...), so any read-only or non-destructive-write
+  command that failed the fast-allow for an unrelated reason — piped into an unrecognized
+  helper like `python3` (only `jq` etc. are in the safe-helper list), or a `;`/`|`/`&` inside a
+  quoted argument (a documented gap) — got an `ask` nudging toward a script the command had
+  nothing to do with (e.g. `gh pr list | python3 -c "..."` → "prefer pr.sh"). The `ask` tier now
+  additionally requires a destructive verb (`create`/`edit`/`close`/`delete`/`delete-asset`/
+  `cancel`/`merge`/glab's `update`) to be present anywhere in the command; everything else that
+  isn't fast-allowed now falls through with no decision from this hook, and normal Bash
+  permission rules decide instead.
+
 ## [0.11.1.0] - 2026-08-28
 
 ### Fixed

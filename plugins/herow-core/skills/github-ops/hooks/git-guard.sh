@@ -13,13 +13,19 @@
 #      the equivalent verb (pr.sh ready, issue.sh comment, repo.sh
 #      workflow-run) — see script_allow_re.
 #   3. Destructive/identity-shaping writes on gh pr/issue/release/run/workflow
-#      and glab mr/issue/ci/release (create, edit, close, delete, cancel,
-#      merge, and glab's update) — surface a confirmation ("ask") that nudges
-#      toward the matching github-ops script. A destructive verb on a gh/glab
-#      command family this hook doesn't classify (secret, cache, label, gist,
-#      repo, api, …) gets no decision from this hook at all — normal Bash
-#      permission rules apply, un-gated. See the `suggest` case at the bottom
-#      for the exact family list this tier covers.
+#      and glab mr/issue/ci/release (create, edit, close, delete, delete-asset,
+#      cancel, merge, and glab's update) — surface a confirmation ("ask") that
+#      nudges toward the matching github-ops script. Gated on the VERB, not
+#      just the family: a read-only or non-destructive-write command that
+#      merely fails the tier-1/2 fast-allow (piped to an unrecognized helper,
+#      a `;`/`|` inside a quoted arg) gets NO decision here — it falls through
+#      to normal Bash permission rules instead of an unhelpful "prefer the
+#      script" nudge on a command the script tier has nothing to do with. A
+#      destructive verb on a gh/glab command family this hook doesn't classify
+#      (secret, cache, label, gist, repo, api, …) also gets no decision from
+#      this hook at all — normal Bash permission rules apply, un-gated. See
+#      destructive_re and the `suggest` case at the bottom for the exact verb/
+#      family list this tier covers.
 # Raw git commit/push are left alone (normal permission rules); read-only git
 # (status/diff/log) is RTK's own hook — so no overlap.
 # Never blocks hard, never errors.
@@ -201,6 +207,27 @@ if [ "$all_safe" = 1 ] && [ "$has_gh" = 1 ]; then
 fi
 
 # Write/mutating PR/issue/release/CI commands → ask, nudging toward the script.
+#
+# Gate by VERB, not just family: the read-only verbs (ro_re) and non-
+# destructive writes (write_allow_re) were already auto-allowed above when the
+# whole chain qualified. When it does NOT qualify — a pipe into an
+# unrecognized helper, a `;`/`|` inside a quoted arg (the documented gap
+# above) — the command used to land here and get an `ask` suggesting a script
+# unrelated to it (`gh pr list` → "prefer pr.sh"). That nudge only makes sense
+# for destructive verbs; for everything else this hook stays silent and
+# normal Bash permission rules decide. NOT anchored at `^`: the destructive
+# verb can be in any segment of a chain (`gh pr list && gh pr merge 42`) —
+# same `(^|[[:space:]])` shape already used for the attribution-verb check
+# above. End boundary keeps `delete` from prefix-matching `delete-asset`
+# (listed explicitly).
+#
+# Conscious side effect: `gh pr view 42; rm -rf /tmp/x` no longer gets this
+# hook's `ask` either (no destructive gh/glab verb in it) — not a real loss of
+# protection, since `rm -rf` still answers to normal Bash permission rules and
+# to destructive-guard.sh, which matches the same PreToolUse/Bash event.
+destructive_re='(^|[[:space:]])(gh (pr|issue|release|run|workflow)|glab (mr|issue|ci|release))[[:space:]]+(create|edit|close|delete|delete-asset|cancel|merge|update)([[:space:]]|$)'
+printf '%s' "$CMD" | grep -qE "$destructive_re" || exit 0
+
 suggest=""
 case "$CMD" in
   gh\ pr\ *|glab\ mr\ *)                          suggest="pr.sh" ;;

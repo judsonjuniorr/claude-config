@@ -125,6 +125,25 @@ must_bail_perf_gate = [
     "cat a | grep b",
 ]
 
+# Read-only / non-destructive-write commands that fail the tier-1/2 fast-allow
+# (piped to an unrecognized helper, `;`/`|` inside a quoted arg) must now fall
+# through to NO-DECISION instead of getting an `ask` nudging toward a script
+# that has nothing to do with them — see destructive_re in git-guard.sh.
+must_no_decision_nondestructive = [
+    # Verbatim repro of the reported prompt: a read-only `gh pr list` piped to
+    # python3 (not in safe_re) got an `ask` suggesting pr.sh, which is
+    # unrelated to a list command.
+    'gh pr list --author @me --state open --json number,title,headRefName,baseRefName --limit 50 2>&1 '
+    '| python3 -c "import json,sys; d=json.load(sys.stdin); '
+    "[print(p['number'], '|', p['title']) for p in d]\"",
+    "gh pr view 42 | bat",
+    "gh issue list | python3 -c \"print('hi')\"",
+    # Quoted-delimiter gap (documented above the segment-split loop), on the
+    # non-destructive write tier this time — distinct from the must_not_allow
+    # cases pinned below, which are all destructive/attacker-shaped.
+    'gh issue comment 7 --body "a | b"',
+]
+
 must_not_allow = [
     "gh api -X DELETE repos/o/r/issues/1",
     "gh api repos/o/r/issues -f title=x",
@@ -192,6 +211,13 @@ must_ask = [
     "gh release delete v1",
     "gh run cancel 1",
     "glab mr update 5",
+    # delete/delete-asset boundary: destructive_re must not let `delete`
+    # prefix-match `delete-asset` (which is listed explicitly, same tier).
+    "gh release delete-asset v1 file.zip",
+    # destructive_re is unanchored: the destructive verb must still be found
+    # when it's not the first segment of a chain — a `^`-anchored version
+    # would wrongly drop this to NO-DECISION.
+    "gh pr list && gh pr merge 42",
 ]
 
 # Non-destructive gh/glab writes — newly allowed outright (no prompt), one
@@ -308,6 +334,11 @@ def main():
             must_bail_perf_gate,
             lambda d: d == "NO-DECISION",
         ),
+        report(
+            "MUST NOT ASK (non-destructive fast-allow miss -> NO-DECISION)",
+            must_no_decision_nondestructive,
+            lambda d: d == "NO-DECISION",
+        ),
     ]
     total = sum(
         len(x)
@@ -320,6 +351,7 @@ def main():
             must_deny,
             must_ask,
             must_bail_perf_gate,
+            must_no_decision_nondestructive,
         ]
     )
     print()
