@@ -5,7 +5,7 @@ argument-hint: "[<free text> | list | prune]"
 effort: low
 ---
 
-# /finance:context — Restrictions and context (provider-agnostic)
+# /herow-finance:context — Restrictions and context (provider-agnostic)
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
@@ -14,7 +14,7 @@ Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py`. D
 Absolute path of the script:
 `${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py`
 
-When the user invokes `/finance:context`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
+When the user invokes `/herow-finance:context`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
 
 ---
 
@@ -42,7 +42,7 @@ When the user invokes `/finance:context`, classify `$ARGUMENTS` and follow the f
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py add "<text>" [--tag <optional>]
    ```
 
-3. Confirm in 1 line: what was saved and where (`~/finance/memory.md`). Say: "Next `/finance:organizze` will take this into account."
+3. Confirm in 1 line: what was saved and where (`~/finance/memory.md`). Say: "Next `/herow-finance:organizze` will take this into account."
 
 ## Mode 3 — Direct sub-commands
 
@@ -57,6 +57,6 @@ Show the output to the user.
 
 ## Rules
 
-- **Do not call `/finance:organizze`** automatically. CRUD only.
+- **Do not call `/herow-finance:organizze`** automatically. CRUD only.
 - The script runs legacy migration automatically on the first run (`~/finance-organizze/memory.md` → `~/finance/memory.md`).
 - Storage is hand-editable (`~/finance/memory.md`).

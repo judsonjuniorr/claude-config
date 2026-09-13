@@ -21,11 +21,11 @@ print(model)
 " 2>/dev/null
 ```
 
-- If the output **ends in `[1m]`** (e.g. `claude-sonnet-4-6[1m]`): the session is in 1M context (billed). Warn in 1 line that this invocation inherits 1M and will fail for lack of credits, and offer the two paths:
+- If the output **ends in `[1m]`** (e.g. `claude-sonnet-5[1m]`): the session is in 1M context (billed). Warn in 1 line that this invocation inherits 1M and will fail for lack of credits, and offer the two paths:
   - **Switch to standard context** (recommended for this command — runs without credits): `/model` → pick a **non-`[1m]`** model, or restart already running the plan (replace `<plan>` with the actual argument resolved above):
 
     ```
-    claude --model claude-sonnet-4-6 "/herow-dev:execute <plan>"
+    claude --model claude-sonnet-5 "/herow-dev:execute <plan>"
     ```
   - **Keep 1M** (only if the work genuinely needs Opus + 1M): run `/usage-credits` to turn on credits.
 - If the output is **empty/indeterminate**: **don't warn** (fail open — the check is advisory only; most correct sessions land here).

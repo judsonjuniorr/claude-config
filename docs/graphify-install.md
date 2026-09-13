@@ -22,7 +22,7 @@ Two complementary mechanisms keep `graphify-out/` from going stale:
 - **Git hooks** (installed by this command, step 6 above): `post-merge` and `post-checkout` run `graphify update` in the background after a pull or branch switch, and stamp `graphify-out/.graphify_head` on success. Works even when Claude Code isn't open.
 - **`herow-core`'s `graphify-freshen.sh`** (a `UserPromptSubmit` hook, ships separately with the `herow-core` plugin): a backstop that checks the current HEAD against `.graphify_head` on every prompt and triggers the same background refresh if the git hooks didn't already catch it (e.g. mid-session terminal pulls). Skips silently on worktrees without a `manifest.json`, single-flights via a lock dir, and can be disabled per-invocation with `HEROW_SKIP_GRAPHIFY=1`.
 
-Also see `herow-core`'s `graphify-nudge.sh` (`PreToolUse`, matcher `Grep|Glob|Bash`) and `graphify-inject.sh` (`SessionStart`) — these steer Claude toward `graphify query`/`path`/`explain` instead of raw grep/glob whenever `graphify-out/graph.json` exists, without needing a per-repo `CLAUDE.md` edit.
+Also see `herow-core`'s `graphify-inject.sh` (`SessionStart`) — it steers Claude toward `graphify query`/`path`/`explain` instead of raw grep/glob whenever `graphify-out/graph.json` exists, without needing a per-repo `CLAUDE.md` edit.
 
 ## Frontmatter
 

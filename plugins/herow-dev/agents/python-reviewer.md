@@ -98,11 +98,15 @@ objgraph                                   # Reference-cycle / growth inspection
 ## Review Output Format
 
 ```text
-[SEVERITY] Issue title
-File: path/to/file.py:42
+<emoji> <Level> confidence=<NN> path/to/file.py:42 — Issue title
 Issue: Description
 Fix: What to change
 ```
+
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.
+Tag memory-management findings with 🧠 after the level.
 
 ## Approval Criteria
 

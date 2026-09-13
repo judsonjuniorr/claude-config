@@ -39,4 +39,4 @@ English.
 ## Prerequisites
 
 - None required. The PRD is rendered in chat; a file is written only on request.
-- Optional: the [`backend-architect`](../../agents/backend-architect.md) agent installed — the command offers to delegate the high-level technical-considerations section to it (fills inline if absent).
+- Optional: the [`backend-architect`](../plugins/herow-dev/agents/backend-architect.md) agent installed — the command offers to delegate the high-level technical-considerations section to it (fills inline if absent).

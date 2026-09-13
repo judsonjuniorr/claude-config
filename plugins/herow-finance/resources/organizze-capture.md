@@ -1,11 +1,11 @@
 # organizze — profile fill & post-analysis capture
 
-On-demand resource for `/finance:organizze`. Three independent sub-flows, read from the
+On-demand resource for `/herow-finance:organizze`. Three independent sub-flows, read from the
 main command at their respective points: **§Step 2.8** before the pull (fill missing
 profile fields), **§Step 6.5** after analysis (capture new memory/goal), **§Step 6.6**
 after analysis (answer the subagent's open questions). The GLOBAL RULE (ask via
 `AskUserQuestion`, never inline) and the main command's `**Absolute paths**` apply here.
-The profile field list below is the shared copy — `/finance:profile` Mode 4 references it.
+The profile field list below is the shared copy — `/herow-finance:profile` Mode 4 references it.
 
 ## Step 2.8 — Fill in missing personal profile fields
 
@@ -25,7 +25,7 @@ Recommendation personalization depends on the profile in `~/finance/profile.md` 
 
 3. For each field in `$MISSING` (limit **6 questions per run** — the rest will be asked next time):
    - Use `AskUserQuestion` with the format appropriate for the field (single-select with enum + "Skip" for `estado_civil`, `moradia_tipo`, `tolerancia_risco`; open text for the rest).
-   - Suggested questions per field (identical to Mode 4 of `/finance:profile`):
+   - Suggested questions per field (identical to Mode 4 of `/herow-finance:profile`):
      - `idade`: "How old are you?"
      - `profissao`: "What is your profession / how do you earn money?"
      - `renda_liquida_mensal_cents`: "What is your average net monthly income in R$?" → convert to cents.
@@ -61,7 +61,7 @@ If there is a response, save:
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/memory.py add "<user text>" [--tag <optional>]
 ```
 
-(Or tell the user they can run `/finance:context` later.)
+(Or tell the user they can run `/herow-finance:context` later.)
 
 **6.5b — Financial goal** — ask via `AskUserQuestion` (single-select with "Skip"):
 
@@ -85,9 +85,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py add "<text>" \
   [--priority negociavel|inegociavel]
 ```
 
-(Or tell the user they can run `/finance:goal` later.)
+(Or tell the user they can run `/herow-finance:goal` later.)
 
-Memory and goals live in `~/finance/{memory,plans}.md` — provider-agnostic. `analyze.py` injects them automatically into future analyses. To manage outside the analysis flow: `/finance:context` and `/finance:goal`.
+Memory and goals live in `~/finance/{memory,plans}.md` — provider-agnostic. `analyze.py` injects them automatically into future analyses. To manage outside the analysis flow: `/herow-finance:context` and `/herow-finance:goal`.
 
 ## Step 6.6 — Answer open questions from the subagent
 
@@ -111,4 +111,4 @@ The subagent emits up to 3 questions at the end of the report, in the exact form
    ```
    - Example tags: `subscription`, `debt`, `home`, `transport`, `goal`.
 
-5. Confirm in 1 line: "N memories saved — next `/finance:organizze` will take them into account." **Do not re-invoke the subagent** in this turn.
+5. Confirm in 1 line: "N memories saved — next `/herow-finance:organizze` will take them into account." **Do not re-invoke the subagent** in this turn.

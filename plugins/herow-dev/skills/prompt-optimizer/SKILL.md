@@ -14,7 +14,7 @@ description: >-
 origin: community
 metadata:
   author: YannJY02
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # Prompt Optimizer
@@ -26,18 +26,6 @@ complete optimized prompt the user can paste and run.
 > examples live in `reference.md` **in this skill's directory** — read it before
 > producing output. It lists herow components; the installed plugin set varies, so
 > verify a component exists in the current session before recommending it.
-
-## When to Use
-
-- "Optimize this prompt" / "improve my prompt" / "rewrite this prompt"
-- "Help me write a better prompt for…" / "what's the best way to ask Claude Code to…"
-- User pastes a draft prompt and asks for feedback or enhancement
-
-### Do Not Use When
-
-- User wants the task done directly (just execute it) or says "just do it"
-- "Optimize this code/performance" — refactoring, not prompt optimization
-- User is asking about tooling setup rather than prompt content
 
 ## How It Works
 

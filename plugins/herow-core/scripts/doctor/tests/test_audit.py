@@ -19,8 +19,8 @@ class TestAudit(DoctorTestCase):
 
     def test_empty_home_all_pass_no_crash(self):
         report = self._run()
-        self.assertEqual(report["summary"], {"fail": 0, "warn": 0, "pass": 8})
-        self.assertEqual(len(report["checks"]), 8)
+        self.assertEqual(report["summary"], {"fail": 0, "warn": 0, "pass": 7})
+        self.assertEqual(len(report["checks"]), 7)
         # contract: every check line has the five fields
         for c in report["checks"]:
             self.assertEqual(set(c), {"check", "status", "detail", "diff", "fix_cmd"})
@@ -37,13 +37,13 @@ class TestAudit(DoctorTestCase):
         report = self._run()
         self.assertEqual(report["summary"]["fail"], 1)
         self.assertEqual(report["summary"]["warn"], 1)
-        self.assertEqual(report["summary"]["pass"], 6)
-        self.assertEqual(sum(report["summary"].values()), 8)
+        self.assertEqual(report["summary"]["pass"], 5)
+        self.assertEqual(sum(report["summary"].values()), 7)
 
     def test_unparseable_settings_degrades(self):
         _doctor.settings_path().write_text("{ not valid json ")
         report = self._run()  # must not raise
-        self.assertEqual(sum(report["summary"].values()), 8)
+        self.assertEqual(sum(report["summary"].values()), 7)
 
 
 if __name__ == "__main__":

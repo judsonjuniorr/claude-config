@@ -5,7 +5,7 @@ argument-hint: "[<free text: 'spent 50 at the market yesterday'> | --conta X --c
 effort: medium
 ---
 
-# /finance:organizze-create — create an entry in Organizze
+# /herow-finance:organizze-create — create an entry in Organizze
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via `AskUserQuestion`, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in the text.
 
@@ -23,7 +23,7 @@ This is the **first write path** of the Organizze integration (everything else i
 ## Steps (follow exactly, skip none)
 
 ### 1. First-run / auth
-If `~/finance/organizze/.auth` does not exist, **do not** run the script: it's the same `.auth` as `/finance:organizze` (read+write scope — no new credential needed). **Read `${CLAUDE_PLUGIN_ROOT}/resources/organizze-onboarding.md` and follow §Step 2 (token setup)** to create `.auth`. Stop here until `.auth` exists.
+If `~/finance/organizze/.auth` does not exist, **do not** run the script: it's the same `.auth` as `/herow-finance:organizze` (read+write scope — no new credential needed). **Read `${CLAUDE_PLUGIN_ROOT}/resources/organizze-onboarding.md` and follow §Step 2 (token setup)** to create `.auth`. Stop here until `.auth` exists.
 
 ### 2. Intent parse (natural language → flags)
 From `$ARGUMENTS`, extract whatever you can: description, amount, sign (spent/paid → `--despesa`; received/earned → `--receita`), relative date (yesterday/today/"day X"), target (on card X → `--cartao`; transfer from A to B → `--transferencia --de A --para B`), installments ("3x" → `--parcelas 3`), recurrence ("every month"/"fixed" → `--recorrente`). Whatever **cannot** be confidently inferred becomes a question in step 3 — never guess the amount, account, or sign.
@@ -52,7 +52,7 @@ Read `info|resolve|...`, `info|category|...`, `info|dry-run|...`, and `info|payl
 
 ### Step 4.5 — Invalidate compute cache
 
-After a successful write, delete the cached metrics so the next `/finance:organizze` run recomputes fresh values:
+After a successful write, delete the cached metrics so the next `/herow-finance:organizze` run recomputes fresh values:
 
 ```bash
 rm -f ~/finance/organizze/metrics.json

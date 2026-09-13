@@ -3,7 +3,7 @@
 
 Stores structured data about the user so that financial analyses are
 personalized: age, occupation, income, family, housing, city,
-risk tolerance, habits. Each time `/finance:organizze` runs, still-empty
+risk tolerance, habits. Each time `/herow-finance:organizze` runs, still-empty
 required fields are asked via AskUserQuestion in the main chat.
 
 File: ~/finance/profile.md (readable markdown, `key: value` format per line).
@@ -75,7 +75,7 @@ def _save(data: dict[str, str]) -> None:
         "# User profile",
         "# Manually editable. One field per line, format `key: value`. "
         "Do not use multiple lines.",
-        "# Empty fields will be re-asked in /finance:organizze. To silence "
+        "# Empty fields will be re-asked in /herow-finance:organizze. To silence "
         "for 7 days, run `profile.py mark-skip`.",
         "",
     ]

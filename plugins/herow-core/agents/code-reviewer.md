@@ -99,12 +99,16 @@ Before reviewing, establish context:
 
 ## Output format
 
-Group findings by severity, descending. For each finding:
+Group findings by severity, descending. Lead every finding with this header line:
 
-```
-[SEVERITY] file.ts:42 — Short title
+```text
+<emoji> <Level> confidence=<NN> <path>:<line> — Short title
 Problem: what is wrong and why it matters.
 Fix: concrete suggestion or code snippet.
 ```
+
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.
 
 After all findings, provide a one-paragraph summary: overall assessment, most important issue, and a go/no-go recommendation.

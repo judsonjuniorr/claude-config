@@ -1,13 +1,13 @@
 ---
-description: (herow) Model-tiering & token-budget policy for the /seo:* suite — cheap tiers for parsing/diagnostics, Opus only for the final judgment call. Policy-only, gated on human approval.
+description: (herow) Model-tiering & token-budget policy for the /herow-seo:* suite — cheap tiers for parsing/diagnostics, Opus only for the final judgment call. Policy-only, gated on human approval.
 allowed-tools: Read, Write, Edit, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: low
 ---
 
-# /seo:cost-guard — model-tiering & token-budget policy
+# /herow-seo:cost-guard — model-tiering & token-budget policy
 
-> **Policy-only:** writes/updates a tiering policy the other /seo:* commands read; it never analyzes GSC and **never publishes site content.**
+> **Policy-only:** writes/updates a tiering policy the other /herow-seo:* commands read; it never analyzes GSC and **never publishes site content.**
 > **Human gate:** never silently changes behavior. Any policy edit is presented for your approval before it's written.
 > **No runaway cost:** never run the whole suite on the most expensive tier — Opus is reserved for the final decision call.
 
@@ -15,7 +15,7 @@ Skeptic correction (Ok_Priority_5044): running *everything* through Claude makes
 
 ## Relationship to the data commands
 
-The data commands (`/seo:content-sprint`, `/seo:launch`, etc.) accept a `gsc-export-path` — a GSC **Performance** export or **Bulk Export** — and cost-guard sets the model tier they use to *parse* it. The `argument-hint` is kept standard for suite consistency, but this command does not read GSC data itself; it only reads and writes the policy those commands consult.
+The data commands (`/herow-seo:content-sprint`, `/herow-seo:launch`, etc.) accept a `gsc-export-path` — a GSC **Performance** export or **Bulk Export** — and cost-guard sets the model tier they use to *parse* it. The `argument-hint` is kept standard for suite consistency, but this command does not read GSC data itself; it only reads and writes the policy those commands consult.
 
 ## Tiering policy (work-type → tier)
 
@@ -23,7 +23,7 @@ The data commands (`/seo:content-sprint`, `/seo:launch`, etc.) accept a `gsc-exp
 - **Diagnostics** (cannibalization, indexability, gap reads) → Haiku / Sonnet.
 - **Content drafting** → Sonnet.
 - **Final strategic decisions** (which cluster, which fix list) → Opus only.
-- **Per-run token budget** — a cap the heavier commands (e.g. `/seo:launch`) check before fanning out; over budget → stop and ask.
+- **Per-run token budget** — a cap the heavier commands (e.g. `/herow-seo:launch`) check before fanning out; over budget → stop and ask.
 
 ## Flow
 
@@ -34,7 +34,7 @@ The data commands (`/seo:content-sprint`, `/seo:launch`, etc.) accept a `gsc-exp
 
 ## Output artifact
 
-The persisted tiering + token-budget policy (`cost-policy.md`) that the other /seo:* commands read before choosing a model or fanning out work. Nothing else is produced.
+The persisted tiering + token-budget policy (`cost-policy.md`) that the other /herow-seo:* commands read before choosing a model or fanning out work. Nothing else is produced.
 
 ## Guardrails
 

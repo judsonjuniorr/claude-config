@@ -1,6 +1,6 @@
 ---
 name: pr-test-analyzer
-description: Review pull request test coverage quality and completeness, with emphasis on behavioral coverage and real bug prevention.
+description: Judges whether a change's tests would actually catch it breaking — which behaviors are untested, which tests assert implementation detail instead of behavior, and which would still pass if the change were reverted. Use on a PR or local diff before it lands. Returns the specific uncovered behaviors with a suggested test per gap. It reads coverage as evidence rather than a target, so it does not chase a percentage, and it does not write the tests — use /herow-dev:code:generate-tests for that.
 effort: low
 tools: Read, Grep, Glob, Bash
 ---
@@ -39,7 +39,17 @@ Rate gaps by impact:
 
 ## Output Format
 
-1. coverage summary
-2. critical gaps
-3. improvement suggestions
-4. positive observations
+Open with a one-paragraph coverage summary, then one record per gap:
+
+```text
+<emoji> <Level> confidence=<NN> path/to/file.py:42 — untested behavior
+Issue: which behavior has no test, or which test asserts implementation detail.
+Impact: what would ship broken if this regressed.
+Fix: the test to add, named and described.
+```
+
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this gap is real;
+`/herow-dev:code:review` filters on it and re-ranks from the level. Cite the **source** file and
+line whose behavior is uncovered, not the test file. Close with any positive observations worth
+keeping.
