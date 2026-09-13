@@ -448,7 +448,9 @@ def summarize(
 
     # === Cash flow per account — daily projection + critical days ===
     # Use cashflow_snapshot (raw) when provided to preserve account ID joins
-    cf_block = render_cashflow_block(cashflow_snapshot if cashflow_snapshot is not None else snapshot)
+    cf_block = render_cashflow_block(
+        cashflow_snapshot if cashflow_snapshot is not None else snapshot
+    )
     if cf_block:
         out.append(cf_block)
         out.append("")
@@ -501,11 +503,11 @@ def summarize(
     out.append("")
     out.append(
         "Top 3 effective spending categories of the month (excluding invoice "
-        "payments). Research for cheaper alternatives has been PRE-COLLECTED "
-        "by parallel `search-specialist` agents and is injected in the "
-        "'Market research (PRE-COLLECTED)' block above. **Consume that block** "
-        "in the 'Market alternatives' section. DO NOT invoke `WebSearch`. "
-        "If a category is missing from the block, note '(data unavailable)'."
+        "payments). Research for cheaper alternatives is pre-collected by "
+        "parallel `search-specialist` agents and injected in the "
+        "'Market research (PRE-COLLECTED)' block above; cite it in the "
+        "'Market alternatives' section. If a category is missing from the "
+        "block, note '(data unavailable)'."
     )
     out.append("")
     targets = top_categories_effective(snapshot, limit=3)
@@ -718,7 +720,7 @@ def load_research_block(research_dir: pathlib.Path | None) -> str:
         return ""
     today = dt.date.today()
     out: list[str] = []
-    out.append("# Market research (PRE-COLLECTED — DO NOT REDO WebSearch)")
+    out.append("# Market research (PRE-COLLECTED)")
     out.append("")
     out.append(
         "Each category below was researched by a dedicated "
@@ -806,18 +808,28 @@ def _render_metrics_block(metrics: dict) -> str:
         "Use them directly — do NOT recompute from the raw transactions."
     )
     out.append("")
-    out.append(f"- Monthly expenses: **{cents_to_brl(metrics.get('monthly_expenses_cents'))}**")
-    out.append(f"- Monthly income: **{cents_to_brl(metrics.get('monthly_income_cents'))}**")
-    out.append(f"- Liquid balance: **{cents_to_brl(metrics.get('liquid_balance_cents'))}**")
+    out.append(
+        f"- Monthly expenses: **{cents_to_brl(metrics.get('monthly_expenses_cents'))}**"
+    )
+    out.append(
+        f"- Monthly income: **{cents_to_brl(metrics.get('monthly_income_cents'))}**"
+    )
+    out.append(
+        f"- Liquid balance: **{cents_to_brl(metrics.get('liquid_balance_cents'))}**"
+    )
     burn = metrics.get("burn_cents") or 0
     burn_sign = "over" if burn > 0 else "under"
-    out.append(f"- Burn (expenses − income): **{cents_to_brl(burn)}** ({burn_sign}spending)")
+    out.append(
+        f"- Burn (expenses − income): **{cents_to_brl(burn)}** ({burn_sign}spending)"
+    )
     runway = metrics.get("runway_days")
     if runway is not None:
         out.append(f"- Runway: **{runway} days** at current burn rate")
     else:
         out.append("- Runway: N/A (income ≥ expenses)")
-    out.append(f"  Formula: burn = expenses − income = {cents_to_brl(metrics.get('monthly_expenses_cents'))} − {cents_to_brl(metrics.get('monthly_income_cents'))}")
+    out.append(
+        f"  Formula: burn = expenses − income = {cents_to_brl(metrics.get('monthly_expenses_cents'))} − {cents_to_brl(metrics.get('monthly_income_cents'))}"
+    )
     out.append("")
 
     alerts = (metrics.get("meta") or {}).get("alerts") or []
@@ -893,119 +905,84 @@ def render_prompt(
 
 ---
 
-# Mandatory guidelines
+# Guidance specific to this snapshot
 
-1. **Budget targets by category**: Organizze already defines a budget per category (section "Current month budget"). Your analysis MUST prioritize hitting those targets — highlight categories above 80% of budget as risk and categories well below as reallocation opportunities.
+Your standing rules and the report's section order are in the system prompt above. These four add
+only what depends on the data in *this* snapshot.
 
-2. **User objectives** (section above, if any): evaluate ad-hoc whether there is room in the month for each objective from the **current balance + tx_future**, without assuming a fixed monthly contribution. For each `active` objective state clearly: "viable this month: YES/NO/PARTIAL — R$ X possible", with numerical justification.
+1. **Budget targets by category**: when the `## Current month budget (targets vs. actuals)` section
+   is present it carries Organizze's own per-category budget — prioritize hitting those targets,
+   flagging categories above 80% of budget as risk and ones well below as reallocation
+   opportunities. That section is omitted when `metrics.json` supplied the pre-computed totals
+   instead; in that case say `(no per-category budget in this snapshot)` in "Category goals —
+   status" and rank categories by the month-over-month change instead of against a target.
 
-3. **Objective vs. imminent debit conflict**: if any critical day appears in any main account (section "Cash flow per account"), **pause objectives with priority=negociavel this cycle** and name them explicitly in "Paused objectives". Objectives with priority=inegociavel must be maintained by cutting spending in other categories.
+2. **User goals**: evaluate ad-hoc whether the month has room for each goal, from the current
+   balance plus confirmed future entries, without assuming a fixed monthly contribution. For each
+   `active` goal state "viable this month: YES/NO/PARTIAL — R$ X possible" with numeric justification.
 
-4. **Inter-account transfers (STRICT GUARDRAIL)**: accounts that EXIST in this snapshot: {accounts_hint}. Every transfer suggestion must name **two of these accounts** and cover a specific debit with a date. If the user's objective cites a target account NOT in the list above, do NOT invent: say "reserve R$ X for Y" without naming an account.
+3. **Goal vs. imminent debit conflict**: if a critical day appears in any main account in
+   `## Cash flow per account — critical days (next 90 days)`, pause goals with
+   `priority=negociavel` this cycle and name them in "Goals paused this cycle". Goals with
+   `priority=inegociavel` must be maintained by cutting spending in other categories.
 
-5. **Day-by-day source balance (CRITICAL RULE)**: when suggesting a transfer from account A to account B on date D, **account A must have balance ≥ suggested amount on D AND remain ≥ 0 until the end of the projected horizon** (not just D — needs to cover D, D+1, …, until the last confirmed debit of account A in the cycle). Use the "Cash flow per account" section to validate — if day D appears with `❌ no main account with sufficient slack`, or the `accounts with slack on that day` list does not include A with sufficient amount, or A has a confirmed future debit (financing, invoice, automatic debit) between D and the end of the horizon that overdraws the post-transfer balance, **DO NOT suggest that transfer**. Instead:
-   (a) delay the transfer to the first date on which A has sustainable slack (e.g.: after a confirmed salary/income entry AND before the next large debit);
-   (b) propose renegotiating/deferring the destination account's debit to after the next income entry;
-   (c) suggest reordering the month's payments to fit the cash flow.
-   Always cite **the source balance on the date AND the projected source balance at end of cycle** ("<source account> on DD/MM: R$ X · end of cycle: R$ Y") as evidence. Mentally redoing the day-by-day math is MANDATORY — do not just rely on "slack on that day" from the snapshot, because the `accounts with slack on that day` column shows the balance ON THE DATE, without subtracting confirmed future debits.
-
-5b. **Existing recurring transfer is the default — DO NOT duplicate** (CRITICAL RULE). Before suggesting ANY inter-account transfer, check the "Confirmed future entries" and "Detected recurring transactions" sections to identify already-scheduled recurring transfers (e.g.: monthly allocation between salary account and operating account, or recurring contributions to savings pots). If the recurring transfer already covers the destination account balance in the cycle (destination projected ≥ 0 without additional contribution), **do not recommend extra transfers** — they are redundant and drain the source account which is counting on that cash for its own debits. Cite explicitly: "recurring transfer of R$ X on <date> already covers <destination account> — no additional contribution needed". Critical days on the destination account may be false positives when `cashflow_by_account` does not match the transfer credit with the debit on the other side — always validate by redoing the destination day-by-day WITH the internal transfer credits on the same day they leave the source.
-
-6. **Due date renegotiation (use when cash flow does not close)**: if a recurring debit consistently falls on a date with no cash (e.g.: subscription on day 5 when salary arrives on day 6), recommend **changing the due date** or **changing the payment method** (bank debit → card, prepay bill, etc.). Include in format:
-   `[RENEGOTIATE · <creditor>] Move due date from <current date> to <suggested date> — reason: cash on <current date> is R$ X, insufficient for debit of R$ Y`.
-
-7. **Tone**: no fluff, no hedging. Numbers first, recommendation after.
-
-8. **Personalization via profile (CRITICAL)**: the "User profile" block at the top has age, income, dependents, housing, city, risk tolerance. **Every recommendation cites at least one profile field**. Ex.: "for someone with `2 small children` in `São Paulo, SP` financing a home (`R$ 2,500/month`), suggested minimum reserve = 6 months of expenses (~R$ X)". If any critical field is `(no data)`, emit a `[QUESTION]` in the final block.
-
-9. **Merchant-level cuts (3-5 mandatory)**: using the "Top 20 transactions of the current month" table, identify 3-5 specific transactions to cut/substitute. Each item in format `[CUT] <merchant/description> · R$ X/month → alternative Y · savings R$ Z/month · R$ Z*12/year`. Use the real `description` from the snapshot, do not invent merchant names.
-
-10. **Market research — CONSUME, DO NOT REDO.** The command that invoked you dispatched `search-specialist` agents in parallel (1 per target category) BEFORE this analysis; the results are in the "Market research (PRE-COLLECTED)" block above — if that block exists, **use it** in the 'Market alternatives' section (cite URLs and prices directly from it, do not invoke WebSearch). **Use WebSearch only as fallback** when that block is absent OR does not cover a specific target category — in that case run at most 1 extra search per discovered category. No useful source = `(no alternative found)`.
-
-11. **Prioritized payoff**: list installments and debts detectable in the snapshot ordered by chosen strategy: **avalanche** (highest interest/payment first — rational, saves more) or **snowball** (lowest balance first — psychological, motivating). Choose by `tolerancia_risco` from profile (`conservador`/`moderado` → snowball; `agressivo` → avalanche). Respect user memory (do not propose paying off items marked "non-negotiable" or "essential").
-
-12. **Open questions (final block)**: at the end of the report, list **up to 3 concrete questions** that would improve the next analysis, in the exact format `[QUESTION] <question text>` (one per line, no bullets or hyphens in front). Examples: "[QUESTION] Do you have any debt outside Organizze (financing, family loan)?", "[QUESTION] Is subscription X of R$ Y essential?". The command that invoked you will capture these questions and bring them to the user. No questions? Write only: `(no open questions)`.
+4. **Inter-account transfers (STRICT GUARDRAIL)**: the accounts that exist in this snapshot are
+   {accounts_hint}. Every transfer suggestion must name **two of these** and cover a specific dated
+   debit. If a goal cites a target account not in that list, do not invent one — say "reserve R$ X
+   for Y" without naming an account.
 
 ---
 
-# Task — produce EXACTLY this format
+# Task
 
-**TL;DR** (3 lines): current situation + nearest risk + biggest opportunity.
+Produce the report in the section order given by *Standard output* in the system prompt above.
+The templates below pin the exact shape of the marked lines, because the invoking command parses
+them into its own panels — match them character for character.
 
-**Key numbers** (markdown table): current balance, 7/30/90d projection, % committed to recurring,
-active installments (total remaining), overdue (expense/income), largest category this month, nearest invoice, number of critical days per account.
-
-**Overdue — immediate action** (≤3 bullets): for each relevant overdue transaction, indicate
-"pay/collect by <date>".
-
-**Category targets — status** (≤5 bullets): categories at risk (>80% spent) and categories with relevant slack. Use numbers from the "Current month budget" section.
-
-**User objectives — viability this month** (1 bullet per active objective): short name · viable YES/NO/PARTIAL · amount possible this month · justification in 1 line. If no active objectives, write "(no active objectives)".
-
-**Transfer and savings plan** (≤5 bullets): for each relevant critical day OR viable objective, format:
+**Transfer and savings plan** — one block per relevant critical day or viable goal:
 ```
 [CRITICAL · on <date>] Transfer R$ X from "<source account>" to "<destination account>"
   Source balance on <date>: R$ Y  ← mandatory, must be ≥ X
   Reason: <specific debit on <date> leaves destination at <amount>>
 ```
-or
 ```
 [RENEGOTIATE · <creditor>] Move due date/payment method from <current date> to <suggested date>
   Cash on <current date>: R$ Y (insufficient for debit R$ Z)
   Target: fit debit on a date with slack ≥ R$ Z
 ```
-or
 ```
-[SAVINGS · this month] Reserve R$ X for "<destination account if it exists>" OR "<objective Y>" if account not registered
+[SAVINGS · this month] Reserve R$ X for "<destination account if it exists>" OR "<goal Y>" if account not registered
   Source: <account with slack or monthly surplus>
 ```
-**Rules**: (a) only use accounts from the existing list; (b) never suggest transfer from account A on date D if the "Cash flow per account" section indicates A has no slack on D; (c) when no account has slack on the critical day, prefer `[RENEGOTIATE]` over `[CRITICAL]`. If no clear action, write "(no transfer actions needed)".
+When no account has slack on the critical day, prefer `[RENEGOTIATE]` over `[CRITICAL]`. Never
+create a new account. If no action is warranted, write `(no transfer actions needed)`.
 
-**Paused objectives this cycle** (≤3 bullets, omit if empty): objective name + reason (critical day on <date> or category target at risk).
-
-**Installments — actionable view** (≤5 bullets): highlight those that are "almost done" and those "long way to go". Do not suggest renegotiating installments that user memory explicitly excludes.
-
-**Specific cuts suggested** (3-5 items, format `[CUT]`): using the "Top 20 transactions of the current month" and "Detected recurring transactions" tables, identify cuttable or substitutable spending. Exact format:
+**Specific cuts suggested**:
 ```
 [CUT] <description/merchant from snapshot> · R$ X/month
   Alternative: <concrete substitute>
   Savings: R$ Z/month · R$ Z*12/year
   Justification: <1 line citing profile or memory>
 ```
-If nothing to cut (profile already lean), write `(no cuts recommended — spending already aligned with profile)` and explain why in 1 line.
+Nothing to cut (profile already lean) → `(no cuts recommended — spending aligned with profile)`
+plus a 1-line reason.
 
-**Prioritized payoff** (ordered list, 1 line per item): for each installment/debt detectable in the snapshot, order by chosen strategy (avalanche or snowball) and cite the first line justifying the choice by the `tolerancia_risco` from the profile. Format:
+**Prioritized payoff**:
 ```
 Strategy: avalanche|snowball — chosen by profile tolerance `<value>`.
 1. <installment/debt description> · R$ X remaining · <N installments left> · priority <Y>
-2. ...
 ```
-If no eligible debts (zero active installments), write `(no eligible debts for accelerated payoff)`.
+No eligible debts → `(no eligible debts for accelerated payoff)`.
 
-**Market alternatives** (1 block per `TARGET-WEBSEARCH` category): for each of the top 3 categories, show the WebSearch result. Format:
+**Market alternatives** — one block per `TARGET-WEBSEARCH` category, drawn from the pre-collected
+research block:
 ```
 ### <Category>: <cheapest option found> · ~R$ X/month
   Source: <URL>
   Potential savings vs. current: R$ Z/month
   Note: <caveat if applicable, e.g.: 'price varies by neighborhood'>
 ```
-If WebSearch returned nothing useful, write `(no alternative found for <category>)`.
-
-**3 prioritized recommendations** in format:
-```
-[HIGH/MEDIUM IMPACT · LOW/MEDIUM EFFORT] <short title>
-  Savings/gain: <monthly · annual amount>
-  Evidence: <specific transactions/categories from the data above>
-  Action: <concrete step>
-  Why for you: <reference to profile — age, income, dependents, housing, etc.>
-```
-Never propose something that contradicts user memory or creates a new account.
-
-**Next verifiable steps** (≤3 bullets).
-
-**Open questions** (up to 3, exact format `[QUESTION] <text>` — one per line, no hyphen/bullet): if any critical personal data is missing from the profile OR if there is ambiguity about a specific expense/debt, ask here. The command that invoked you will bring these questions to the user and record the answers for the next analysis. No questions → write `(no open questions)`.
-
-End with the disclaimer: "This is not licensed financial advice."
+A category the research block does not cover → `(data unavailable)`.
 """
     return prompt, metrics_loaded
 
@@ -1086,7 +1063,9 @@ def main() -> int:
         )
         fw = ""
     research_dir = pathlib.Path(args.research_dir) if args.research_dir else None
-    prompt, metrics_loaded = render_prompt(snap_raw, snap_san, fw, research_dir=research_dir)
+    prompt, metrics_loaded = render_prompt(
+        snap_raw, snap_san, fw, research_dir=research_dir
+    )
     if not metrics_loaded:
         print("warn|metrics-missing|budget fallback active", file=sys.stderr)
 

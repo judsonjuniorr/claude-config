@@ -245,7 +245,9 @@ If `--history-days` in Step 3 was less than 180, warn: "short history, low confi
 
 Print in chat, in this order:
 
-1. The subagent report content. Expected structure (15 sections):
+1. The subagent report content. Expected structure (17 sections — the canonical order is
+   *Standard output* in `${CLAUDE_PLUGIN_ROOT}/agents/financial-analyst.md`):
+   - **Spending velocity alerts** (`⚠️ [ALERT]` lines; omitted when `metrics.json` has none)
    - TL;DR (cites ≥1 profile field)
    - Key numbers
    - Overdue items — immediate action
@@ -254,12 +256,13 @@ Print in chat, in this order:
    - **Transfer and savings plan** (highlight visually — this is the heart of the analysis)
    - **Goals paused this cycle** (if any)
    - Installment plans — actionable view
-   - **Specific cuts suggested** (3-5 `[CUT]` merchant-level)
+   - **Specific cuts suggested** (`[CUT]` merchant-level)
    - **Prioritized payoff** (avalanche/snowball + ordered list)
-   - **Market alternatives** (3 blocks with URL+price from WebSearch research)
-   - 3 prioritized recommendations (each with "Why for you" referencing the profile)
+   - **Market alternatives** (one block per target category, URL+price from the pre-collected research)
+   - Prioritized recommendations (each with "Why for you" referencing the profile)
    - Verifiable next steps
    - **Open questions** (lines `[QUESTION]` captured in Step 6.6)
+   - **[NEXT BEST ACTION]** (single highest-impact action for today)
    - Disclaimer
 2. Final line:
    ```
@@ -354,7 +357,7 @@ If **anything** in 9d fails (skill load, HTML write, `Artifact` tool error), deg
 - Negative balance / negative burn → format with the sign, never `NaN`.
 - Long category names → truncate with a `title=` tooltip, no layout break.
 
-**Report markers:** parse `[CUT]` / `[QUESTION]` / `[MEDICAL_EXPENSE]` from `$REPORT` into their panels; never leak the raw marker text into the UI.
+**Report markers:** parse `[CUT]`, `[QUESTION]`, `[ALERT]`, `[NEXT BEST ACTION]`, `[CRITICAL]`, `[RENEGOTIATE]` and `[SAVINGS]` from `$REPORT` into their panels; never leak the raw marker text into the UI. **Not** `[MEDICAL_EXPENSE]` — that is the sanitizer's redaction token for medical descriptions on the way *in* (`scripts/organizze/sanitize.py`, Step 3.1), not something the report emits. Surfacing it in a panel would undo the redaction.
 
 **Print / PDF (`@media print`):** the button calls `window.print()`; expand all collapsibles (full report visible), hide interactive controls (tabs become stacked sections), force light theme, `page-break-inside:avoid` on cards/tables, and print a header/footer with the snapshot date + "gerado em"/"generated on".
 
