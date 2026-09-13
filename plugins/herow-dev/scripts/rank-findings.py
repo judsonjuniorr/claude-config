@@ -213,9 +213,7 @@ def count_line(findings: list[dict], has_verdicts: bool) -> str:
     tally = [0] * len(LEVELS)
     for finding in findings:
         tally[finding["level"]] += 1
-    head = "  ".join(
-        "%s %d" % (LEVELS[i][0], tally[i]) for i in range(len(LEVELS))
-    )
+    head = "  ".join("%s %d" % (LEVELS[i][0], tally[i]) for i in range(len(LEVELS)))
 
     terms = []
     memory = sum(1 for f in findings if f["memory"])
@@ -299,11 +297,11 @@ def main() -> int:
         print(
             json.dumps(
                 {
-                    "findings": [
-                        dict(f, title_line=title_line(f)) for f in findings
-                    ],
+                    "findings": [dict(f, title_line=title_line(f)) for f in findings],
                     "count_line": line,
-                    "count_position": "last" if args.mode == "local" else "after-decision",
+                    "count_position": "last"
+                    if args.mode == "local"
+                    else "after-decision",
                     "dropped": {"duplicate": dup_dropped, "cutoff": cut_dropped},
                 },
                 ensure_ascii=False,

@@ -1,11 +1,11 @@
 ---
-description: (herow) Heavy end-to-end orchestrator — bootstrap a NEW project through the whole corrected playbook (strategy → indexation gate → draft → GEO schema → audit) with cost + human gates between every stage. Most expensive command; prefer the individual /seo:* commands unless you are starting from scratch.
+description: (herow) Heavy end-to-end orchestrator — bootstrap a NEW project through the whole corrected playbook (strategy → indexation gate → draft → GEO schema → audit) with cost + human gates between every stage. Most expensive command; prefer the individual /herow-seo:* commands unless you are starting from scratch.
 allowed-tools: Read, Write, Edit, Bash, WebFetch, WebSearch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:launch — full-playbook bootstrap orchestrator
+# /herow-seo:launch — full-playbook bootstrap orchestrator
 
 > **Requires:** a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration. With no data, this command prints the 3-step export guide and stops.
 > **Human gate:** never auto-publishes. Stops at a gate between every major stage and ends by presenting all stage artifacts for your approval.
@@ -14,9 +14,9 @@ effort: medium
 The heavy global orchestrator for **bootstrapping a brand-new project** through the corrected Agensi playbook in one sequenced run: find clusters, check the site is even indexable before pouring on content, draft the top approved cluster with information gain, emit GEO schema, and produce a weekly audit baseline — with a cost gate and a human gate between stages.
 
 > [!WARNING]
-> **This is the heaviest, most token-expensive command in the suite.** It runs three agents back-to-back over your full GSC export and produces multiple artifacts in one pass. For day-to-day work, **run the individual commands instead** — the content-sprint stage to write one cluster, the indexation-check / weekly-audit stages to diagnose, the GEO stage for schema. Reach for `/seo:launch` **only** when bootstrapping a new project end-to-end and you accept the cost. It opens by asking you to confirm.
+> **This is the heaviest, most token-expensive command in the suite.** It runs three agents back-to-back over your full GSC export and produces multiple artifacts in one pass. For day-to-day work, **run the individual commands instead** — the content-sprint stage to write one cluster, the indexation-check / weekly-audit stages to diagnose, the GEO stage for schema. Reach for `/herow-seo:launch` **only** when bootstrapping a new project end-to-end and you accept the cost. It opens by asking you to confirm.
 
-**This command does NOT invoke any other slash-command.** It is a single orchestrator that drives the **three agents inline, in sequence**, via the `Agent` tool. References below to "the content-sprint stage", "the indexation-check stage", "the GEO stage", and "the weekly-audit stage" are **descriptive labels for the conceptual `/seo:*` steps only** — the actual work is done by calling `seo-strategist`, `content-engineer`, and `technical-seo-auditor` directly here. A slash-command must never call another slash-command.
+**This command does NOT invoke any other slash-command.** It is a single orchestrator that drives the **three agents inline, in sequence**, via the `Agent` tool. References below to "the content-sprint stage", "the indexation-check stage", "the GEO stage", and "the weekly-audit stage" are **descriptive labels for the conceptual `/herow-seo:*` steps only** — the actual work is done by calling `seo-strategist`, `content-engineer`, and `technical-seo-auditor` directly here. A slash-command must never call another slash-command.
 
 ## GSC data contract (shared across the suite)
 
@@ -58,7 +58,7 @@ The ordered set of stage artifacts, all for review and nothing published: the st
 - **Heaviest / most expensive:** warn up front and confirm via `AskUserQuestion` before running. Recommend the individual commands for everything except a fresh bootstrap.
 - **Cost-guard tiering:** bulk parsing on the cheap tier; only decisions on Opus. Honor it across every stage.
 - **Indexation gate between stages:** if the site can't be indexed, fix that before producing more content — don't pour content onto an unindexable site.
-- **No slash-command-calls-slash-command:** this orchestrator drives the three agents inline via the `Agent` tool; it never invokes another `/seo:*` command. The stage labels are descriptive only.
+- **No slash-command-calls-slash-command:** this orchestrator drives the three agents inline via the `Agent` tool; it never invokes another `/herow-seo:*` command. The stage labels are descriptive only.
 - **toprank optional:** detect-and-delegate per skill; degrade to native tools (WebFetch/WebSearch/Write); never hard-fail on a missing plugin.
 - **No auto-publish & human gates throughout:** every stage boundary and the end is a human gate. Nothing ships without approval.
 - **No vanity metrics:** lead with CTR, indexation coverage, and clicks-at-risk — never impressions alone.

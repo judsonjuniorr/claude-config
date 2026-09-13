@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: low
 ---
 
-# /seo:indexation-check — the indexation gate the skeptics demanded
+# /herow-seo:indexation-check — the indexation gate the skeptics demanded
 
 > **Requires:** a GSC export (Performance / Bulk Export, **or** a Page Indexing / Coverage CSV) **or** the `toprank` plugin's GSC integration. With no data, this command prints the 3-step export guide and stops.
 > **Human gate:** never auto-applies. Ends by presenting the not-indexed list + cause + unblock actions for your approval.

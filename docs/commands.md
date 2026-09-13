@@ -7,7 +7,7 @@ Slash commands for Claude Code. Each command lives in its own subdirectory conta
 
 ## Available
 
-### [`/create-prd`](./create-prd/)
+### [`/create-prd`](../plugins/herow-extras/commands/create-prd.md)
 
 Brainstorm the inputs first, write second: extract every requirement a Product Requirements Document needs through structured questioning, then synthesize the PRD — lean one-pager or comprehensive.
 
@@ -26,9 +26,9 @@ Brainstorm the inputs first, write second: extract every requirement a Product R
 
 **Prerequisites**:
 - None required — the PRD renders in chat; a file is written only on request.
-- Optional: the [`backend-architect`](../agents/backend-architect.md) agent for the high-level technical-considerations section (fills inline if absent).
+- Optional: the [`backend-architect`](../plugins/herow-dev/agents/backend-architect.md) agent for the high-level technical-considerations section (fills inline if absent).
 
-### [`/file-organizer`](./file-organizer/)
+### [`/file-organizer`](../plugins/herow-extras/commands/file-organizer.md)
 
 Analyze a directory, surface duplicates and clutter, propose a tidy structure, and only after explicit approval move/rename files — every destructive action is logged so it can be reversed.
 
@@ -51,7 +51,7 @@ Analyze a directory, surface duplicates and clutter, propose a tidy structure, a
 - POSIX shell with `find`, `du`, `sort`, `awk`, and `md5`/`md5sum`.
 - Refuses to operate on `/`, `$HOME` root, `~/Library`, `~/.config`, `~/.ssh`, or paths with a top-level `.git/` unless the user explicitly insists.
 
-### [`/fix-conflicts`](./fix-conflicts/)
+### [`/fix-conflicts`](../plugins/herow-dev/commands/git/fix-conflicts.md)
 
 Resolves merge conflicts on a PR or branch with every decision justified by the commit history of both sides — not by the raw diff.
 
@@ -74,9 +74,9 @@ Resolves merge conflicts on a PR or branch with every decision justified by the 
 **Prerequisites**:
 - Inside a git repository (the command runs `git fetch origin --prune` itself).
 - For the PR path: `gh` (or `glab`) authenticated against the host.
-- The [`github-ops`](../skills/github-ops/README.md) skill installed — every `gh`/`glab` interaction defers to it.
+- The [`github-ops`](../plugins/herow-core/skills/github-ops/README.md) skill installed — every `gh`/`glab` interaction defers to it.
 
-### [`/graphify-install`](./graphify-install/)
+### [`/graphify-install`](../plugins/herow-extras/commands/graphify-install.md)
 
 End-to-end bootstrap for [graphify](https://github.com/safishamsi/graphify) inside any git repository.
 
@@ -101,7 +101,7 @@ End-to-end bootstrap for [graphify](https://github.com/safishamsi/graphify) insi
 - The `graphify` skill is installed and available to Claude Code.
 - You're inside a git repo (or willing to let the command run `git init`).
 
-### [`/release-notes`](./release-notes/)
+### [`/release-notes`](../plugins/herow-dev/commands/git/release-notes.md)
 
 Generates a user-friendly changelog from the commits since the last tag (or the last 50 commits if no tag exists), rendered inline in the chat.
 
@@ -125,7 +125,7 @@ Generates a user-friendly changelog from the commits since the last tag (or the 
 - Inside a git repository.
 - `jq` available (Python fallback if not).
 
-### [`/validate-ui`](./validate-ui/)
+### [`/validate-ui`](../plugins/herow-dev/commands/react/validate-ui.md)
 
 Audits UI/UX against a **consolidated** ruleset — Vercel's Web Interface Guidelines as the base, plus three `davila7/claude-code-templates` skills (`frontend-design`, `ui-ux-pro-max`, `ui-design-system`) and Context7 docs for the detected lib/framework. **Read-only — never edits files.**
 
@@ -155,7 +155,7 @@ Audits UI/UX against a **consolidated** ruleset — Vercel's Web Interface Guide
 Some commands are grouped under a namespace directory, invoked as **`/<namespace>:<name>`** (Claude Code's path-as-namespace convention). Each suite self-documents in its own README:
 
 - [`finance`](./finance.md) — personal finance: [`/herow-finance:organizze`](./finance.md), `/herow-finance:goal`, `/herow-finance:context`.
-- [`seo/`](./seo/) — SEO/GEO growth suite: 11 `/seo:*` commands (content-sprint, weekly-audit, indexation-check, geo-optimize, catalog-pages, ctr-tune, conversion-track, backlink-outreach, cost-guard, report, launch) + the `seo-strategist` / `content-engineer` / `technical-seo-auditor` agents. Encodes the Agensi SEO+GEO playbook with the skeptic corrections (CTR & conversion over impressions, indexation gate, GEO weighting, backlinks-are-human, information-gain bar, cost tiering); standalone with optional `toprank` delegation; every command ends at a human gate.
+- [`seo/`](../plugins/herow-seo/commands/) — SEO/GEO growth suite: 11 `/herow-seo:*` commands (content-sprint, weekly-audit, indexation-check, geo-optimize, catalog-pages, ctr-tune, conversion-track, backlink-outreach, cost-guard, report, launch) + the `seo-strategist` / `content-engineer` / `technical-seo-auditor` agents. Encodes the Agensi SEO+GEO playbook with the skeptic corrections (CTR & conversion over impressions, indexation gate, GEO weighting, backlinks-are-human, information-gain bar, cost tiering); standalone with optional `toprank` delegation; every command ends at a human gate.
 
 ## Adding a new command
 

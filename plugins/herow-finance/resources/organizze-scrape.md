@@ -1,6 +1,6 @@
 # organizze — web scraping subsystem (Step 3.5)
 
-On-demand resource for `/finance:organizze`. Read and follow after the Step 3 pull, before
+On-demand resource for `/herow-finance:organizze`. Read and follow after the Step 3 pull, before
 Step 4. Scrapes real values to enrich the API snapshot. **If anything fails, degrade
 silently to API-only** (snapshot remains; add the WARN line below at the start of the
 final report) and continue at Step 4. The main command's `**Absolute paths**` apply.

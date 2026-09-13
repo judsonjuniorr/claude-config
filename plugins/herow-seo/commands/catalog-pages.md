@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:catalog-pages — programmatic long-tail catalog pages
+# /herow-seo:catalog-pages — programmatic long-tail catalog pages
 
 > **Requires:** a catalog data source (CSV/JSON of items) + a page template. Optionally a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration for the cannibalization/coverage read. With no GSC data, the uniqueness checks still run; the coverage read is skipped.
 > **Human gate:** never auto-publishes. Ends by presenting the generated pages + the cannibalization/uniqueness report for your approval.

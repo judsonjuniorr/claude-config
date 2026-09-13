@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:weekly-audit — the weekly technical-SEO habit
+# /herow-seo:weekly-audit — the weekly technical-SEO habit
 
 > **Requires:** a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration. With no data, this command prints the 3-step export guide and stops.
 > **Human gate:** never auto-applies fixes. Ends by presenting the ranked fix list for your approval.

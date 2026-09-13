@@ -1,6 +1,6 @@
 ---
 name: seo-strategist
-description: Senior SEO/GEO strategist. Turns GSC exports, crawl data, and AI-referral logs into one prioritized decision list. Analysis and decisions only — never writes content or schema. Use for the "what and why" behind any /seo:* command.
+description: Senior SEO/GEO strategist. Turns GSC exports, crawl data, and AI-referral logs into one prioritized decision list. Analysis and decisions only — never writes content or schema. Use for the "what and why" behind any /herow-seo:* command.
 tools: Read, WebFetch, WebSearch, Bash, Grep, Glob
 effort: high
 ---

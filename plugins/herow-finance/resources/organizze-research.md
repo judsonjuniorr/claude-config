@@ -1,6 +1,6 @@
 # organizze — market research & per-account forecast (Steps 5.5–5.6)
 
-On-demand resource for `/finance:organizze`. Read and follow after Step 5 (base prompt
+On-demand resource for `/herow-finance:organizze`. Read and follow after Step 5 (base prompt
 rendered) and before Step 6 (delegate). Step 5.5 fires parallel market research and renders
 the prompt with `--research-dir`; Step 5.6 appends the per-account forecast block. The
 GLOBAL RULE (ask via `AskUserQuestion`) and the main command's `**Absolute paths**` apply.

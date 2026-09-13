@@ -5,16 +5,16 @@ argument-hint: "[<free text> | init | list | get <key> | set <key> <value> | ski
 effort: low
 ---
 
-# /finance:profile — Personal profile (provider-agnostic)
+# /herow-finance:profile — Personal profile (provider-agnostic)
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`. Data lives in `~/finance/profile.md` (format `key: value`, hand-editable) and is injected into **every analysis** (`/finance:organizze` and future providers) as personal context — to calibrate recommendations by age, income, dependents, housing, city, risk tolerance.
+Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`. Data lives in `~/finance/profile.md` (format `key: value`, hand-editable) and is injected into **every analysis** (`/herow-finance:organizze` and future providers) as personal context — to calibrate recommendations by age, income, dependents, housing, city, risk tolerance.
 
 Absolute path of the script:
 `${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`
 
-When the user invokes `/finance:profile`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
+When the user invokes `/herow-finance:profile`, classify `$ARGUMENTS` and follow the flow. Do not pre-inspect the filesystem.
 
 ---
 
@@ -74,7 +74,7 @@ For monetary values in phrases ("12k", "R$ 12,000", "12 thousand") convert to ce
 
 ## Mode 4 — Interview (init or missing fields)
 
-For each key to ask (all in `init`; only the ones from `missing` when called by `/finance:organizze`), use `AskUserQuestion` with the appropriate format and **always include a "Skip" option**.
+For each key to ask (all in `init`; only the ones from `missing` when called by `/herow-finance:organizze`), use `AskUserQuestion` with the appropriate format and **always include a "Skip" option**.
 
 **Format suggestions by field:**
 
@@ -97,14 +97,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py set <key> "<value>"
 
 If the user skips **all** fields, run `profile.py mark-skip` (silences for 7 days).
 
-At the end, show the updated state with `profile.py get` and say: "Next `/finance:organizze` will take this into account."
+At the end, show the updated state with `profile.py get` and say: "Next `/herow-finance:organizze` will take this into account."
 
 ---
 
 ## Rules
 
-- **Do not call `/finance:organizze`** automatically. This command is CRUD; analysis is separate.
+- **Do not call `/herow-finance:organizze`** automatically. This command is CRUD; analysis is separate.
 - The script runs legacy migration automatically on the first run.
 - Storage is hand-editable (`~/finance/profile.md`).
-- **Per-session limit**: if called by `/finance:organizze` during the interview flow, ask at most **6 fields** per turn to avoid fatigue. The rest will be asked on the next run.
+- **Per-session limit**: if called by `/herow-finance:organizze` during the interview flow, ask at most **6 fields** per turn to avoid fatigue. The rest will be asked on the next run.
 - **Monetary conversion**: user says "12k" → save `1200000`. User says "R$ 1,200.50" → save `120050`. Confirm in 1 line before saving when the value is ambiguous.

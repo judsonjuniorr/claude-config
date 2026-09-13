@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:backlink-outreach — draft + track link outreach (you build the links)
+# /herow-seo:backlink-outreach — draft + track link outreach (you build the links)
 
 > **Requires:** a topic/niche to pursue authority for. Optionally a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration, to find which pages most need authority. With no data, the topic alone is enough — GSC just sharpens targeting.
 > **Human gate:** never sends anything, never auto-publishes. Ends by presenting targets + drafts + tracker for you to send manually.

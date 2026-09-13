@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:content-sprint — question-intent content pipeline
+# /herow-seo:content-sprint — question-intent content pipeline
 
 > **Requires:** a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration. With no data, this command prints the 3-step export guide and stops.
 > **Human gate:** never auto-publishes. Ends by presenting the draft + schema for your approval.

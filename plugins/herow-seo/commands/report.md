@@ -5,13 +5,13 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:report — the consolidated dashboard
+# /herow-seo:report — the consolidated dashboard
 
 > **Requires:** a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration, plus optional AI-referral and conversion exports. With no data, this command prints the 3-step export guide and stops.
 > **Human gate:** never auto-publishes. Ends by presenting the dashboard for your review — it is yours to send, not the command's.
 > **No vanity metrics:** impressions appear only as context beside CTR / indexation / conversion, never as the headline number.
 
-Closes the metrics loop for the corrected Agensi playbook: the single artifact the founder actually shows. Every other `/seo:*` command moves one number — this one tells you whether the loop is working. It reports; it does not chase a chart up and to the right.
+Closes the metrics loop for the corrected Agensi playbook: the single artifact the founder actually shows. Every other `/herow-seo:*` command moves one number — this one tells you whether the loop is working. It reports; it does not chase a chart up and to the right.
 
 ## GSC data contract (shared across the suite)
 

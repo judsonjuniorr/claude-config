@@ -202,7 +202,7 @@ CI Checks: <status summary or "pending" or "none configured">
 
 Next steps:
   - gh pr view <number> --web   → open in browser
-  - /code:review <number>       → review the PR
+  - /herow-dev:code:review <number>       → review the PR
   - gh pr ready <number>        → mark ready for review (you decide when)
 ```
 

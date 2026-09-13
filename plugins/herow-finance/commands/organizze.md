@@ -5,13 +5,13 @@ argument-hint: "[<free text> | --history-days N | --future-days N | --no-analyze
 effort: medium
 ---
 
-# /finance:organizze — Organizze → consolidated analysis
+# /herow-finance:organizze — Organizze → consolidated analysis
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text. Applies to all steps below and to every on-demand resource.
 
 > **Recommended subagent (when installed):** Step 6 delegates analysis to the `financial-analyst` subagent via the `Agent` tool. The agent ships with this plugin (herow-finance); if it is unavailable the step automatically falls back to `general-purpose` — the command continues to work.
 
-When the user invokes `/finance:organizze`, follow these steps **exactly**. Skip none. Do not pre-inspect (do not run `git status`, do not list directories, do not check versions — go straight to the scripts; they are self-contained and handle legacy migration automatically).
+When the user invokes `/herow-finance:organizze`, follow these steps **exactly**. Skip none. Do not pre-inspect (do not run `git status`, do not list directories, do not check versions — go straight to the scripts; they are self-contained and handle legacy migration automatically).
 
 Optional arguments (parse from `$ARGUMENTS`):
 - `--history-days N` (default 180)
@@ -48,11 +48,11 @@ If `$ARGUMENTS` is empty or contains only flags (`--history-days`, `--future-day
 
 If `$ARGUMENTS` contains natural language text, **do not run pull/analyze just to "have context"** — they are expensive (minutes) and exist only for the analysis flow. Classify:
 
-- **Financial goal/target** (amount + deadline + something to buy/contract/pay off/save — "trip", "pay off X", "save R$ Y by Z", "emergency fund"): **redirect to `/finance:goal`** telling the user in 1 line "This looks like a goal — opening `/finance:goal`" and follow that command's instructions passing `$ARGUMENTS` as text.
+- **Financial goal/target** (amount + deadline + something to buy/contract/pay off/save — "trip", "pay off X", "save R$ Y by Z", "emergency fund"): **redirect to `/herow-finance:goal`** telling the user in 1 line "This looks like a goal — opening `/herow-finance:goal`" and follow that command's instructions passing `$ARGUMENTS` as text.
 
-- **Restriction/context** (statements about what **not** to change, prescriptions, non-negotiables — "I can't reduce X", "Y is a medical prescription", "Z is non-negotiable"): **redirect to `/finance:context`** with the same logic.
+- **Restriction/context** (statements about what **not** to change, prescriptions, non-negotiables — "I can't reduce X", "Y is a medical prescription", "Z is non-negotiable"): **redirect to `/herow-finance:context`** with the same logic.
 
-- **Personal profile update** (statements about identity/life — "I'm 32", "I live in SP", "I earn R$ 12k", "I'm married", "I have 2 kids", "I work as a dev"): **redirect to `/finance:profile`** saying "This looks like a profile update — opening `/finance:profile`" and follow that command's instructions passing `$ARGUMENTS`.
+- **Personal profile update** (statements about identity/life — "I'm 32", "I live in SP", "I earn R$ 12k", "I'm married", "I have 2 kids", "I work as a dev"): **redirect to `/herow-finance:profile`** saying "This looks like a profile update — opening `/herow-finance:profile`" and follow that command's instructions passing `$ARGUMENTS`.
 
 - **Analysis request/question** (anything else: "how am I doing", "what should I cut", "will I miss anything?"): continue to Step 1.
 
@@ -166,7 +166,7 @@ Do not invoke `analyze.py` yet — first we need to fire the research (Step 5.5)
 > ```bash
 > for f in memory plans profile; do [ -f ~/finance/$f.md ] || echo "missing: ~/finance/$f.md"; done
 > ```
-> `analyze.py` injects these silently — a missing `memory.md` (restrictions/context) or `plans.md` (goals) is dropped with no warning, and a missing `profile.md` renders as `(no data)`. If any are missing, tell the user in 1 line: "No <memory/plans/profile> on file — this analysis will be less personalized; you can add context via `/finance:context`, goals via `/finance:goal`, profile via `/finance:profile`." Then continue (do not block).
+> `analyze.py` injects these silently — a missing `memory.md` (restrictions/context) or `plans.md` (goals) is dropped with no warning, and a missing `profile.md` renders as `(no data)`. If any are missing, tell the user in 1 line: "No <memory/plans/profile> on file — this analysis will be less personalized; you can add context via `/herow-finance:context`, goals via `/herow-finance:goal`, profile via `/herow-finance:profile`." Then continue (do not block).
 
 ## Steps 5.5 / 5.6 — Market research & per-account forecast
 
@@ -239,7 +239,7 @@ Only run this when the scraping `.session` exists (it does whenever Step 3.5 did
 3. **Manual fallback** — if auto-apply was skipped (no `.session`), declined, or partially failed, tell the user:
    > Apply the remaining budgets manually at https://app.organizze.com.br/orcamento. JSON with the values is at `<path>` for reference.
 
-If `--history-days` in Step 3 was less than 180, warn: "short history, low confidence — I suggest re-running `/finance:organizze` with `--history-days 180` for more robust suggestions".
+If `--history-days` in Step 3 was less than 180, warn: "short history, low confidence — I suggest re-running `/herow-finance:organizze` with `--history-days 180` for more robust suggestions".
 
 ## Step 8 — Present to the user
 
@@ -323,7 +323,7 @@ Financial figures stay in **R$** in both languages. Everything else (labels + `a
 
 ### 9e — Failure is never fatal
 
-If **anything** in 9d fails (skill load, HTML write, `Artifact` tool error), degrade to the Step 8 chat output with **one** WARN line — never fail the whole `/finance:organizze` run because the artifact could not render:
+If **anything** in 9d fails (skill load, HTML write, `Artifact` tool error), degrade to the Step 8 chat output with **one** WARN line — never fail the whole `/herow-finance:organizze` run because the artifact could not render:
 - pt-br: `⚠️ Não consegui gerar o artifact (<motivo>). A análise acima continua válida.`
 - en: `⚠️ Could not generate the artifact (<reason>). The analysis above still stands.`
 
@@ -390,9 +390,9 @@ If the artifact was degraded, add **one** line naming which sections were limite
 
 ## Related commands
 
-- **`/finance:goal`** — CRUD of financial goals (`~/finance/plans.md`).
-- **`/finance:context`** — CRUD of restrictions/context (`~/finance/memory.md`).
-- **`/finance:profile`** — CRUD of the personal profile (`~/finance/profile.md`) — used to personalize recommendations.
+- **`/herow-finance:goal`** — CRUD of financial goals (`~/finance/plans.md`).
+- **`/herow-finance:context`** — CRUD of restrictions/context (`~/finance/memory.md`).
+- **`/herow-finance:profile`** — CRUD of the personal profile (`~/finance/profile.md`) — used to personalize recommendations.
 
 All three are provider-agnostic: any future provider consumes the same storage.
 

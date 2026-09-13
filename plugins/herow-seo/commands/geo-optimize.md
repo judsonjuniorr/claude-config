@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:geo-optimize — generative-engine optimization (AI citability)
+# /herow-seo:geo-optimize — generative-engine optimization (AI citability)
 
 > **Requires:** target page URLs/paths (and optionally a GSC export — Performance CSV / Bulk Export — plus an AI-referral log). With no pages, this command prints what to provide and stops.
 > **Human gate:** never injects into the live site. Ends by presenting the JSON-LD + quick-answers for your approval.

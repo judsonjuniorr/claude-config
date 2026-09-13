@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:conversion-track — does the traffic actually convert?
+# /herow-seo:conversion-track — does the traffic actually convert?
 
 > **Requires:** a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration, **plus** a conversion data source (an analytics/CSV export mapping pages → signups/sales). With no data, this command prints the export guide and stops.
 > **Human gate:** never auto-publishes. Ends by presenting flagged pages + recommended actions for your approval.

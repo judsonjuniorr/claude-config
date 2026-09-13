@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
 ---
 
-# /seo:ctr-tune — CTR-first SERP tuning
+# /herow-seo:ctr-tune — CTR-first SERP tuning
 
 > **Requires:** a GSC export (Performance CSV / Bulk Export) **or** the `toprank` plugin's GSC integration. With no data, this command prints the 3-step export guide and stops.
 > **Human gate:** never auto-publishes. Ends by presenting title/meta variants for your approval.

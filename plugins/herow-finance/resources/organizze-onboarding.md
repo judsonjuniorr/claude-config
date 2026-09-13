@@ -1,6 +1,6 @@
 # organizze — onboarding (first run)
 
-On-demand resource for `/finance:organizze`. Read and follow when triggered from the main
+On-demand resource for `/herow-finance:organizze`. Read and follow when triggered from the main
 command (Step 1 detects `.auth` missing; Steps 2.5/2.7 run after the first pull when their
 conditions hold). The same `**Absolute paths**` and GLOBAL RULE (ask via `AskUserQuestion`)
 from the main command apply here.

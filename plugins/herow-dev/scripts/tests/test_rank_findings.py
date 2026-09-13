@@ -58,10 +58,12 @@ class TestLevelParsing(unittest.TestCase):
 
 class TestEscalate(unittest.TestCase):
     def test_escalate_raises_exactly_one_level(self):
-        for start, expect in (("Low", "Medium"), ("Medium", "High"), ("High", "Critical")):
-            fs, _, _ = prep(
-                [finding(level=start)], [{"id": 1, "verdict": "ESCALATE"}]
-            )
+        for start, expect in (
+            ("Low", "Medium"),
+            ("Medium", "High"),
+            ("High", "Critical"),
+        ):
+            fs, _, _ = prep([finding(level=start)], [{"id": 1, "verdict": "ESCALATE"}])
             self.assertEqual(rf.LEVELS[fs[0]["level"]][1], expect, start)
 
     def test_critical_saturates(self):
@@ -81,7 +83,9 @@ class TestEscalate(unittest.TestCase):
 
 class TestVerdictDegradation(unittest.TestCase):
     def test_missing_verdict_degrades_to_confirm(self):
-        fs, _, has = prep([finding(id=1), finding(id=2, line=99)], [{"id": 1, "verdict": "CONFIRM"}])
+        fs, _, has = prep(
+            [finding(id=1), finding(id=2, line=99)], [{"id": 1, "verdict": "CONFIRM"}]
+        )
         self.assertTrue(has)
         self.assertEqual({f["verdict"] for f in fs}, {"CONFIRM"})
 
@@ -123,15 +127,11 @@ class TestDedupe(unittest.TestCase):
         self.assertEqual((len(fs), dup), (2, 0))
 
     def test_different_class_survives(self):
-        fs, dup, _ = prep(
-            [finding(id=1, title="leak"), finding(id=2, title="typo")]
-        )
+        fs, dup, _ = prep([finding(id=1, title="leak"), finding(id=2, title="typo")])
         self.assertEqual((len(fs), dup), (2, 0))
 
     def test_different_file_survives(self):
-        fs, dup, _ = prep(
-            [finding(id=1, file="a.ts"), finding(id=2, file="b.ts")]
-        )
+        fs, dup, _ = prep([finding(id=1, file="a.ts"), finding(id=2, file="b.ts")])
         self.assertEqual((len(fs), dup), (2, 0))
 
     def test_explicit_class_beats_title(self):
@@ -154,7 +154,10 @@ class TestDedupe(unittest.TestCase):
         self.assertTrue(fs[0]["memory"], "the 🧠 lane must not be lost to dedupe")
 
     def test_order_independence(self):
-        a = [finding(id=1, confidence=70, title="x"), finding(id=2, confidence=95, title="x")]
+        a = [
+            finding(id=1, confidence=70, title="x"),
+            finding(id=2, confidence=95, title="x"),
+        ]
         fs1, _, _ = prep(a)
         fs2, _, _ = prep(list(reversed(a)))
         self.assertEqual(fs1[0]["confidence"], fs2[0]["confidence"])
@@ -163,7 +166,10 @@ class TestDedupe(unittest.TestCase):
 class TestCutoff(unittest.TestCase):
     def test_below_cutoff_dropped(self):
         fs, _, _ = prep(
-            [finding(id=1, confidence=95, title="a"), finding(id=2, confidence=60, title="b")],
+            [
+                finding(id=1, confidence=95, title="a"),
+                finding(id=2, confidence=60, title="b"),
+            ],
             cutoff=80,
         )
         self.assertEqual([f["confidence"] for f in fs], [95])
@@ -218,9 +224,7 @@ class TestTitleLine(unittest.TestCase):
             [finding(level="High", title="Leak", memory=True)],
             [{"id": 1, "verdict": "ESCALATE", "note": "worse than stated"}],
         )
-        self.assertEqual(
-            rf.title_line(fs[0]), "🔴 Critical · 🧠 · ⏫ ESCALATE — Leak"
-        )
+        self.assertEqual(rf.title_line(fs[0]), "🔴 Critical · 🧠 · ⏫ ESCALATE — Leak")
 
 
 class TestSorting(unittest.TestCase):
