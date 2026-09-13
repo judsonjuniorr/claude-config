@@ -2,6 +2,79 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.2.0] - 2026-09-13
+
+### Added
+- **`/herow-dev:code:review` now has a real findings contract, and the bookkeeping runs in code
+  instead of by hand.** Every dispatched reviewer leads each finding with
+  `<emoji> <Level> confidence=<NN> <path>:<line> — <title>`, using the same four levels the command
+  already ranks on. A new `rank-findings.py` then does the deduping, cutoff filtering, ESCALATE
+  re-ranking and count-line rendering — all of it deterministic, so identical input gives identical
+  output. Before this, the command specified a confidence cutoff that no reviewer supplied a number
+  for, and reviewers answered in `CRITICAL`/`HIGH`/`MEDIUM` while the command ranked in
+  🔴/🟠/🟡/🟢 with nothing mapping between them. Picking a finding's severity is still a judgment
+  call and stays with the model.
+- **CI now catches a hook that points at a deleted script.** `hooks.json` was only ever
+  syntax-checked, so removing a hook script while leaving it registered passed CI green and then
+  failed on every matching tool call. Python files under `plugins/` are syntax-checked too, and the
+  shell check now covers `herow-core/scripts/setup/` and `herow-dev/scripts/`.
+
+### Changed
+- **The always-on rules no longer contradict each other or repeat what the harness already does.**
+  "If something is unclear, stop. Ask." was overridden by the newer *Judgment and craft* rule
+  ("decide, ship it, offer a swap menu") but never removed, which produced clarifying questions on
+  exactly the low-blast work the other rule says to just get on with. The finish-the-task rule is
+  now the one fact you can't infer — that a `Stop` hook bounces unfinished turns — and the
+  plan-announcement template is gone. Terse "caveman" output is untouched.
+- **Progress updates on long work are allowed again.** The style rules told Claude to skip
+  narration and never explain a tool call. That was tuned against models that over-narrated;
+  current ones under-narrate, and the rule read as "stay silent through a long tool-heavy stretch".
+- **The `financial-analyst` prompt now lives in one place.** Its rules and report structure existed
+  in four copies — the agent file, `analyze.py`'s guidelines, a second full output spec inside
+  `analyze.py`, and `docs/financial-analyst.md` — which had drifted apart. The agent file is now the
+  single source; `analyze.py` contributes only what depends on the snapshot plus the exact templates
+  the command parses, and the docs page points at the agent file instead of mirroring it.
+- **Report sections are as long as the data warrants.** Fixed caps (`≤3 bullets`, `≤5 bullets`,
+  `max 3` questions, `3-5` cuts) were tuned against an older model's verbosity and truncated real
+  findings — a month with six overdue items lost three of them. Every `[MARKER]` format stays, since
+  the command parses them.
+- **`security-reviewer` audits the stack you actually have.** Its scan step was hardcoded to
+  `npm audit` even though the review command dispatches it on every language; it now detects the
+  manifest and picks the matching audit and linter. Its OWASP checklist was the 2017 list, two
+  editions stale, and is now the 2025 one with a verification date.
+- **`typescript-reviewer` no longer double-reports React issues at a lower severity.** It carried a
+  React block it described as a fallback, rating at MEDIUM what `react-reviewer` rates CRITICAL or
+  HIGH — and both agents are dispatched together, so which severity survived depended on which
+  agent answered first.
+- **Five specialist agents describe themselves properly.** `comment-analyzer`,
+  `type-design-analyzer`, `silent-failure-hunter`, `pr-test-analyzer` and `fastapi-reviewer` had
+  one-sentence descriptions with no when-to-use and no boundary, leaving the router nothing to pick
+  them on. Each now says when to use it, what it returns, and what it deliberately does not cover.
+
+### Fixed
+- **`/herow-core:doctor` pins Opus 5.** It pinned Opus 4.8. Separately, `model-pin.py` had no opus
+  entry in its version-fallback table, so on any machine below the required Claude Code version the
+  opus pin was silently dropped and `verify.sh` then reported a bare `fail|default-opus-model` with
+  no explanation.
+- **Around 90 command references named commands that no longer exist.** Docs and prompts still said
+  `/finance:organizze`, `/seo:weekly-audit` and similar from before the plugin rename — including
+  places that told Claude to tell you to run one. Ten broken doc links from the same migration are
+  fixed too.
+- **The `financial-analyst` agent no longer carries instructions that cannot run.** It forbade a
+  `WebSearch` tool it was never granted while `analyze.py` granted the same tool "as fallback"; it
+  looked for a user-memory heading, a cash-flow section and a future-entries section under names
+  nothing emits; and three different "no alternative found" strings were in circulation, one of them
+  untranslated.
+- **The Organizze dashboard no longer tries to surface redacted medical descriptions.** It was told
+  to parse `[MEDICAL_EXPENSE]` out of the report into a panel — but that is the sanitizer's
+  redaction token for data going *in*, so rendering it would have undone the redaction.
+- **The graphify hint is stated once per session, not on every search.** A `PreToolUse` hook
+  re-injected roughly 70 words of tool-preference steering on every Grep, Glob and search-style Bash
+  call in a graphified repo, after Claude had already chosen the tool. The session-start
+  announcement does the job.
+- **The config doctor's own test suite passes again.** It asserted 8 registered checks when 7 are
+  registered, and had been red since 2026-07-15 — unnoticed because CI runs no tests.
+
 ## [0.11.1.1] - 2026-09-02
 
 ### Fixed
