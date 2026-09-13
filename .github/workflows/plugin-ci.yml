@@ -34,13 +34,30 @@ jobs:
       - name: Guard — hook scripts parse
         run: |
           set -e
-          for f in plugins/herow-core/scripts/*.sh plugins/herow-core/skills/github-ops/hooks/*.sh plugins/herow-core/skills/github-ops/scripts/*.sh migrate.sh; do
+          for f in plugins/herow-core/scripts/*.sh plugins/herow-core/scripts/setup/*.sh plugins/herow-core/skills/github-ops/hooks/*.sh plugins/herow-core/skills/github-ops/scripts/*.sh plugins/herow-dev/scripts/*.sh migrate.sh; do
             bash -n "$f"
           done
           for f in plugins/herow-core/scripts/*.js; do
             node --check "$f"
           done
+          git ls-files 'plugins/**/*.py' | while read -r f; do
+            python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"
+          done
           echo "scripts OK"
+
+      - name: Guard — every hook command resolves to a file
+        run: |
+          set -e
+          for m in plugins/*/hooks/hooks.json; do
+            plugin_root="$(dirname "$(dirname "$m")")"
+            jq -r '.hooks | to_entries[] | .value[] | .hooks[] | .command' "$m" \
+              | sed -E 's/^[^"]*"([^"]+)".*$/\1/' \
+              | sed "s|\\\${CLAUDE_PLUGIN_ROOT}|$plugin_root|" \
+              | while read -r f; do
+                  [ -f "$f" ] || { echo "::error::$m registers a missing hook script: $f"; exit 1; }
+                done
+          done
+          echo "hook paths OK"
 
       - name: Guard — JSON manifests valid
         run: |

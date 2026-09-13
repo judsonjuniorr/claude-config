@@ -145,15 +145,54 @@ Dispatch* in *Effort → Dispatch*). Do not wait for Phase 2 agents to return be
 
 ### Phase 3 — DEDUPE & RANK
 
-1. Group findings by file and line range.
-2. Deduplicate overlapping findings (same location, same issue class).
-3. Drop findings below the effort's confidence cutoff.
-4. On `max`, run the verification pass.
-5. Assign each survivor a 🔴/🟠/🟡/🟢 level.
+1. **Normalize** each agent's findings into one JSON array. This is the judgment step: agents
+   report prose, and you read each record's header line (see *Findings contract* below) into
+   `{id, level, confidence, file, line, title, issue, fix, class?, memory?}`. Assigning the level
+   is yours — the *Severity Scale* below is the whole rule, and there is no confidence-to-level
+   mapping. Write the array to a temp file.
+2. **Rank mechanically.** Everything left is a pure function of that array, so run the script
+   rather than doing it by hand:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/rank-findings.py" \
+     --findings /tmp/review-findings.json --cutoff <effort cutoff> --mode local
+   ```
+
+   It groups by file and line range, drops same-location duplicates of the same issue class
+   (keeping the highest confidence, preserving any 🧠 tag), applies the cutoff, sorts most-severe
+   first, and renders the count line. It reports what it dropped as `dropped|duplicate|N` and
+   `dropped|cutoff|N`.
+3. On `max`, run the verification pass over the survivors.
 
 ### Phase 3.5 — SECOND OPINION
 
-Run the *Second Opinion* pass (see *Second Opinion* below) on the surviving findings.
+Run the *Second Opinion* pass (see *Second Opinion* below) on the surviving findings, then re-run
+the script with the collected verdicts so the ESCALATE re-ranking, the badges, and the count line
+are applied consistently:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/rank-findings.py" \
+  --findings /tmp/review-findings.json --verdicts /tmp/review-verdicts.json \
+  --cutoff <effort cutoff> --mode local
+```
+
+Omit `--verdicts` when no verdicts were collected — the script then renders badge-less titles and
+drops the `(2nd opinion: …)` suffix, matching *Second Opinion*'s degrade path. Pass `--mode pr` in
+PR Review Mode; it only changes where the count line goes (`count-position`).
+
+### Findings contract
+
+Every dispatched agent leads each finding with:
+
+```text
+<emoji> <Level> confidence=<NN> <path>:<line> — <short title>
+```
+
+Levels are the four in *Severity Scale* below — 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low. Agents do
+not emit `CRITICAL`/`HIGH`/`MEDIUM`, and `confidence` is the agent's own calibrated 0-100 certainty,
+which is what the effort cutoff filters on. `rank-findings.py` still accepts the older
+`CRITICAL`/`HIGH`/`MEDIUM` spellings and warns, so a stale agent definition degrades instead of
+being dropped; a finding with no `confidence` is treated as 0 and filtered out by any cutoff.
 
 ### Phase 4 — REPORT
 

@@ -41,10 +41,13 @@ You have zero tolerance for silent failures.
 
 ## Output Format
 
-For each finding:
+```text
+<emoji> <Level> confidence=<NN> path/to/file.py:42 — short title
+Issue: what gets swallowed.
+Impact: the symptom a user would actually observe.
+Fix: concrete change.
+```
 
-- location
-- severity
-- issue
-- impact
-- fix recommendation
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.

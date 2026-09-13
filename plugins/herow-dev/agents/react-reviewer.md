@@ -167,15 +167,19 @@ If `eslint-plugin-react-hooks` or `eslint-plugin-jsx-a11y` is not in the project
 
 ## Output Format
 
-Report findings grouped by severity (CRITICAL, HIGH, MEDIUM). For each issue:
+Report findings grouped by severity, most severe first. For each issue:
 
-```
-[SEVERITY] short title
-File: path/to/file.tsx:42
+```text
+<emoji> <Level> confidence=<NN> path/to/file.tsx:42 — short title
 Issue: One-sentence description.
 Why: Explanation of the impact.
 Fix: Concrete recommended change.
 ```
+
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.
+Tag memory-lifecycle and retention findings with 🧠 after the level.
 
 Always include the file path and line number. Quote the offending snippet when it improves clarity.
 

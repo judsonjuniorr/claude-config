@@ -99,11 +99,23 @@ vitest run                          # Tests (Vitest)
 jest --ci                           # Tests (Jest)
 ```
 
+## Output Format
+
+```text
+<emoji> <Level> confidence=<NN> path/to/file.ts:42 — short title
+Issue: what is wrong and why it matters.
+Fix: concrete change.
+```
+
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.
+
 ## Approval Criteria
 
-- **Approve**: No CRITICAL or HIGH issues
-- **Warning**: MEDIUM issues only (can merge with caution)
-- **Block**: CRITICAL or HIGH issues found
+- **Approve**: no 🔴 or 🟠 findings
+- **Warning**: 🟡 findings only (can merge with caution)
+- **Block**: any 🔴 or 🟠 finding
 
 ---
 

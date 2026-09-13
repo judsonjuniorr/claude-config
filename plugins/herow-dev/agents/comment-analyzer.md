@@ -37,9 +37,13 @@ You ensure comments are accurate, useful, and maintainable.
 
 ## Output Format
 
-Provide advisory findings grouped by severity:
+```text
+<emoji> <Level> confidence=<NN> path/to/file.ts:42 — Inaccurate | Stale | Incomplete | Low-value
+Issue: what the comment claims versus what the code does.
+Fix: the rewrite, or `delete` when the code already says it.
+```
 
-- `Inaccurate`
-- `Stale`
-- `Incomplete`
-- `Low-value`
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level. A
+comment that actively misleads is 🟠 at most; low-value noise is 🟢.

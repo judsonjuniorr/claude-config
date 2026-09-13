@@ -33,9 +33,14 @@ You evaluate whether types make illegal states harder or impossible to represent
 
 ## Output Format
 
-For each type reviewed:
+```text
+<emoji> <Level> confidence=<NN> path/to/file.ts:42 — <TypeName>
+Issue: which invariant the type fails to enforce, across the four dimensions.
+Fix: the tighter type, and the invariant it would then enforce.
+```
 
-- type name and location
-- scores for the four dimensions
-- overall assessment
-- specific improvement suggestions
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level. A type
+that permits a state the code then has to defend against at runtime is 🟠; a stylistic tightening
+is 🟢. Close with a one-paragraph assessment across the types reviewed.

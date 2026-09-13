@@ -58,11 +58,14 @@ You are a senior FastAPI reviewer focused on production Python APIs.
 ## Output Format
 
 ```text
-[SEVERITY] Short issue title
-File: path/to/file.py:42
+<emoji> <Level> confidence=<NN> path/to/file.py:42 — Short issue title
 Issue: What is wrong and why it matters.
 Fix: Concrete change to make.
 ```
+
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.
 
 End with:
 
