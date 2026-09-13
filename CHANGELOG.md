@@ -50,6 +50,18 @@ All notable changes to this project will be documented in this file.
   `type-design-analyzer`, `silent-failure-hunter`, `pr-test-analyzer` and `fastapi-reviewer` had
   one-sentence descriptions with no when-to-use and no boundary, leaving the router nothing to pick
   them on. Each now says when to use it, what it returns, and what it deliberately does not cover.
+- **`/herow-core:setup-claude` generates the two blocks nobody should hand-write, and can target the
+  global file.** It wrote an interview-driven friction log and explicitly never touched
+  `~/.claude/CLAUDE.md` — which is exactly where the subagent routing table lives and rots: on this
+  machine 9 of its 11 rows named agents that do not resolve (`code-reviewer`, not
+  `herow-core:code-reviewer`), and 15 of the 26 installed agents had no row at all. The command now
+  enumerates agents from `.claude/agents/`, `~/.claude/agents/` and every `installPath` in
+  `installed_plugins.json`, reconciles the existing table against that inventory, and pairs it with
+  explicit non-routing conditions — Opus 5 delegates more readily than its predecessors, so a table
+  with no brake over-routes. It also writes a `## Health Stack` section in the shape `/health`
+  already reads, without depending on that skill being installed, and prunes dated prompt text by
+  invoking `/claude-api prompt-audit` at run time rather than from a copy of its rules, which ship
+  with Claude Code and are rewritten per release.
 
 ### Fixed
 - **`/herow-core:doctor` pins Opus 5.** It pinned Opus 4.8. Separately, `model-pin.py` had no opus
