@@ -1,6 +1,6 @@
 ---
 name: fastapi-reviewer
-description: Reviews FastAPI applications for async correctness, dependency injection, Pydantic schemas, security, OpenAPI quality, testing, and production readiness.
+description: Reviews FastAPI code for the framework-specific mistakes a general Python review misses — blocking calls inside `async def` handlers, dependency scope and `Depends` misuse, Pydantic request/response models that leak internal fields or skip validation, auth applied per-route instead of per-router, and OpenAPI output that lies about the real contract. Use when a diff touches routers, dependencies, or Pydantic models. Returns findings with a file:line and the framework-idiomatic fix. General Python style, typing, and security belong to python-reviewer; this agent assumes those already ran.
 tools: Read, Grep, Glob, Bash
 effort: medium
 ---

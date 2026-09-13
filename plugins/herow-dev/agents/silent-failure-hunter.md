@@ -1,6 +1,6 @@
 ---
 name: silent-failure-hunter
-description: Review code for silent failures, swallowed errors, bad fallbacks, and missing error propagation.
+description: Hunts failures that leave no trace — empty catch blocks, bare `except`/`pass` pairs, errors logged then continued past, default values substituted for failed calls, promises with no rejection path, discarded non-zero exit codes. Use on a diff touching error handling, I/O, or external calls, and on anything reported as "it silently does the wrong thing". Returns findings with a file:line, what gets swallowed, and the symptom a user would actually observe. It does not flag deliberate, documented fallbacks — those are a design choice, not a defect.
 effort: low
 tools: Read, Grep, Glob, Bash
 ---
