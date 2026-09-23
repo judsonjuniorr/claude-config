@@ -30,7 +30,34 @@
 # (status/diff/log) is RTK's own hook — so no overlap.
 # Never blocks hard, never errors.
 
-CMD="$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))" 2>/dev/null || true)"
+# Bounded read before the parse instead of a raw `json.load(sys.stdin)` on
+# the hook's own stdin -- but ONLY on bash >= 4. Full rationale, including the
+# measurement behind it, lives in scripts/destructive-guard.sh above its own
+# copy of this block; the short version:
+#
+#   - reading stdin directly blocks until EOF, so a harness slow to CLOSE it
+#     burns the whole 10s hook timeout and yields no decision at all (14 such
+#     cancellations for this hook in the week ending 2026-09-22);
+#   - the stall shape is a LATE EOF, so on bash >= 4 a `-t` timeout still
+#     assigns what arrived and the attribution deny below still runs;
+#   - bash 3.2 (still /bin/bash on stock macOS, and this ships as a
+#     marketplace plugin) DISCARDS the partial read, which would silently pass
+#     an attribution footer through -- exactly what this hook exists to stop --
+#     so it keeps the old unbounded read: never worse than before.
+#
+# ACCEPTED RESIDUAL: a slow SENDER (not a slow closer) leaves truncated JSON on
+# the bash>=4 branch and fails OPEN. Same trade as the sibling hook, same
+# reasoning. Both branches and this residual are pinned by tests that assert
+# ELAPSED time, not just the decision -- see tests/test_git_guard.py.
+PAYLOAD=""
+if [ "${BASH_VERSINFO[0]:-3}" -ge 4 ]; then
+  IFS= read -r -d '' -t 2 PAYLOAD || true
+else
+  PAYLOAD="$(cat)"
+fi
+[ -n "$PAYLOAD" ] || exit 0
+
+CMD="$(printf '%s' "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))" 2>/dev/null || true)"
 [ -n "$CMD" ] || exit 0
 
 # Strip a leading RTK proxy prefix so `rtk [proxy] git commit` matches like
