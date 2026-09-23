@@ -11,7 +11,7 @@ Your task is to resolve merge conflicts **intelligently and with justification**
 
 > **For any GitHub operation (`gh`, PRs, reviews, comments, status checks): always consult the `github-ops` skill** before executing. It defines the conventions, authentication, argument shapes, and error handling for this project. Load it before any `gh` call in this flow.
 
-> **Recommended subagents (when installed):** after resolution, delegate to `code-reviewer` to verify each merged hunk preserves intent on both sides; if a resolution introduces logic that fails at runtime, delegate the diagnosis to `debugger` (writes a regression test before fixing). Invoke via the `Agent` tool with the matching `subagent_type`. If the agent file is not present at `~/.claude/agents/<name>.md`, execute the steps below directly.
+> **Recommended subagents (when installed):** after resolution, delegate to `code-reviewer` to verify each merged hunk preserves intent on both sides; if a resolution introduces logic that fails at runtime, delegate the diagnosis to `debugger` (writes a regression test before fixing). Invoke via the `Agent` tool with the namespaced `subagent_type` from the session's agent list (`herow-dev:<name>` / `herow-core:<name>`); if it isn't listed, execute the steps below directly.
 
 ## Received argument
 

@@ -7,7 +7,7 @@ effort: medium
 
 # Generate Tests
 
-> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate the implementation to `fullstack-developer`; for **Python** targets, delegate to `python-pro`. After tests are written, optionally hand off to `code-reviewer` to validate coverage and quality. Invoke via the `Agent` tool with the matching `subagent_type`. If the agent file is not present at `~/.claude/agents/<name>.md`, execute the steps below directly.
+> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate the implementation to `fullstack-developer`; for **Python** targets, delegate to `python-pro`. After tests are written, optionally hand off to `code-reviewer` to validate coverage and quality. Invoke via the `Agent` tool with the namespaced `subagent_type` from the session's agent list (`herow-dev:<name>` / `herow-core:<name>`); if it isn't listed, execute the steps below directly.
 
 Your task is to create a comprehensive test suite for the target specified in `$ARGUMENTS`.
 

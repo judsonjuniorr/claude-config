@@ -80,7 +80,7 @@ Supporting material for the pipeline in SKILL.md.
 | Scope | Recommended Model | Rationale |
 |-------|------------------|-----------|
 | TRIVIAL | Haiku | Cheapest tier for mechanical, single-file edits |
-| LOW–MEDIUM | Sonnet | Best coding model for standard work |
+| LOW–MEDIUM | Sonnet | Cheaper tier; enough for well-scoped work |
 | HIGH | Sonnet (impl) + Opus (planning) | Opus for architecture, Sonnet for implementation |
 | EPIC | Opus (planning) + Sonnet (execution) | Deep reasoning for multi-session planning |
 

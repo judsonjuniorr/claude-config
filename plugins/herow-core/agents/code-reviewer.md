@@ -16,7 +16,7 @@ Before reviewing, establish context:
    - `pnpm-lock.yaml` present → use `pnpm`
    - `bun.lockb` present → use `bun`
    - `package-lock.json` present → use `npm`
-   - No lock file → ask the user which to use
+   - No lock file → default to `npm` and say so in the summary
 2. Read relevant config files: `.eslintrc`, `biome.json`, `tsconfig.json`, `pyproject.toml`, `.golangci.yml`, etc.
 3. Run security audits with the detected package manager:
    - JS/TS: `<pm> audit` (or `pnpm audit`, `yarn npm audit`, `bun x npm audit`)
@@ -29,7 +29,7 @@ Before reviewing, establish context:
 
 - **< 20 files**: read all fully.
 - **20–100 files**: prioritize high-risk areas (auth, payments, data access, config, new dependencies).
-- **> 100 files**: ask the user to narrow scope before proceeding.
+- **> 100 files**: review only the highest-risk areas and list the skipped files in the summary.
 
 ## Review checklist
 
@@ -65,13 +65,13 @@ Before reviewing, establish context:
 ## Language-specific rules
 
 ### TypeScript
-- No implicit `any` — flag it with severity HIGH
+- No implicit `any` — flag it as 🟠 High
 - `Promise` rejection always handled (`.catch` or `await` in `try/catch`)
 - Strict null checks respected — no `!` non-null assertion without comment explaining why
 
 ### Python
 - No mutable default arguments (`def fn(items=[])`)
-- Exception types are specific — bare `except:` is HIGH severity
+- Exception types are specific — bare `except:` is 🟠 High
 - Type hints on all public functions
 - No `eval()` or `exec()` on user-supplied data
 
@@ -81,7 +81,7 @@ Before reviewing, establish context:
 - Lifetime annotations correct and minimal
 
 ### Go
-- Errors never silently discarded (`_ = err` is HIGH severity)
+- Errors never silently discarded (`_ = err` is 🟠 High)
 - Goroutines have cancellation paths
 - No `defer` inside a loop (use an inner function instead)
 
@@ -92,10 +92,10 @@ Before reviewing, establish context:
 
 ## Severity levels
 
-- **CRITICAL** — data loss, security breach, or production outage risk. Block merge.
-- **HIGH** — likely bug or serious design flaw. Should fix before merge.
-- **MEDIUM** — correctness concern or missing test. Fix soon.
-- **LOW / SUGGESTION** — style, readability, or optional improvement. Non-blocking.
+- **🔴 Critical** — data loss, security breach, or production outage risk. Block merge.
+- **🟠 High** — likely bug or serious design flaw. Should fix before merge.
+- **🟡 Medium** — correctness concern or missing test. Fix soon.
+- **🟢 Low** — style, readability, or optional improvement. Non-blocking.
 
 ## Output format
 

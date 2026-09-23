@@ -161,7 +161,7 @@ Pulls personal financial data from **Organizze** via the official [`organizze` C
 - macOS Keychain (`security` CLI) — native on macOS.
 - `mcp__playwright__*` available (used only during the one-time token onboarding).
 - `playwright` Python library + Chromium — **installed automatically by `setup_auth.sh`** (`pip3 install playwright` + `python3 -m playwright install chromium`).
-- `financial-analyst` subagent installed — see [`agents/financial-analyst.md`](../plugins/herow-finance/agents/financial-analyst.md).
+- `herow-finance:financial-analyst` subagent (ships with the `herow-finance` plugin) — see [`agents/financial-analyst.md`](../plugins/herow-finance/agents/financial-analyst.md).
 
 ### First run
 

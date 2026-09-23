@@ -4,37 +4,6 @@ argument-hint: [plan path or slug — default: most recent plan in .claude/plans
 effort: medium
 ---
 
-## Model check (1M context)
-
-The real blocker isn't the *tier* (Sonnet vs Opus) but **1M context**: the 1M toggle is session-global and inherited by commands/subagents. This command **does not pin a model** — it inherits the session's default model; in a 1M session it runs as `<model>[1m]` and fails with `API Error: Usage credits required for 1M context` if there are no credits. Detect this by the `[1m]` suffix:
-
-```bash
-python3 -c "
-import json, os
-model = os.environ.get('CLAUDE_MODEL', '')
-if not model:
-    try:
-        s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
-        model = s.get('model') or ''
-    except: model = ''
-print(model)
-" 2>/dev/null
-```
-
-- If the output **ends in `[1m]`** (e.g. `claude-sonnet-5[1m]`): the session is in 1M context (billed). Warn in 1 line that this invocation inherits 1M and will fail for lack of credits, and offer the two paths:
-  - **Switch to standard context** (recommended for this command — runs without credits): `/model` → pick a **non-`[1m]`** model, or restart already running the plan (replace `<plan>` with the actual argument resolved above):
-
-    ```
-    claude --model claude-sonnet-5 "/herow-dev:execute <plan>"
-    ```
-  - **Keep 1M** (only if the work genuinely needs Opus + 1M): run `/usage-credits` to turn on credits.
-- If the output is **empty/indeterminate**: **don't warn** (fail open — the check is advisory only; most correct sessions land here).
-- Otherwise (standard-context model): proceed without warning.
-
-> Don't block in any case. This command does not pin a model in the frontmatter — it inherits the session's default model; in standard context it runs normally. The warning above only matters when the session is in 1M.
-
----
-
 You are going to **execute** an already-defined plan. Path/slug (empty = resolve the most recent plan, see below):
 
 **$ARGUMENTS**

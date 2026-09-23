@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.4.0] - 2026-09-23
+
+### Changed
+- **`/herow-core:doctor` pins Opus 5.5.** `token-guard.sh` now pins `claude-opus-5-5`, and
+  `model-pin.py` lists it first. It needs Claude Code ≥ 2.1.280; older installs fall back to
+  Opus 4.7, the same way the Opus 5 pin already did.
+- **Prompt audit against Opus 5.5.** Prompt text across the plugins was trimmed where it
+  prescribed method instead of outcome: the research skill and `search-specialist` state a
+  stop rule instead of source counts, the builder agents keep their definition of done but
+  drop the "analyze first" phase, and all-caps constraints now read at normal volume.
+  `ui-ux-designer` names the current generic defaults to flag instead of prescribing new ones.
+- The SEO suite states its rules without the Reddit-thread provenance, and
+  `technical-seo-auditor` / `content-engineer` pin `model: sonnet`, so cost-guard's cheap tier
+  is actually enforced.
+- `github-ops`' hook section is down to the four facts the model acts on; the full `git-guard`
+  behavior stays in its README.
+
+### Fixed
+- **`security-reviewer` findings survived no `/code:review` cutoff.** The agent had no
+  `confidence=` findings contract, so the ranker scored every finding 0 and dropped it at
+  every effort level. It now emits the same header line as the other review agents.
+- **Agent delegation checked `~/.claude/agents/`, which plugin installs never populate.**
+  `github-ops` always skipped its code-reviewer pass, and `/herow-finance:organizze` warned
+  "not installed" on every run before falling back to `general-purpose`. Every delegation now
+  names the namespaced agent (`herow-core:code-reviewer`, `herow-finance:financial-analyst`, …)
+  and falls back only when it is missing from the session's agent list.
+- Removed the "1M context needs usage credits" check from `/quick`, `/execute` and
+  `/fix-cves`. Sonnet 5 and Opus 4.7+ run native 1M with no credits, and the probe read a
+  settings key that is never set, so it could not fire.
+- Subagents no longer "ask the user" (they can't): `code-reviewer` and `search-specialist`
+  state their assumption and proceed. `code-reviewer`, `python-reviewer` and `react-reviewer`
+  use the emoji severity levels their own output contract requires.
+- `tdd-guide` triggers on test-first requests instead of on every feature, fix, or refactor,
+  and its upstream "v1.8" addendum is gone. `/code:review` and the research skill name the
+  `Agent` tool instead of `Task`.
+
 ## [0.11.3.0] - 2026-09-23
 
 ### Fixed

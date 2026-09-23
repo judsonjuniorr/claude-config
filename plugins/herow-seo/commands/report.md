@@ -11,7 +11,7 @@ effort: medium
 > **Human gate:** never auto-publishes. Ends by presenting the dashboard for your review — it is yours to send, not the command's.
 > **No vanity metrics:** impressions appear only as context beside CTR / indexation / conversion, never as the headline number.
 
-Closes the metrics loop for the corrected Agensi playbook: the single artifact the founder actually shows. Every other `/herow-seo:*` command moves one number — this one tells you whether the loop is working. It reports; it does not chase a chart up and to the right.
+Closes the metrics loop for this suite: the single artifact the founder actually shows. Every other `/herow-seo:*` command moves one number — this one tells you whether the loop is working. It reports; it does not chase a chart up and to the right.
 
 ## GSC data contract (shared across the suite)
 
@@ -25,8 +25,8 @@ If no data source resolves, do **not** fabricate data. Detect toprank's GSC inte
 ## Flow
 
 1. **Resolve data sources.** Detect `toprank` (look for its `seo-analysis` skill); if present, prefer delegating the GSC pull to it. Else read the export at `gsc-export-path`, plus any provided AI-referral log and conversion export. If **nothing** resolves → print the 3-step guide and stop. Otherwise **degrade gracefully**: print which export feeds which section, build the sections you have data for, and mark the rest **"no data"**. Error clearly on a missing/malformed file you were handed — never silently pass.
-2. **Traffic + indexation.** Delegate to the **`technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent file isn't installed) for the CTR numbers (clicks-at-risk, truncated/low-CTR queries) and the indexation-coverage breakdown (indexed vs `Discovered`/`Crawled – not indexed`).
-3. **AI-citation + conversion + next moves.** Delegate to the **`seo-strategist`** agent (fallback `general-purpose`) for the AI-referral read (sessions by engine from the referral log) and the conversion read, plus the **top-3 "what to do next"** ranked by leverage.
+2. **Traffic + indexation.** Delegate to the **`herow-seo:technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent isn't in the session's agent list) for the CTR numbers (clicks-at-risk, truncated/low-CTR queries) and the indexation-coverage breakdown (indexed vs `Discovered`/`Crawled – not indexed`).
+3. **AI-citation + conversion + next moves.** Delegate to the **`herow-seo:seo-strategist`** agent (fallback `general-purpose`) for the AI-referral read (sessions by engine from the referral log) and the conversion read, plus the **top-3 "what to do next"** ranked by leverage.
 4. **Assemble.** Merge both agents' output into a single consolidated markdown dashboard (sections below), each metric tracing to a parsed row or marked "no data" — never invented.
 5. **HUMAN GATE.** Present the dashboard as an artifact and stop. Ask via `AskUserQuestion` only whether to save/revise the file. **Never publish, send, post, or share it anywhere** — distribution is entirely the founder's call.
 

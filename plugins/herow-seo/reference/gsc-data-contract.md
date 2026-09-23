@@ -24,7 +24,7 @@ This suite encodes the validated Agensi/Reddit SEO+GEO playbook — **with the s
 
 ## The three agents (the "team")
 
-The commands delegate to three specialist agents in [`../../agents/`](../../agents/) (and fall back to `general-purpose` when an agent file isn't installed — same precedent as `finance/organizze`):
+The commands delegate to three specialist agents in [`../../agents/`](../../agents/) (and fall back to `general-purpose` when an agent isn't installed — same precedent as `finance/organizze`):
 
 - [`seo-strategist`](../../agents/seo-strategist.md) (Opus, **no Write**) — analyzes GSC/data, finds patterns, makes the call. Decisions only.
 - [`content-engineer`](../../agents/content-engineer.md) (Sonnet) — drafts content + FAQ schema + internal links, with a hard **information-gain gate** (refuses to finalize commodity reworded-web content).

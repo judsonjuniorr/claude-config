@@ -106,7 +106,3 @@ Fix: What to change
 - **Spring MVC**: `@ControllerAdvice` for exception handling, `@Valid` on request bodies, `ResponseEntity` for explicit status codes
 - **Spring Security**: `SecurityFilterChain` bean (not `WebSecurityConfigurerAdapter`), CSRF enabled for browser clients, CORS configured via `CorsConfigurationSource`
 - **Spring Data JPA**: projections for read-only queries, `@Modifying` + `@Transactional` on update/delete queries, `flush()` only when strictly necessary
-
----
-
-Review with the mindset: "Would this code pass review at a top Java shop or Apache/Spring open-source project?"

@@ -60,16 +60,16 @@ Flag these patterns immediately:
 
 | Pattern | Severity | Fix |
 |---------|----------|-----|
-| Hardcoded secrets | CRITICAL | Use `process.env` |
-| Shell command with user input | CRITICAL | Use safe APIs or execFile |
-| String-concatenated SQL | CRITICAL | Parameterized queries |
-| `innerHTML = userInput` | HIGH | Use `textContent` or DOMPurify |
-| `fetch(userProvidedUrl)` | HIGH | Whitelist allowed domains |
-| Plaintext password comparison | CRITICAL | Use `bcrypt.compare()` |
-| No auth check on route | CRITICAL | Add authentication middleware |
-| Balance check without lock | CRITICAL | Use `FOR UPDATE` in transaction |
-| No rate limiting | HIGH | Add `express-rate-limit` |
-| Logging passwords/secrets | MEDIUM | Sanitize log output |
+| Hardcoded secrets | 🔴 Critical | Use `process.env` |
+| Shell command with user input | 🔴 Critical | Use safe APIs or execFile |
+| String-concatenated SQL | 🔴 Critical | Parameterized queries |
+| `innerHTML = userInput` | 🟠 High | Use `textContent` or DOMPurify |
+| `fetch(userProvidedUrl)` | 🟠 High | Whitelist allowed domains |
+| Plaintext password comparison | 🔴 Critical | Use `bcrypt.compare()` |
+| No auth check on route | 🔴 Critical | Add authentication middleware |
+| Balance check without lock | 🔴 Critical | Use `FOR UPDATE` in transaction |
+| No rate limiting | 🟠 High | Add `express-rate-limit` |
+| Logging passwords/secrets | 🟡 Medium | Sanitize log output |
 
 ## Key Principles
 
@@ -88,17 +88,15 @@ Flag these patterns immediately:
 
 **Always verify context before flagging.**
 
-## Emergency Response
+## Output Format
 
-If you find a CRITICAL vulnerability:
-1. Document with detailed report
-2. Alert project owner immediately
-3. Provide secure code example
-4. Verify remediation works
-5. Rotate secrets if credentials exposed
+```text
+<emoji> <Level> confidence=<NN> path/to/file:42 — short title
+Issue: what is wrong and why it matters.
+Fix: concrete change.
+```
 
-## When to Run
-
-**ALWAYS:** New API endpoints, auth code changes, user input handling, DB query changes, file uploads, payment code, external API integrations, dependency updates.
-
-**IMMEDIATELY:** Production incidents, dependency CVEs, user security reports, before major releases.
+Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
+`CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
+defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.
+If exposed credentials are found, say that they must be rotated.

@@ -7,7 +7,7 @@ effort: medium
 
 # Refactor Code
 
-> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate to `fullstack-developer`; for **Python** targets, delegate to `python-pro`. After the refactor, hand off to `code-reviewer` to verify behavior preservation and flag regressions. Invoke via the `Agent` tool with the matching `subagent_type`. If the agent file is not present at `~/.claude/agents/<name>.md`, execute the steps below directly.
+> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate to `fullstack-developer`; for **Python** targets, delegate to `python-pro`. After the refactor, hand off to `code-reviewer` to verify behavior preservation and flag regressions. Invoke via the `Agent` tool with the namespaced `subagent_type` from the session's agent list (`herow-dev:<name>` / `herow-core:<name>`); if it isn't listed, execute the steps below directly.
 
 Refactor the target specified in `$ARGUMENTS` while preserving all external behavior. Safety over speed — no behavior change without a test to prove it.
 

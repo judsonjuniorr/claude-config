@@ -1,7 +1,7 @@
 ---
 description: (herow) Multi-agent code review for local changes or a PR — color-ranked findings including a dedicated memory-management lane for Python/React, optional --fix or --comment, an advisor-first second opinion, and an interactive finish that can submit a request-changes review with inline suggestions or commit+push applied fixes, in the repo's language.
 argument-hint: "[pr-number | pr-url | branch] [low|medium|high|max] [--fix] [--comment]"
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, advisor
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, advisor
 effort: medium
 ---
 
@@ -34,7 +34,7 @@ Without `--comment`, an interactive run ends with the *Finish* prompt (see *Fini
 
 ## Effort → Dispatch
 
-Run these agents via the Task tool **in parallel** against the diff. Higher effort = more agents
+Run these agents via the Agent tool **in parallel** against the diff. Higher effort = more agents
 and a lower confidence cutoff:
 
 | Effort | Agents | Confidence cutoff |
@@ -53,7 +53,7 @@ Agent focus areas:
 6. `type-design-analyzer` — type encapsulation and invariant enforcement
 7. `code-simplifier` — clarity and maintainability
 
-**Verification pass (`max` only):** after dedupe, launch one Task agent per surviving finding that
+**Verification pass (`max` only):** after dedupe, launch one agent per surviving finding that
 tries to **refute** it — is it a false positive, a pre-existing issue, or on a line not in the
 diff? Drop any finding the refuter cannot confirm. Mirrors the confidence-scoring step in the
 built-in reviewer.
@@ -374,7 +374,7 @@ Check availability in priority order:
 advisor tool present in this session's tool list  → use the advisor  (preferred)
 which codex                                        → exit 0 → use Codex
 which agy                                           → exit 0 → use Agy
-otherwise                                           → Claude subagent fallback (Task tool)
+otherwise                                           → Claude subagent fallback (Agent tool)
 ```
 
 `advisor` is availability-gated (check the session's tool list), not shell-probed like the others —
@@ -408,7 +408,7 @@ Use this prompt verbatim (with the sanitized JSON substituted in):
 - **Agy**: run `agy --help` first to find the prompt-passing flag. Prefer `--file` or stdin
   (`agy ... < prompt.txt`) over inline quoting. If `--help` output does not reveal a
   prompt-string flag, fall back to the Claude subagent — do not guess a CLI invocation.
-- **Claude fallback**: spawn a Task subagent with the prompt above.
+- **Claude fallback**: spawn a subagent via the Agent tool with the prompt above.
 
 ### Step 3a — Advisor invocation (when chosen)
 

@@ -116,7 +116,3 @@ defect at that location; `/herow-dev:code:review` filters on it and re-ranks fro
 - **Approve**: no 🔴 or 🟠 findings
 - **Warning**: 🟡 findings only (can merge with caution)
 - **Block**: any 🔴 or 🟠 finding
-
----
-
-Review with the mindset: "Would this code pass review at a top TypeScript shop or well-maintained open-source project?"

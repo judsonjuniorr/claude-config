@@ -175,7 +175,7 @@ Do not invoke `analyze.py` yet — first we need to fire the research (Step 5.5)
 ## Step 6 — Delegate to the `financial-analyst` subagent
 
 Use the `Agent` tool:
-- `subagent_type`: `financial-analyst` if it exists at `~/.claude/agents/financial-analyst.md`. If it does not exist, **warn the user** ("subagent not installed — use `general-purpose` this time? To install, run `ln -sf <claude-config-root>/agents/financial-analyst.md ~/.claude/agents/`") and proceed with `general-purpose`.
+- `subagent_type`: `herow-finance:financial-analyst`. If it's missing from the session's agent list, say so in one line and use `general-purpose` — the prompt already carries the analyst rules (`analyze.py` injects them).
 - `description`: `Monthly Organizze financial analysis`
 - `prompt`: the contents of `$PROMPT_FILE` (rendered in step 5.5 with pre-collected research).
 

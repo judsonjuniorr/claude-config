@@ -11,7 +11,7 @@ effort: medium
 > **Human gate:** never auto-publishes. Ends by presenting flagged pages + recommended actions for your approval.
 > **No vanity metrics:** the KPI is **conversion**, never impressions or raw clicks.
 
-The skeptic correction (szymon-slowik-seo): impressions and clicks are not the goal — conversion is. A page can win clicks and still convert nobody. This command closes the **"traffic ≠ value"** gap by joining search traffic to conversion per page and surfacing where the clicks are wasted.
+Impressions and clicks are not the goal — conversion is. A page can win clicks and still convert nobody. This command closes the **"traffic ≠ value"** gap by joining search traffic to conversion per page and surfacing where the clicks are wasted.
 
 ## GSC data contract (shared across the suite)
 
@@ -25,7 +25,7 @@ If no data source resolves, do **not** fabricate data. Detect toprank's GSC inte
 ## Flow
 
 1. **Resolve both data sources.** Detect `toprank` (look for its `seo-analysis` / `content-planner` skills); if present, prefer delegating the GSC pull to it, else read the export at `gsc-export-path`. If neither resolves → print the 3-step guide and stop. **Then resolve the conversion source** — an analytics export or CSV mapping pages/paths to conversions/signups/sales. If conversion data is absent, say so plainly and stop: do **not** invent conversion numbers. Error clearly on a missing/empty/malformed file — never silently pass.
-2. **Join traffic ↔ conversion.** Delegate to the **`seo-strategist`** agent via the `Agent` tool (fall back to `general-purpose` if the agent file isn't installed — same precedent as finance/organizze) to join GSC pages to the conversion source by page/path (normalize trailing slashes, query strings, and protocol), compute conversion rate per page (conversions ÷ clicks), and rank pages by traffic.
+2. **Join traffic ↔ conversion.** Delegate to the **`herow-seo:seo-strategist`** agent via the `Agent` tool (fall back to `general-purpose` if the agent isn't in the session's agent list — same precedent as finance/organizze) to join GSC pages to the conversion source by page/path (normalize trailing slashes, query strings, and protocol), compute conversion rate per page (conversions ÷ clicks), and rank pages by traffic.
 3. **Flag the gaps.** Surface **high-traffic / low-conversion** pages (clicks coming in, nothing converting — the wasted-traffic pages) and **high-conversion winners** worth doubling down on. Every flag must trace to a real row in both exports.
 4. **HUMAN GATE.** Present the ranked per-page table + flags + recommended actions (improve the CTA, match search intent to the page, or stop chasing a query that never converts) and ask via `AskUserQuestion` what to action — top recommendation first. **Never change anything automatically.**
 

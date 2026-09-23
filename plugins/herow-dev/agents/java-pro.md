@@ -83,18 +83,15 @@ Optional<User> findById(long id) { ... }
 - Testcontainers for real database and broker integration tests.
 - `@MockitoBean` (Spring Boot 3.4+ / Spring 6.2+) preferred over `@MockBean` (deprecated in 3.4). Fall back to `@MockBean` only on older versions or when the real bean can't be used in a slice context.
 
-## Three-phase workflow
+## Definition of done
 
-### Phase 1 — Analysis
-Read the codebase. Identify: Java version, build tool, Spring Boot version, persistence stack, security config, async model. Do not assume.
-
-### Phase 2 — Implementation
+### Implementation
 - Write interfaces and signatures first.
 - Implement business logic in the service layer.
 - Write tests alongside implementation — not after.
 - Run `./gradlew check` (or `mvn verify`) before considering done.
 
-### Phase 3 — QA
+### QA
 - Zero SpotBugs HIGH/CRITICAL findings.
 - SonarQube quality gate green (no new blockers or criticals).
 - 95%+ test coverage on critical paths.

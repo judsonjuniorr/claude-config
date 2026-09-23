@@ -11,7 +11,7 @@ effort: medium
 > **Human gate:** never auto-publishes. Ends by presenting title/meta variants for your approval.
 > **No vanity metrics:** ranks opportunity by CTR / clicks-at-risk, never impressions alone.
 
-The skeptic correction: a 0.84% CTR is unsustainable. **CTR beats vanity impressions** — if the clicks don't rise, Google decays the impressions. This is the command that operationalizes "CTR > impressions": it finds queries where you already rank but nobody clicks, then rewrites the title + meta to earn the click.
+A 0.84% CTR is unsustainable. **CTR beats vanity impressions** — if the clicks don't rise, Google decays the impressions. This is the command that operationalizes "CTR > impressions": it finds queries where you already rank but nobody clicks, then rewrites the title + meta to earn the click.
 
 ## GSC data contract (shared across the suite)
 
@@ -25,8 +25,8 @@ If no data source resolves, do **not** fabricate data. Detect toprank's GSC inte
 ## Flow
 
 1. **Resolve data.** Detect `toprank` (look for its `seo-analysis` / `meta-tags-optimizer` skills). If present, prefer delegating the GSC pull to it. Else read the export at `gsc-export-path`. If neither resolves → print the 3-step guide and stop. Error clearly on a missing/empty/malformed file — never silently pass.
-2. **Diagnose CTR.** Delegate to the **`technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent file isn't installed — same precedent as the rest of the suite) to find queries whose **actual CTR is well below the SERP-position average**, ranked by **clicks-at-risk = impressions × (expected-CTR − actual-CTR)**. Flag titles truncated >60c, duplicate/vague titles, and missing meta.
-3. **Draft variants.** Delegate to the **`content-engineer`** agent (fallback `general-purpose`) to write new **≤60c titles** and **≤155c metas** for the top offenders — specificity, a number/year, a concrete reason to click, no keyword stuffing. If `toprank`'s `meta-tags-optimizer` is installed, delegate to it and apply the gate to its output.
+2. **Diagnose CTR.** Delegate to the **`herow-seo:technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent isn't in the session's agent list — same precedent as the rest of the suite) to find queries whose **actual CTR is well below the SERP-position average**, ranked by **clicks-at-risk = impressions × (expected-CTR − actual-CTR)**. Flag titles truncated >60c, duplicate/vague titles, and missing meta.
+3. **Draft variants.** Delegate to the **`herow-seo:content-engineer`** agent (fallback `general-purpose`) to write new **≤60c titles** and **≤155c metas** for the top offenders — specificity, a number/year, a concrete reason to click, no keyword stuffing. If `toprank`'s `meta-tags-optimizer` is installed, delegate to it and apply the gate to its output.
 4. **HUMAN GATE.** Present the title/meta variants with the SERP rationale and clicks-at-risk per query. Ask via `AskUserQuestion` which variants to adopt (top clicks-at-risk first). Do not proceed without a choice. **Never apply automatically** — the human ships the change to the CMS/site.
 
 ## Output artifact

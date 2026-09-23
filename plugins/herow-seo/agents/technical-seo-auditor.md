@@ -2,6 +2,7 @@
 name: technical-seo-auditor
 description: Technical SEO auditor. Parses GSC exports and crawl data into a prioritized "what's broken" fix list, indexation-coverage and CTR diagnostics. Read-only diagnoser used by /herow-seo:weekly-audit, /herow-seo:indexation-check, /herow-seo:ctr-tune, /herow-seo:report.
 tools: Read, Bash, WebFetch, Grep, Glob
+model: sonnet
 effort: medium
 ---
 

@@ -161,9 +161,9 @@ If `eslint-plugin-react-hooks` or `eslint-plugin-jsx-a11y` is not in the project
 
 ## Approval Criteria
 
-- **Approve**: No CRITICAL or HIGH issues
-- **Warning**: MEDIUM issues only (merge with caution)
-- **Block**: CRITICAL or HIGH issues found
+- **Approve**: no 🔴 or 🟠 findings
+- **Warning**: 🟡 findings only (can merge with caution)
+- **Block**: any 🔴 or 🟠 finding
 
 ## Output Format
 
@@ -187,7 +187,3 @@ Always include the file path and line number. Quote the offending snippet when i
 
 - Agents: `typescript-reviewer` (generic TS/JS, invoked alongside on `.tsx`/`.jsx`), `security-reviewer` (project-wide audit)
 - Authoring rules (the canonical source the lanes above map onto — `herow-core/rules/react/`): `coding-style.md`, `patterns.md`, `performance.md`, `security.md`, `testing.md`. The review lanes here are the review-time checklist; consult these files for the authoring guidance behind each check rather than re-copying it. `performance.md` owns re-render/bundle cost; the Memory Lifecycle lane above owns retention.
-
----
-
-Review with the mindset: "Would this code pass review at a top React shop or well-maintained open-source library?"

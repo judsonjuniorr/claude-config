@@ -7,7 +7,7 @@ effort: medium
 
 # Create PRD
 
-> **Recommended subagent (when installed):** for the high-level **Technical considerations** section — architecture notes, dependencies, build/buy and stack trade-offs — offer to delegate to `backend-architect` via the `Agent` tool (`subagent_type: backend-architect`). The command works without it; if the agent file is not present at `~/.claude/agents/backend-architect.md`, fill the section inline and keep it high-level.
+> **Recommended subagent (when installed):** for the high-level **Technical considerations** section — architecture notes, dependencies, build/buy and stack trade-offs — offer to delegate to `herow-dev:backend-architect` via the `Agent` tool. The command works without it; if that agent isn't in the session's agent list, fill the section inline and keep it high-level.
 
 Turn a rough idea into a Product Requirements Document by **brainstorming the inputs first, writing second**. Treat `$ARGUMENTS` as the feature name or one-line idea seed.
 

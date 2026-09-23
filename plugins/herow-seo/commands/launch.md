@@ -1,5 +1,5 @@
 ---
-description: (herow) Heavy end-to-end orchestrator — bootstrap a NEW project through the whole corrected playbook (strategy → indexation gate → draft → GEO schema → audit) with cost + human gates between every stage. Most expensive command; prefer the individual /herow-seo:* commands unless you are starting from scratch.
+description: (herow) Heavy end-to-end orchestrator — bootstrap a NEW project through the whole suite (strategy → indexation gate → draft → GEO schema → audit) with cost + human gates between every stage. Most expensive command; prefer the individual /herow-seo:* commands unless you are starting from scratch.
 allowed-tools: Read, Write, Edit, Bash, WebFetch, WebSearch, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: medium
@@ -11,7 +11,7 @@ effort: medium
 > **Human gate:** never auto-publishes. Stops at a gate between every major stage and ends by presenting all stage artifacts for your approval.
 > **No vanity metrics:** ranks opportunity by CTR / clicks-at-risk / indexability, never impressions alone.
 
-The heavy global orchestrator for **bootstrapping a brand-new project** through the corrected Agensi playbook in one sequenced run: find clusters, check the site is even indexable before pouring on content, draft the top approved cluster with information gain, emit GEO schema, and produce a weekly audit baseline — with a cost gate and a human gate between stages.
+The heavy global orchestrator for **bootstrapping a brand-new project** through this suite in one sequenced run: find clusters, check the site is even indexable before pouring on content, draft the top approved cluster with information gain, emit GEO schema, and produce a weekly audit baseline — with a cost gate and a human gate between stages.
 
 > [!WARNING]
 > **This is the heaviest, most token-expensive command in the suite.** It runs three agents back-to-back over your full GSC export and produces multiple artifacts in one pass. For day-to-day work, **run the individual commands instead** — the content-sprint stage to write one cluster, the indexation-check / weekly-audit stages to diagnose, the GEO stage for schema. Reach for `/herow-seo:launch` **only** when bootstrapping a new project end-to-end and you accept the cost. It opens by asking you to confirm.
@@ -35,17 +35,17 @@ If no data source resolves, do **not** fabricate data. Detect toprank's GSC inte
 
 2. **Resolve data.** Detect `toprank` (look for its `seo-analysis` / `content-planner` skills). If present, prefer delegating the GSC pull to it. Else read the export at `gsc-export-path`. If neither resolves → print the 3-step guide and stop. Error clearly on a missing/empty/malformed file — never silently pass.
 
-3. **Strategize** (the content-sprint stage). Delegate to the **`seo-strategist`** agent via the `Agent` tool (fall back to `general-purpose` if the agent file isn't installed) to find striking-distance question clusters: position 5–20 or weak CTR, filtered to question-intent and winnable difficulty (proxy KD ≤ 29, SV > 500, clear intent), deduped for cannibalization, with a content-gap read. Output: a ranked cluster list.
+3. **Strategize** (the content-sprint stage). Delegate to the **`herow-seo:seo-strategist`** agent via the `Agent` tool (fall back to `general-purpose` if the agent isn't in the session's agent list) to find striking-distance question clusters: position 5–20 or weak CTR, filtered to question-intent and winnable difficulty (proxy KD ≤ 29, SV > 500, clear intent), deduped for cannibalization, with a content-gap read. Output: a ranked cluster list.
 
-4. **Indexation gate** (the indexation-check stage) **— HUMAN GATE.** Delegate to the **`technical-seo-auditor`** agent (fallback `general-purpose`) to break down coverage: indexed vs `Discovered – currently not indexed` vs `Crawled – currently not indexed` vs excluded. **If a large share of pages are not indexed, STOP and surface the fix list first — do not pour more content onto an unindexable site.** Present the coverage status and, via `AskUserQuestion`, ask whether to fix indexability now or proceed to drafting anyway. Past ~100 pages, "not indexed" is expected — frame it as a quality/internal-link/crawl-budget problem, not a panic.
+4. **Indexation gate** (the indexation-check stage) **— HUMAN GATE.** Delegate to the **`herow-seo:technical-seo-auditor`** agent (fallback `general-purpose`) to break down coverage: indexed vs `Discovered – currently not indexed` vs `Crawled – currently not indexed` vs excluded. **If a large share of pages are not indexed, STOP and surface the fix list first — do not pour more content onto an unindexable site.** Present the coverage status and, via `AskUserQuestion`, ask whether to fix indexability now or proceed to drafting anyway. Past ~100 pages, "not indexed" is expected — frame it as a quality/internal-link/crawl-budget problem, not a panic.
 
 5. **Pick the cluster — HUMAN GATE.** Present the ranked clusters from stage 3 and ask via `AskUserQuestion` which one to draft (top recommendation first). Do not proceed without a choice.
 
-6. **Draft.** Delegate to the **`content-engineer`** agent (fallback `general-purpose`) to produce the approved cluster: a quick-answer block at the top, the body, a concise FAQ, valid `FAQPage` + `Article` JSON-LD, 3–8 internal links with anchors, and a ≤60c title / ≤155c meta. Enforce the **information-gain gate**: content-engineer returns **PASS** (proprietary element named) or **BLOCKED** (missing input). A BLOCKED draft is returned with `[INSERT: …]` placeholders, never finalized.
+6. **Draft.** Delegate to the **`herow-seo:content-engineer`** agent (fallback `general-purpose`) to produce the approved cluster: a quick-answer block at the top, the body, a concise FAQ, valid `FAQPage` + `Article` JSON-LD, 3–8 internal links with anchors, and a ≤60c title / ≤155c meta. Enforce the **information-gain gate**: content-engineer returns **PASS** (proprietary element named) or **BLOCKED** (missing input). A BLOCKED draft is returned with `[INSERT: …]` placeholders, never finalized.
 
 7. **GEO schema** (the GEO stage). Still via **`content-engineer`**, emit the typed JSON-LD (`FAQPage` / `Article` / `BreadcrumbList` / `Organization` as fits the page) plus AI-citable quick-answers, formatted for citation by ChatGPT/Perplexity/Gemini/Claude.
 
-8. **Audit** (the weekly-audit stage). Delegate to the **`technical-seo-auditor`** agent again to produce the weekly "what's broken" baseline: prioritized ~10 fixes (duplicate/conflicting schema, render/hydration bugs, redirect chains, titles >60c, missing canonical, slow CWV, orphan pages), plus CTR diagnostics ranked by clicks-at-risk. This is the recurring baseline the founder runs from week 2 on.
+8. **Audit** (the weekly-audit stage). Delegate to the **`herow-seo:technical-seo-auditor`** agent again to produce the weekly "what's broken" baseline: prioritized ~10 fixes (duplicate/conflicting schema, render/hydration bugs, redirect chains, titles >60c, missing canonical, slow CWV, orphan pages), plus CTR diagnostics ranked by clicks-at-risk. This is the recurring baseline the founder runs from week 2 on.
 
 9. **Final HUMAN GATE.** Present the full ordered set of stage artifacts (cluster pick, draft + schema, indexation status, audit baseline) written to the working tree or a chosen `out/` dir. Ask via `AskUserQuestion`: approve / revise / discard. **Never publish** — publishing is manual or via `toprank setup-cms`.
 

@@ -110,9 +110,9 @@ Tag memory-management findings with 🧠 after the level.
 
 ## Approval Criteria
 
-- **Approve**: No CRITICAL or HIGH issues
-- **Warning**: MEDIUM issues only (can merge with caution)
-- **Block**: CRITICAL or HIGH issues found
+- **Approve**: no 🔴 or 🟠 findings
+- **Warning**: 🟡 findings only (can merge with caution)
+- **Block**: any 🔴 or 🟠 finding
 
 ## Framework Checks
 
@@ -121,7 +121,3 @@ Tag memory-management findings with 🧠 after the level.
 - **FastAPI**: CORS config, Pydantic validation, response models, no blocking in async, no
   module-global mutable state used to smuggle per-request data across requests
 - **Flask**: Proper error handlers, CSRF protection
-
----
-
-Review with the mindset: "Would this code pass review at a top Python shop or open-source project?"
