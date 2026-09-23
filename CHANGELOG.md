@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.3.0] - 2026-09-23
+
+### Fixed
+- **Bash commands no longer stall for 10 seconds when a hook is slow to receive its input.**
+  The `destructive-guard` and `git-guard` PreToolUse hooks waited for the harness to close
+  their input stream before doing anything. When that close was slow, each hook burned its
+  full 10-second timeout and was then cancelled — which means it made no decision at all, so
+  the wait bought nothing and the command ran unguarded anyway. Measured over one week:
+  120 such cancellations for `destructive-guard` and 14 for `git-guard`, every one pinned at
+  the timeout. The hooks now cap that wait at ~2 seconds and still make their decision from
+  the input that already arrived, so a slow close costs 2 seconds instead of 10.
+  On bash 3.2 (still `/bin/bash` on stock macOS) the original unbounded wait is kept
+  deliberately: that version discards a timed-out read, which would have turned a slow close
+  into a guard that returns fast and silently allows the command through.
+- **`destructive-guard` starts one interpreter per command instead of three.** It runs on
+  every single Bash command, so the two extra startups were pure overhead on a path that
+  exits early most of the time. Measured end-to-end: 126ms → 76ms per command.
+
+### Changed
+- Both guards now document their accepted failure modes in place: a harness slow to *send*
+  (rather than slow to close) leaves the guard failing open, and a command containing invalid
+  UTF-8 can skip a segment. Both are pinned by tests so they cannot change unnoticed.
+
+### Added
+- Hook guard test suites now run in CI. Previously `plugin-ci` only checked that these files
+  parsed, so none of their assertions ever ran on a pull request.
+- Tests for both guards now assert *elapsed time*, not just the decision — the only way to
+  catch the wait cap being removed — and probe each shell's bash version instead of assuming
+  it, printing an explicit SKIP for any branch the host cannot cover.
+
 ## [0.11.2.0] - 2026-09-13
 
 ### Added
