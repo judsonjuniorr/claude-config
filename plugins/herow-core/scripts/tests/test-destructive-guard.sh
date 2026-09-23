@@ -262,6 +262,158 @@ out="$(printf '' | bash "$GUARD")"
 out="$(printf 'not json' | bash "$GUARD")"
 [ -z "$out" ] && ok "malformed stdin silent, exit 0" || fail "malformed stdin produced output"
 
+# --- Bounded stdin read: bound must EXIST and must not disarm the guard -----
+# The guard bounds its stdin read so a harness slow to CLOSE stdin costs ~2s
+# instead of the full 10s hook timeout. That stall shape is a LATE EOF: the
+# payload has already arrived and only the close is pending, so the guard must
+# still evaluate the real command and ask. "Returns fast but silently
+# unguarded" is the one outcome that must never happen in a data-loss guard.
+#
+# The read is bounded only on bash >= 4; bash 3.2 DISCARDS a partial timed-out
+# read, so it deliberately keeps the old unbounded read.
+#
+# Two things are asserted per shell, and BOTH matter:
+#   1. the guard still asks (the bound did not drop the payload), and
+#   2. the elapsed time proves which branch actually ran.
+# Without (2) these tests pass against a guard whose bound was reverted to a
+# plain $(cat) — the writer closes on its own, so "it asked" is true either
+# way. (2) is the only assertion that pins the bound itself.
+#
+# The shell's major version is PROBED, never assumed: /bin/bash is bash 3.2 on
+# stock macOS but bash 5 on Linux CI and on brew-linked Macs. A label claiming
+# "3.2 coverage" on a host where both shells are bash 5 is a test that lies
+# about a data-loss guard, so uncovered branches print a loud SKIP instead.
+shell_major() {
+  local v
+  v="$("$1" -c 'echo ${BASH_VERSINFO[0]}' 2>/dev/null || true)"
+  case "$v" in ''|*[!0-9]*) echo 0 ;; *) echo "$v" ;; esac
+}
+
+# Payload is built ONCE, outside the writer subshell: a python3 cold start
+# inside the fork would race the guard's own 2s bound on a loaded machine and
+# produce a false "guard was disarmed" failure.
+STALL_PAYLOAD="$(python3 -c "import json; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ~/important'}}))")"
+# MUST exceed the guard's -t bound, or the bound never fires and these degrade
+# into ordinary-EOF tests that pass while covering nothing.
+STALL_WRITER_SLEEP=6
+# $SECONDS is whole-second resolution and counts tick boundaries crossed, so a
+# genuine 2.1s bounded read can read as 3. The ceiling sits between the 2s
+# bound and the 6s close with a full second of slack on each side; tightening
+# it to 3 made this flake. Do not narrow the gap without switching to
+# sub-second timing.
+STALL_BOUND_CEILING=4
+
+stall_guard() {
+  local sh="$1" fifo w
+  fifo="$T/stall.$$"
+  rm -f "$fifo"; mkfifo "$fifo"
+  { printf '%s\n' "$STALL_PAYLOAD"; sleep "$STALL_WRITER_SLEEP"; } > "$fifo" &
+  w=$!
+  SECONDS=0
+  STALL_OUT="$("$sh" "$GUARD" < "$fifo")"
+  STALL_SECS=$SECONDS
+  kill "$w" 2>/dev/null || true
+  wait "$w" 2>/dev/null || true
+  rm -f "$fifo"
+}
+
+COVERED_GE4=0
+COVERED_LT4=0
+for sh in bash /bin/bash; do
+  maj="$(shell_major "$sh")"
+  if [ "$maj" -eq 0 ]; then
+    echo "SKIP - $sh unavailable or version unreadable"
+    continue
+  fi
+  stall_guard "$sh"
+  asks "$STALL_OUT" \
+    && ok "late-EOF stall still asks ($sh = bash $maj, ${STALL_SECS}s)" \
+    || fail "late-EOF stall DISARMED the guard ($sh = bash $maj)"
+  if [ "$maj" -ge 4 ]; then
+    COVERED_GE4=1
+    [ "$STALL_SECS" -lt "$STALL_BOUND_CEILING" ] \
+      && ok "read is bounded on bash $maj (${STALL_SECS}s < ${STALL_WRITER_SLEEP}s close)" \
+      || fail "read NOT bounded on bash $maj: ${STALL_SECS}s — the -t bound is gone"
+  else
+    COVERED_LT4=1
+    [ "$STALL_SECS" -ge "$STALL_BOUND_CEILING" ] \
+      && ok "bash $maj keeps the unbounded read (${STALL_SECS}s, waited for EOF)" \
+      || fail "bash $maj returned in ${STALL_SECS}s — expected it to wait for EOF"
+  fi
+done
+[ "$COVERED_GE4" -eq 1 ] || echo "SKIP - bash>=4 BOUNDED-read branch not covered on this host"
+[ "$COVERED_LT4" -eq 1 ] || echo "SKIP - bash 3.2 UNBOUNDED-read branch not covered on this host (no bash < 4 present)"
+
+# Slow SENDER, not slow closer: only part of the JSON has arrived when the
+# bound expires. Accepted, documented residual (see the guard's own comment) —
+# the guard must fail OPEN silently and never emit a decision from half a
+# payload. On bash 3.2 the unbounded read waits and the guard asks instead;
+# both outcomes are safe, neither may be a bogus decision.
+partial_send() {
+  local sh="$1" fifo w
+  fifo="$T/partial.$$"
+  rm -f "$fifo"; mkfifo "$fifo"
+  { printf '%s' "$(printf '%s' "$STALL_PAYLOAD" | cut -c1-20)"; sleep 4
+    printf '%s\n' "$(printf '%s' "$STALL_PAYLOAD" | cut -c21-)"; } > "$fifo" &
+  w=$!
+  PARTIAL_OUT="$("$sh" "$GUARD" < "$fifo")"
+  kill "$w" 2>/dev/null || true
+  wait "$w" 2>/dev/null || true
+  rm -f "$fifo"
+}
+
+for sh in bash /bin/bash; do
+  maj="$(shell_major "$sh")"
+  [ "$maj" -eq 0 ] && continue
+  partial_send "$sh"
+  if [ "$maj" -ge 4 ]; then
+    [ -z "$PARTIAL_OUT" ] \
+      && ok "slow sender fails OPEN silently on bash $maj (truncated JSON, no bogus decision)" \
+      || fail "slow sender produced output on bash $maj: $PARTIAL_OUT"
+  else
+    asks "$PARTIAL_OUT" \
+      && ok "slow sender still asks on bash $maj (unbounded read waits for the rest)" \
+      || fail "slow sender neither asked nor stayed silent on bash $maj"
+  fi
+done
+
+# KNOWN GAP, pre-existing and deliberately pinned: a command carrying invalid
+# UTF-8 (a lone surrogate) makes the segment loop's `sed`/`grep` abort with
+# "illegal byte sequence" under a UTF-8 locale, so that segment is skipped and
+# a destructive command in it is MISSED. Verified present before this change
+# too (the old three-python3 extraction crashed on the text-mode write and
+# dropped the whole command instead), so this is not a regression -- and the
+# base64 framing is strictly better here, because segments WITHOUT invalid
+# bytes still get checked. Not fixed in this pass: the obvious fix, forcing
+# LC_ALL=C, cannot be applied globally because it would make python3 read
+# stdin as ASCII and break every legitimately non-ASCII payload (verified: an
+# emoji command currently guards correctly). Fixing it means scoping the
+# locale to the matching calls only. These two cases pin both halves so the
+# behavior cannot silently change.
+invalid_utf8_payload() {
+  python3 -c "
+import json, sys
+s = json.dumps({'tool_name':'Bash','tool_input':{'command':sys.argv[1]}})
+sys.stdout.buffer.write(s.encode('utf-8','surrogatepass') + b'\n')" "$1"
+}
+
+out="$(invalid_utf8_payload 'rm -rf ~/x'$'\xed\xb3\xa9' | bash "$GUARD" 2>/dev/null || true)"
+[ -z "$out" ] && ok "KNOWN GAP pinned: invalid-UTF8 segment is skipped (fails open, pre-existing)" \
+  || ok "invalid-UTF8 segment now asks — gap closed, update this comment"
+
+out="$(invalid_utf8_payload 'echo bad'$'\xed\xb3\xa9''
+rm -rf ~/important' | bash "$GUARD" 2>/dev/null || true)"
+asks "$out" && ok "valid segments still checked alongside an invalid-UTF8 one" \
+  || fail "invalid UTF-8 in one segment suppressed the whole command"
+
+# Normal (prompt-EOF) payload under /bin/bash: the 3.2 branch must behave
+# identically to the default shell for ordinary input, not just under stall.
+out="$(python3 -c "import json,sys; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ~/data'}}))" | /bin/bash "$GUARD")"
+asks "$out" && ok "rm -rf ~/data asks under /bin/bash" || fail "guard did not ask under /bin/bash"
+
+out="$(python3 -c "import json,sys; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ./node_modules'}}))" | /bin/bash "$GUARD")"
+[ -z "$out" ] && ok "rm -rf ./node_modules silent under /bin/bash" || fail "allowlisted target asked under /bin/bash"
+
 echo "----"
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

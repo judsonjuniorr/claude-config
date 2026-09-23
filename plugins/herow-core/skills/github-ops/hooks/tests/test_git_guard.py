@@ -3,6 +3,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 
 HOOK = os.path.join(os.path.dirname(__file__), "..", "git-guard.sh")
 
@@ -302,6 +304,179 @@ must_deny = [
 ]
 
 
+# The writer delay MUST exceed the guard's -t bound, or the bound never fires
+# and the stall cases degrade into ordinary-EOF tests that pass while covering
+# nothing. BOUND_CEILING splits "bounded" from "waited for EOF" with margin.
+STALL_WRITER_SLEEP = 5.0
+BOUND_CEILING = 3.0
+
+
+def shell_major(shell):
+    """Probe the shell's bash major version. 0 = unavailable/unreadable.
+
+    Never assumed: /bin/bash is bash 3.2 on stock macOS but bash 5 on Linux CI
+    and on brew-linked Macs. A case labelled "3.2 coverage" on a host where
+    both shells are bash 5 is a test lying about a security hook.
+    """
+    try:
+        r = subprocess.run(
+            [shell, "-c", "echo ${BASH_VERSINFO[0]}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return int(r.stdout.strip())
+    except Exception:
+        return 0
+
+
+def run_stalled(cmd, shell="bash"):
+    """Run the hook with a LATE EOF, and report how long it took.
+
+    The payload arrives immediately; the writer then holds the pipe open past
+    the guard's bound before closing. That is the real stall shape the bounded
+    read exists for -- a harness slow to CLOSE stdin, not slow to send -- so
+    the decision must still be made from the payload that did arrive.
+
+    Returns (decision, elapsed_seconds). The elapsed value is what pins the
+    bound itself: without it, reverting `-t 2` to a plain read still passes,
+    because the writer closes on its own and the decision comes out either way.
+
+    The close MUST happen on a timer rather than after communicate(): bash 3.2
+    blocks until EOF, so closing afterwards would deadlock against the very
+    branch this covers.
+    """
+    payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}})
+    r, w = os.pipe()
+    p = subprocess.Popen([shell, HOOK], stdin=r, stdout=subprocess.PIPE, text=True)
+    os.close(r)
+    os.write(w, payload.encode())
+    closed = threading.Event()
+
+    def _close():
+        if not closed.is_set():
+            closed.set()
+            os.close(w)
+
+    closer = threading.Timer(STALL_WRITER_SLEEP, _close)
+    closer.start()
+    t0 = time.monotonic()
+    try:
+        out = p.communicate(timeout=30)[0].strip()
+    finally:
+        elapsed = time.monotonic() - t0
+        closer.cancel()
+        _close()  # idempotent: never leak w when the guard decided early
+        p.wait(timeout=5)
+    if not out:
+        return "NO-DECISION", elapsed
+    try:
+        return json.loads(out)["hookSpecificOutput"]["permissionDecision"], elapsed
+    except Exception:
+        return "PARSE-ERR:" + out[:100], elapsed
+
+
+def run_raw(payload_text, shell="bash"):
+    """Feed raw bytes straight to the hook -- not a well-formed payload."""
+    r = subprocess.run(
+        [shell, HOOK], input=payload_text, capture_output=True, text=True
+    )
+    return r.stdout.strip() or "NO-DECISION", r.returncode
+
+
+def report_stall():
+    """Assert BOTH that the guard still decides under stall AND which read
+    branch actually ran, per shell, with the branch coverage stated out loud."""
+    print("=== LATE-EOF STALL: still denies, and the read branch is pinned ===")
+    attributed = f'git commit -m "fix\n\n{ATTR1} <x@y>"'
+    ok = True
+    n = 0
+    covered = {"bounded": False, "unbounded": False}
+    for shell in ("bash", "/bin/bash"):
+        maj = shell_major(shell)
+        if maj == 0:
+            print(f"SKIP [{'n/a':12}] {shell} unavailable or version unreadable")
+            continue
+        d, secs = run_stalled(attributed, shell)
+        good = d == "deny"
+        n += 1
+        print(
+            f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): "
+            f"attribution under stall, {secs:.1f}s"
+        )
+        if maj >= 4:
+            covered["bounded"] = True
+            bounded = secs < BOUND_CEILING
+            n += 1
+            print(
+                f"{'OK ' if bounded else 'FAIL'} [{'bounded':12}] bash {maj}: "
+                f"read returned in {secs:.1f}s (< {BOUND_CEILING}s close)"
+                + ("" if bounded else "  -- the -t bound is GONE")
+            )
+            ok = ok and bounded
+        else:
+            covered["unbounded"] = True
+            waited = secs >= BOUND_CEILING
+            n += 1
+            print(
+                f"{'OK ' if waited else 'FAIL'} [{'unbounded':12}] bash {maj}: "
+                f"waited {secs:.1f}s for EOF (3.2 keeps the unbounded read)"
+            )
+            ok = ok and waited
+        ok = ok and good
+    for branch, seen in covered.items():
+        if not seen:
+            print(f"SKIP [{'uncovered':12}] the {branch}-read branch is NOT covered on this host")
+    return ok, n
+
+
+def report_failopen():
+    """Empty / malformed stdin must fail OPEN silently on every shell."""
+    print("=== MUST FAIL OPEN (empty / malformed stdin, exit 0) ===")
+    ok = True
+    n = 0
+    for shell in ("bash", "/bin/bash"):
+        if shell_major(shell) == 0:
+            continue
+        for label, payload in (("empty stdin", ""), ("not json", "not json")):
+            out, rc = run_raw(payload, shell)
+            good = out == "NO-DECISION" and rc == 0
+            ok = ok and good
+            n += 1
+            print(f"{'OK ' if good else 'FAIL'} [{out[:12]:12}] {shell}: {label} (exit {rc})")
+    return ok, n
+
+
+def report_shell_parity():
+    """An ordinary prompt-EOF payload must behave identically on both shells --
+    the 3.2 branch is only covered under stall otherwise."""
+    print("=== SHELL PARITY (normal payload, both shells) ===")
+    attributed = f'git commit -m "fix\n\n{ATTR1} <x@y>"'
+    ok = True
+    n = 0
+    for shell in ("bash", "/bin/bash"):
+        maj = shell_major(shell)
+        if maj == 0:
+            continue
+        for cmd, want, what in (
+            (attributed, "deny", "attribution denied"),
+            ("gh pr view 42", "allow", "read-only fast-allow"),
+        ):
+            p = subprocess.run(
+                [shell, HOOK],
+                input=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}),
+                capture_output=True, text=True,
+            )
+            o = p.stdout.strip()
+            try:
+                d = json.loads(o)["hookSpecificOutput"]["permissionDecision"]
+            except Exception:
+                d = "NO-DECISION" if not o else "PARSE-ERR"
+            good = d == want
+            ok = ok and good
+            n += 1
+            print(f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): {what}")
+    return ok, n
+
+
 def report(title, cases, expect_fn):
     print(f"=== {title} ===")
     ok = True
@@ -340,7 +515,10 @@ def main():
             lambda d: d == "NO-DECISION",
         ),
     ]
-    total = sum(
+    extra = [report_stall(), report_failopen(), report_shell_parity()]
+    results += [r[0] for r in extra]
+    extra_n = sum(r[1] for r in extra)
+    total = extra_n + sum(  # extra_n: self-counted by the report_* helpers above
         len(x)
         for x in [
             must_allow_regression,
