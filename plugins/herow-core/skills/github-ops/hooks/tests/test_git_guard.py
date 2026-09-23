@@ -304,8 +304,8 @@ must_deny = [
 ]
 
 
-# The writer delay MUST exceed the guard's -t bound, or the bound never fires
-# and the stall cases degrade into ordinary-EOF tests that pass while covering
+# The writer delay MUST exceed the guard's bound, or the bound never fires and
+# the stall cases degrade into ordinary-EOF tests that pass while covering
 # nothing. BOUND_CEILING splits "bounded" from "waited for EOF" with margin.
 STALL_WRITER_SLEEP = 5.0
 BOUND_CEILING = 3.0
@@ -315,17 +315,32 @@ def shell_major(shell):
     """Probe the shell's bash major version. 0 = unavailable/unreadable.
 
     Never assumed: /bin/bash is bash 3.2 on stock macOS but bash 5 on Linux CI
-    and on brew-linked Macs. A case labelled "3.2 coverage" on a host where
-    both shells are bash 5 is a test lying about a security hook.
+    and on brew-linked Macs. The guard's bound no longer branches on the
+    version (it lives inside the python3 call, which behaves the same on both),
+    but the hook still has to work under either shell, so both are exercised.
     """
     try:
         r = subprocess.run(
             [shell, "-c", "echo ${BASH_VERSINFO[0]}"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return int(r.stdout.strip())
     except Exception:
         return 0
+
+
+# Probed ONCE. Three reporters used to re-probe the same two shells, paying six
+# subprocesses to answer a question that cannot change mid-run, and each made
+# its own decision about how to skip a missing shell.
+SHELLS = [(s, m) for s in ("bash", "/bin/bash") for m in (shell_major(s),) if m]
+SKIPPED_SHELLS = [s for s in ("bash", "/bin/bash") if s not in {x[0] for x in SHELLS}]
+
+
+def _announce_skips():
+    for s in SKIPPED_SHELLS:
+        print(f"SKIP [{'n/a':12}] {s} unavailable or version unreadable")
 
 
 def run_stalled(cmd, shell="bash"):
@@ -337,35 +352,54 @@ def run_stalled(cmd, shell="bash"):
     the decision must still be made from the payload that did arrive.
 
     Returns (decision, elapsed_seconds). The elapsed value is what pins the
-    bound itself: without it, reverting `-t 2` to a plain read still passes,
-    because the writer closes on its own and the decision comes out either way.
+    bound itself: without it, removing the deadline still passes, because the
+    writer closes on its own and the decision comes out either way.
 
-    The close MUST happen on a timer rather than after communicate(): bash 3.2
-    blocks until EOF, so closing afterwards would deadlock against the very
-    branch this covers.
+    The close MUST happen on a timer rather than after communicate(): an
+    unbounded guard blocks until EOF, so closing afterwards would deadlock
+    against exactly the regression this case exists to catch.
     """
     payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}})
     r, w = os.pipe()
-    p = subprocess.Popen([shell, HOOK], stdin=r, stdout=subprocess.PIPE, text=True)
-    os.close(r)
+    try:
+        p = subprocess.Popen(
+            [shell, HOOK], stdin=r, stdout=subprocess.PIPE, text=True
+        )
+    except BaseException:
+        os.close(w)
+        raise
+    finally:
+        os.close(r)
+
     os.write(w, payload.encode())
+    # A plain is_set()/set() pair is not atomic, so the timer thread and the
+    # finally block below could both reach os.close(w) and double-close a fd
+    # that may since have been reused. The lock is what makes _close() the
+    # idempotent thing its callers assume it is.
+    close_lock = threading.Lock()
     closed = threading.Event()
 
     def _close():
-        if not closed.is_set():
-            closed.set()
-            os.close(w)
+        with close_lock:
+            if not closed.is_set():
+                closed.set()
+                os.close(w)
 
     closer = threading.Timer(STALL_WRITER_SLEEP, _close)
     closer.start()
     t0 = time.monotonic()
     try:
         out = p.communicate(timeout=30)[0].strip()
+    except subprocess.TimeoutExpired:
+        # The guard hung. Kill it rather than leaking the child and its pipe --
+        # and note a bare p.wait() here would raise a second TimeoutExpired
+        # that masked the real failure.
+        p.kill()
+        out = (p.communicate()[0] or "").strip()
     finally:
         elapsed = time.monotonic() - t0
         closer.cancel()
-        _close()  # idempotent: never leak w when the guard decided early
-        p.wait(timeout=5)
+        _close()
     if not out:
         return "NO-DECISION", elapsed
     try:
@@ -377,24 +411,30 @@ def run_stalled(cmd, shell="bash"):
 def run_raw(payload_text, shell="bash"):
     """Feed raw bytes straight to the hook -- not a well-formed payload."""
     r = subprocess.run(
-        [shell, HOOK], input=payload_text, capture_output=True, text=True
+        [shell, HOOK],
+        input=payload_text,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     return r.stdout.strip() or "NO-DECISION", r.returncode
 
 
 def report_stall():
-    """Assert BOTH that the guard still decides under stall AND which read
-    branch actually ran, per shell, with the branch coverage stated out loud."""
-    print("=== LATE-EOF STALL: still denies, and the read branch is pinned ===")
+    """Assert BOTH that the guard still decides under stall AND that the bound
+    actually fired, per shell.
+
+    The bound lives inside the guard's python3 call, which reads in blocks
+    against a wall-clock deadline and keeps what arrived, so it behaves
+    identically on bash 3.2 and bash 5 -- there is no version branch left to
+    cover, only the two shells the hook must run under.
+    """
+    print("=== LATE-EOF STALL: still denies, and the bound is pinned ===")
     attributed = f'git commit -m "fix\n\n{ATTR1} <x@y>"'
     ok = True
     n = 0
-    covered = {"bounded": False, "unbounded": False}
-    for shell in ("bash", "/bin/bash"):
-        maj = shell_major(shell)
-        if maj == 0:
-            print(f"SKIP [{'n/a':12}] {shell} unavailable or version unreadable")
-            continue
+    _announce_skips()
+    for shell, maj in SHELLS:
         d, secs = run_stalled(attributed, shell)
         good = d == "deny"
         n += 1
@@ -402,29 +442,61 @@ def report_stall():
             f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): "
             f"attribution under stall, {secs:.1f}s"
         )
-        if maj >= 4:
-            covered["bounded"] = True
-            bounded = secs < BOUND_CEILING
-            n += 1
-            print(
-                f"{'OK ' if bounded else 'FAIL'} [{'bounded':12}] bash {maj}: "
-                f"read returned in {secs:.1f}s (< {BOUND_CEILING}s close)"
-                + ("" if bounded else "  -- the -t bound is GONE")
-            )
-            ok = ok and bounded
-        else:
-            covered["unbounded"] = True
-            waited = secs >= BOUND_CEILING
-            n += 1
-            print(
-                f"{'OK ' if waited else 'FAIL'} [{'unbounded':12}] bash {maj}: "
-                f"waited {secs:.1f}s for EOF (3.2 keeps the unbounded read)"
-            )
-            ok = ok and waited
+        bounded = secs < BOUND_CEILING
+        n += 1
+        print(
+            f"{'OK ' if bounded else 'FAIL'} [{'bounded':12}] bash {maj}: "
+            f"read returned in {secs:.1f}s "
+            f"(ceiling {BOUND_CEILING}s, writer closes at {STALL_WRITER_SLEEP}s)"
+            + ("" if bounded else "  -- the bound is GONE")
+        )
+        ok = ok and bounded and good
+    if not SHELLS:
+        # Zero coverage used to return ok=True with n=0: a green run that
+        # exercised nothing at all.
+        print("FAIL [no-shell    ] no usable bash found; the bound was never exercised")
+        ok = False
+        n += 1
+    return ok, n
+
+
+def report_size_bound():
+    """A large payload over a PIPE must still produce a decision.
+
+    Regression pin. A previous bound used bash `read -r -d '' -t 2`, which
+    drains a non-seekable fd one byte per read(2) syscall (~1MB/s), turning a
+    wall-clock bound into a payload-SIZE cap: past a couple of MB the JSON
+    arrived truncated and the attribution deny was silently skipped. Reproduces
+    only over a pipe -- with `< file` the fd is seekable and bash reads in bulk.
+    """
+    print("=== PAYLOAD SIZE must not bound the read ===")
+    ok = True
+    n = 0
+    # The padding goes in a field the guard does not scan, NOT into the command
+    # itself: a multi-MB single-line command trips a pre-existing quadratic
+    # blowup in the downstream `grep -E` (minutes of CPU), which is an older,
+    # separate problem and would mask what this case is about. What is under
+    # test is the READ -- whether a 3MB payload reaches the parser intact.
+    cmd = f'git commit -m "fix\\n\\n{ATTR1} <x@y>"'
+    payload = json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": cmd, "_pad": "x" * 3_000_000}}
+    )
+    for shell, maj in SHELLS:
+        p = subprocess.run(
+            [shell, HOOK], input=payload, capture_output=True, text=True, timeout=60
+        )
+        o = p.stdout.strip()
+        try:
+            d = json.loads(o)["hookSpecificOutput"]["permissionDecision"]
+        except Exception:
+            d = "NO-DECISION" if not o else "PARSE-ERR"
+        good = d == "deny"
         ok = ok and good
-    for branch, seen in covered.items():
-        if not seen:
-            print(f"SKIP [{'uncovered':12}] the {branch}-read branch is NOT covered on this host")
+        n += 1
+        print(
+            f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): "
+            f"3MB payload over a pipe (command itself is small)"
+        )
     return ok, n
 
 
@@ -433,38 +505,41 @@ def report_failopen():
     print("=== MUST FAIL OPEN (empty / malformed stdin, exit 0) ===")
     ok = True
     n = 0
-    for shell in ("bash", "/bin/bash"):
-        if shell_major(shell) == 0:
-            continue
+    _announce_skips()
+    for shell, _maj in SHELLS:
         for label, payload in (("empty stdin", ""), ("not json", "not json")):
             out, rc = run_raw(payload, shell)
             good = out == "NO-DECISION" and rc == 0
             ok = ok and good
             n += 1
-            print(f"{'OK ' if good else 'FAIL'} [{out[:12]:12}] {shell}: {label} (exit {rc})")
+            print(
+                f"{'OK ' if good else 'FAIL'} [{out[:12]:12}] {shell}: {label} (exit {rc})"
+            )
     return ok, n
 
 
 def report_shell_parity():
-    """An ordinary prompt-EOF payload must behave identically on both shells --
-    the 3.2 branch is only covered under stall otherwise."""
+    """An ordinary prompt-EOF payload must behave identically on both shells,
+    and must NOT pay the bound -- this is ~100% of real calls."""
     print("=== SHELL PARITY (normal payload, both shells) ===")
     attributed = f'git commit -m "fix\n\n{ATTR1} <x@y>"'
     ok = True
     n = 0
-    for shell in ("bash", "/bin/bash"):
-        maj = shell_major(shell)
-        if maj == 0:
-            continue
+    _announce_skips()
+    for shell, maj in SHELLS:
         for cmd, want, what in (
             (attributed, "deny", "attribution denied"),
             ("gh pr view 42", "allow", "read-only fast-allow"),
         ):
+            t0 = time.monotonic()
             p = subprocess.run(
                 [shell, HOOK],
                 input=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}),
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
+            elapsed = time.monotonic() - t0
             o = p.stdout.strip()
             try:
                 d = json.loads(o)["hookSpecificOutput"]["permissionDecision"]
@@ -473,7 +548,18 @@ def report_shell_parity():
             good = d == want
             ok = ok and good
             n += 1
-            print(f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): {what}")
+            print(
+                f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): {what}"
+            )
+            # A read that stopped seeing EOF would satisfy every assertion above
+            # while making every single call wait the full bound.
+            quick = elapsed < 1.0
+            ok = ok and quick
+            n += 1
+            print(
+                f"{'OK ' if quick else 'FAIL'} [{'immediate':12}] {shell}: "
+                f"ordinary payload returned in {elapsed:.1f}s (no bound paid)"
+            )
     return ok, n
 
 
@@ -515,7 +601,12 @@ def main():
             lambda d: d == "NO-DECISION",
         ),
     ]
-    extra = [report_stall(), report_failopen(), report_shell_parity()]
+    extra = [
+        report_stall(),
+        report_size_bound(),
+        report_failopen(),
+        report_shell_parity(),
+    ]
     results += [r[0] for r in extra]
     extra_n = sum(r[1] for r in extra)
     total = extra_n + sum(  # extra_n: self-counted by the report_* helpers above

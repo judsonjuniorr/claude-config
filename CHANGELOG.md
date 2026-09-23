@@ -13,9 +13,12 @@ All notable changes to this project will be documented in this file.
   120 such cancellations for `destructive-guard` and 14 for `git-guard`, every one pinned at
   the timeout. The hooks now cap that wait at ~2 seconds and still make their decision from
   the input that already arrived, so a slow close costs 2 seconds instead of 10.
-  On bash 3.2 (still `/bin/bash` on stock macOS) the original unbounded wait is kept
-  deliberately: that version discards a timed-out read, which would have turned a slow close
-  into a guard that returns fast and silently allows the command through.
+  The wait is bounded inside the same `python3` call that parses the payload, which reads in
+  blocks against a wall-clock deadline and keeps whatever already arrived. That behaves the
+  same under stock macOS `/bin/bash` (3.2) and bash 5, so no shell-version branch is needed —
+  and, unlike a bash `read -t`, it bounds *time* rather than *size*: bash drains a pipe one
+  byte per syscall, so a timed `read` silently truncated payloads past roughly 2MB and let a
+  large Write through unguarded.
 - **`destructive-guard` starts one interpreter per command instead of three.** It runs on
   every single Bash command, so the two extra startups were pure overhead on a path that
   exits early most of the time. Measured end-to-end: 126ms → 76ms per command.
@@ -29,8 +32,11 @@ All notable changes to this project will be documented in this file.
 - Hook guard test suites now run in CI. Previously `plugin-ci` only checked that these files
   parsed, so none of their assertions ever ran on a pull request.
 - Tests for both guards now assert *elapsed time*, not just the decision — the only way to
-  catch the wait cap being removed — and probe each shell's bash version instead of assuming
-  it, printing an explicit SKIP for any branch the host cannot cover.
+  catch the wait cap being removed — pin a multi-MB payload so the cap can never regress into
+  a size limit, and probe each shell's bash version instead of assuming it, failing loudly if
+  no usable shell is found rather than passing with zero coverage.
+- `destructive-guard` now checks that its `base64` decoder actually round-trips, and says so on
+  stderr if none works, instead of silently decoding every field to empty and disarming itself.
 
 ## [0.11.2.0] - 2026-09-13
 

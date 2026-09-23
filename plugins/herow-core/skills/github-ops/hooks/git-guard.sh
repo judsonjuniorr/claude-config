@@ -30,34 +30,51 @@
 # (status/diff/log) is RTK's own hook — so no overlap.
 # Never blocks hard, never errors.
 
-# Bounded read before the parse instead of a raw `json.load(sys.stdin)` on
-# the hook's own stdin -- but ONLY on bash >= 4. Full rationale, including the
-# measurement behind it, lives in scripts/destructive-guard.sh above its own
-# copy of this block; the short version:
+# Bounded, block-wise read INSIDE the parse -- not a raw `json.load(sys.stdin)`
+# and not a shell-side `read -t`. Full rationale lives in
+# herow-core/scripts/destructive-guard.sh (plugin root), above its own copy of
+# this block; the short version:
 #
-#   - reading stdin directly blocks until EOF, so a harness slow to CLOSE it
+#   - reading stdin to EOF blocks until the harness CLOSES it, so a slow close
 #     burns the whole 10s hook timeout and yields no decision at all (14 such
 #     cancellations for this hook in the week ending 2026-09-22);
-#   - the stall shape is a LATE EOF, so on bash >= 4 a `-t` timeout still
-#     assigns what arrived and the attribution deny below still runs;
-#   - bash 3.2 (still /bin/bash on stock macOS, and this ships as a
-#     marketplace plugin) DISCARDS the partial read, which would silently pass
-#     an attribution footer through -- exactly what this hook exists to stop --
-#     so it keeps the old unbounded read: never worse than before.
+#   - bash's `read` drains a non-seekable fd one byte per syscall, so bounding
+#     IT with `-t` is really a payload-SIZE cap: past a couple of MB the JSON
+#     arrives truncated and an attribution footer sails through -- exactly what
+#     this hook exists to stop;
+#   - python reads in blocks against a wall-clock deadline and KEEPS what
+#     arrived, so the bound is on TIME alone and behaves identically on bash
+#     3.2 and bash 5 -- no version test needed.
 #
-# ACCEPTED RESIDUAL: a slow SENDER (not a slow closer) leaves truncated JSON on
-# the bash>=4 branch and fails OPEN. Same trade as the sibling hook, same
-# reasoning. Both branches and this residual are pinned by tests that assert
-# ELAPSED time, not just the decision -- see tests/test_git_guard.py.
-PAYLOAD=""
-if [ "${BASH_VERSINFO[0]:-3}" -ge 4 ]; then
-  IFS= read -r -d '' -t 2 PAYLOAD || true
-else
-  PAYLOAD="$(cat)"
-fi
-[ -n "$PAYLOAD" ] || exit 0
-
-CMD="$(printf '%s' "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))" 2>/dev/null || true)"
+# ACCEPTED RESIDUAL: a slow SENDER (not a slow closer) leaves truncated JSON
+# and fails OPEN. Same trade as the sibling hook, same reasoning. The bound
+# itself is pinned by tests asserting ELAPSED time, not just the decision (see
+# tests/test_git_guard.py); the slow-sender residual is pinned only for the
+# sibling guard, in test-destructive-guard.sh's `write_slow_sender` case.
+CMD="$(python3 -c "
+import json, os, select, sys, time
+buf = b''
+deadline = time.monotonic() + 2
+while True:
+    left = deadline - time.monotonic()
+    if left <= 0 or not select.select([0], [], [], left)[0]:
+        break
+    chunk = os.read(0, 1 << 20)
+    if not chunk:
+        break
+    buf += chunk
+try:
+    d = json.loads(buf)
+except Exception:
+    sys.exit(0)
+if not isinstance(d, dict):
+    sys.exit(0)
+ti = d.get('tool_input')
+if not isinstance(ti, dict):
+    ti = d
+c = ti.get('command', '')
+print(c if isinstance(c, str) else '')
+" 2>/dev/null || true)"
 [ -n "$CMD" ] || exit 0
 
 # Strip a leading RTK proxy prefix so `rtk [proxy] git commit` matches like

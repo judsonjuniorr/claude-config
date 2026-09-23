@@ -64,89 +64,103 @@
 # internal error fails OPEN (silent allow), so a bug in this script can never
 # wedge a session.
 
-# Bounded read instead of a bare `$(cat)` -- but ONLY on bash >= 4, and the
-# version test is load-bearing, not defensive boilerplate.
+# Bounded, block-wise read INSIDE the same python3 call that parses the
+# payload -- deliberately NOT a shell-side `$(cat)` and NOT bash `read -t`.
 #
-# Why bound it: `cat` blocks until stdin EOF, so a harness slow to CLOSE the
-# hook's stdin costs the FULL hook timeout (10s here) and lands as a
-# `hook_cancelled`. Measured once, over one week of transcripts ending
-# 2026-09-22: 120 cancellations, every one pinned at ~10,027ms against the
-# 10,000ms limit -- stalled on the read, not slow in the checks below, which
-# run in ~35ms warm. A cancelled hook yields no decision at all, so those 10s
-# bought nothing: the command fell through to normal permission rules
-# unguarded either way. (Counts are a point-in-time measurement, not a
-# standing fact; they are here to show the shape, not to be kept current.)
+# Why bound it at all: reading to EOF blocks until the harness CLOSES the
+# hook's stdin, so a slow close costs the FULL hook timeout (10s here) and
+# lands as a `hook_cancelled`. Measured once, over one week of transcripts
+# ending 2026-09-22: 120 cancellations, every one pinned at ~10,027ms against
+# the 10,000ms limit -- stalled on the read, not slow in the checks below,
+# which run in ~35ms warm. A cancelled hook yields no decision at all, so
+# those 10s bought nothing: the command fell through to normal permission
+# rules unguarded either way. (Counts are a point-in-time measurement, not a
+# standing fact; they show the shape, not a number to keep current.)
 #
-# Why the version test: the stall shape is a LATE EOF, meaning the payload has
-# already arrived and only the close is pending. On bash >= 4 a `-t` timeout
-# still assigns what was read, so the guard evaluates the real command and
-# asks -- bounded AND protected. Bash 3.2 -- still /bin/bash on stock macOS,
-# and this ships as a marketplace plugin -- DISCARDS the partial read on
-# timeout, which would turn a 2-10s stall from "blocked but guarded" into
-# "returns fast, silently unguarded": a data-loss hole in a data-loss guard.
-# So 3.2 keeps the old unbounded read: same behavior as before, never worse.
-# Both branches are pinned by tests that assert the ELAPSED time, not just the
-# decision -- see test-destructive-guard.sh. Asserting only "it still asked"
-# passes against a guard whose bound was reverted.
+# Why python and not bash `read -r -d '' -t 2`: bash's `read` consumes a
+# NON-SEEKABLE fd one byte per read(2) syscall, so a wall-clock bound on it is
+# really a payload-SIZE cap -- measured ~1MB/s here, i.e. truncation past
+# roughly 2MB however fast the sender is. A Write carries the whole file body
+# in `tool_input.content`, so that size is reachable with ordinary input, and
+# a truncated payload fails the parse and exits with NO decision: "returns
+# fast, silently unguarded", the one outcome a data-loss guard must never
+# have. (It reproduces only over a PIPE; with `< file` the fd is seekable and
+# bash reads in bulk.) python reads in 1MB blocks against a wall-clock
+# deadline, so the bound stays a bound on TIME alone, and it KEEPS what
+# already arrived instead of discarding it on timeout -- which is also why
+# this needs no bash version test any more: the behaviour is identical on 3.2
+# and on 5. Pinned by tests asserting ELAPSED time and by a multi-MB payload
+# case; asserting only "it still asked" passes against a reverted bound.
 #
 # ACCEPTED RESIDUAL -- slow SENDER, as opposed to slow closer: if the harness
 # takes longer than the bound to DELIVER the payload (not just to close), the
-# bash>=4 branch is left holding truncated JSON, the parse below fails, and the
-# guard fails OPEN two seconds in, where the unbounded read had the full 10s to
-# succeed. Traded deliberately: every observed cancellation carried the
-# slow-closer signature (pinned at the limit), and a 1MB payload parses in
-# ~100ms here, so the harness is not dribbling bytes. The shape is pinned by a
-# test so the tradeoff stays visible rather than becoming a surprise.
-PAYLOAD=""
-if [ "${BASH_VERSINFO[0]:-3}" -ge 4 ]; then
-  IFS= read -r -d '' -t 2 PAYLOAD || true
-else
-  PAYLOAD="$(cat)"
-fi
-[ -n "$PAYLOAD" ] || exit 0
-
-# Extract all three fields in ONE python3 call, base64-framed — one
-# interpreter start per Bash tool call instead of three. This hook fires on
-# every Bash call (~3,160 in the same week), so the two extra cold starts
-# were pure overhead on a path that bails at the PERF GATE below ~95% of
-# the time.
+# parse gets truncated JSON and the guard fails OPEN two seconds in, where an
+# unbounded read had the full 10s to succeed. Traded deliberately: every
+# observed cancellation carried the slow-closer signature (pinned at the
+# limit). The shape is pinned by a test so the tradeoff stays visible.
 #
-# The framing is what makes one call safe. An earlier version joined the
-# fields with print() into one string; a `command` value containing a real
-# newline (any heredoc or multi-step script — routine, non-adversarial
-# Claude output, not an edge case) silently truncated CMD to its first line
-# and clobbered FILE with the second, defeating the guard for that command
-# entirely. base64 output is single-line and newline-free by construction,
-# so one line per field round-trips embedded newlines intact into CMD (the
+# The base64 framing is what makes one call safe. An earlier version joined
+# the fields with print() into one string; a `command` value containing a real
+# newline (any heredoc or multi-step script — routine, non-adversarial Claude
+# output, not an edge case) silently truncated CMD to its first line and
+# clobbered FILE with the second, defeating the guard for that command
+# entirely. base64 output is single-line and newline-free by construction, so
+# one line per field round-trips embedded newlines intact into CMD (the
 # segment splitter below already handles them — IFS includes $'\n').
-# `sed`/`base64` are tiny C binaries, not another interpreter: measured
-# end-to-end, a non-destructive Bash call went 126ms -> 76ms. Note the B64D
-# probe and the TOOL_NAME decode run BEFORE the PERF GATE below, so they are
-# paid on every call; the two interpreter starts they replaced were paid there
-# too. A missing or incompatible `base64`/`sed` blanks the fields and takes the
-# documented fail-OPEN path silently -- the same blast radius as a python3
-# failure, now with two more binaries on the critical path.
-FIELDS="$(printf '%s' "$PAYLOAD" | python3 -c "
-import base64, json, sys
+#
+# One interpreter start per Bash tool call: this hook fires on every Bash
+# call, so extra cold starts were pure overhead on a path that bails at the
+# PERF GATE below for the large majority of calls. The B64D probe and ALL
+# THREE decodes run BEFORE that gate, so all of them are paid on every call.
+# Measured end-to-end at the time of the change: ~126ms -> ~76ms per call
+# (illustrative magnitudes, not maintained figures).
+FIELDS="$(python3 -c "
+import base64, json, os, select, sys, time
+buf = b''
+deadline = time.monotonic() + 2
+while True:
+    left = deadline - time.monotonic()
+    if left <= 0 or not select.select([0], [], [], left)[0]:
+        break
+    chunk = os.read(0, 1 << 20)
+    if not chunk:
+        break
+    buf += chunk
 try:
-    d = json.load(sys.stdin)
+    d = json.loads(buf)
 except Exception:
     sys.exit(0)
-ti = d.get('tool_input', d) or {}
+if not isinstance(d, dict):
+    sys.exit(0)
+ti = d.get('tool_input')
+if not isinstance(ti, dict):
+    ti = d
 for v in (d.get('tool_name', '') or '',
           ti.get('command', '') or '',
           ti.get('file_path', '') or ''):
+    if not isinstance(v, str):
+        v = ''
     sys.stdout.write(base64.b64encode(v.encode('utf-8', 'surrogatepass')).decode('ascii') + '\n')
 " 2>/dev/null || true)"
 [ -n "$FIELDS" ] || exit 0
 
 # `-d` is the GNU/newer-macOS decode flag; older macOS base64 only has `-D`.
-# Probed ONCE against a known constant rather than tried per-decode: a
+# Probed ONCE by ROUND-TRIP VALUE (not just exit status) rather than tried
+# per-decode: a
 # `base64 -d || base64 -D` fallback chain cannot work on a pipe, because the
 # first attempt consumes stdin and the retry reads an empty stream — which
 # would silently blank TOOL_NAME/CMD and fail the guard open on every call.
-B64D='-d'
-printf 'aGk=' | base64 -d >/dev/null 2>&1 || B64D='-D'
+B64D=''
+[ "$(printf 'aGk=' | base64 -d 2>/dev/null)" = hi ] && B64D='-d'
+[ -n "$B64D" ] || { [ "$(printf 'aGk=' | base64 -D 2>/dev/null)" = hi ] && B64D='-D'; }
+if [ -z "$B64D" ]; then
+  # No working decoder: every field below would decode to empty and the guard
+  # would exit 0 on every single call -- permanently and invisibly off. Still
+  # fail OPEN (this hook never blocks hard), but say so, because the silent
+  # version of this is indistinguishable from "nothing to guard".
+  echo "destructive-guard: no working base64 decoder (-d/-D); guard disabled for this call" >&2
+  exit 0
+fi
 
 TOOL_NAME="$(printf '%s\n' "$FIELDS" | sed -n '1p' | base64 "$B64D" 2>/dev/null || true)"
 [ -n "$TOOL_NAME" ] || exit 0

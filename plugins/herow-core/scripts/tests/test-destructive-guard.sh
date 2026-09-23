@@ -275,20 +275,18 @@ out="$(printf 'not json' | bash "$GUARD")"
 # still evaluate the real command and ask. "Returns fast but silently
 # unguarded" is the one outcome that must never happen in a data-loss guard.
 #
-# The read is bounded only on bash >= 4; bash 3.2 DISCARDS a partial timed-out
-# read, so it deliberately keeps the old unbounded read.
+# The bound lives INSIDE the guard's python3 call, which reads in blocks
+# against a wall-clock deadline and keeps what arrived. That behaves the same
+# on bash 3.2 and bash 5, so there is no version branch to cover any more --
+# but the shell is still probed and printed, because the guard must keep
+# working under stock macOS /bin/bash as well as a brew bash.
 #
 # Two things are asserted per shell, and BOTH matter:
 #   1. the guard still asks (the bound did not drop the payload), and
-#   2. the elapsed time proves which branch actually ran.
-# Without (2) these tests pass against a guard whose bound was reverted to a
-# plain $(cat) — the writer closes on its own, so "it asked" is true either
-# way. (2) is the only assertion that pins the bound itself.
-#
-# The shell's major version is PROBED, never assumed: /bin/bash is bash 3.2 on
-# stock macOS but bash 5 on Linux CI and on brew-linked Macs. A label claiming
-# "3.2 coverage" on a host where both shells are bash 5 is a test that lies
-# about a data-loss guard, so uncovered branches print a loud SKIP instead.
+#   2. the elapsed time proves the bound actually fired.
+# Without (2) these tests pass against a guard whose bound was removed — the
+# writer closes on its own, so "it asked" is true either way. (2) is the only
+# assertion that pins the bound itself.
 shell_major() {
   local v
   v="$("$1" -c 'echo ${BASH_VERSINFO[0]}' 2>/dev/null || true)"
@@ -299,88 +297,107 @@ shell_major() {
 # inside the fork would race the guard's own 2s bound on a loaded machine and
 # produce a false "guard was disarmed" failure.
 STALL_PAYLOAD="$(python3 -c "import json; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ~/important'}}))")"
-# MUST exceed the guard's -t bound, or the bound never fires and these degrade
+# MUST exceed the guard's bound, or the bound never fires and these degrade
 # into ordinary-EOF tests that pass while covering nothing.
 STALL_WRITER_SLEEP=6
 # $SECONDS is whole-second resolution and counts tick boundaries crossed, so a
 # genuine 2.1s bounded read can read as 3. The ceiling sits between the 2s
-# bound and the 6s close with a full second of slack on each side; tightening
-# it to 3 made this flake. Do not narrow the gap without switching to
-# sub-second timing.
+# bound and the 6s close with two seconds of slack on each side; at 3 (one
+# second of slack below) this flaked. Do not narrow the gap without switching
+# to sub-second timing.
 STALL_BOUND_CEILING=4
 
-stall_guard() {
-  local sh="$1" fifo w
-  fifo="$T/stall.$$"
+# One FIFO harness for both stall shapes. `writer` is the name of a function
+# that writes the payload into the pipe; it runs in the background and is
+# reaped here, so each case only has to describe its own write pattern.
+feed_guard() {
+  local sh="$1" writer="$2" fifo w
+  fifo="$T/feed.$$"
   rm -f "$fifo"; mkfifo "$fifo"
-  { printf '%s\n' "$STALL_PAYLOAD"; sleep "$STALL_WRITER_SLEEP"; } > "$fifo" &
+  "$writer" > "$fifo" &
   w=$!
   SECONDS=0
-  STALL_OUT="$("$sh" "$GUARD" < "$fifo")"
-  STALL_SECS=$SECONDS
+  FEED_OUT="$("$sh" "$GUARD" < "$fifo")"
+  FEED_SECS=$SECONDS
   kill "$w" 2>/dev/null || true
   wait "$w" 2>/dev/null || true
   rm -f "$fifo"
 }
 
-COVERED_GE4=0
-COVERED_LT4=0
+# LATE EOF: the whole payload arrives at once, only the close is pending.
+write_late_eof() { printf '%s\n' "$STALL_PAYLOAD"; sleep "$STALL_WRITER_SLEEP"; }
+
+# Slow SENDER, not slow closer: only part of the JSON has arrived when the
+# bound expires. Accepted, documented residual (see the guard's own comment) —
+# the guard must fail OPEN silently and never emit a decision from half a
+# payload.
+write_slow_sender() {
+  printf '%s' "$(printf '%s' "$STALL_PAYLOAD" | cut -c1-20)"
+  sleep 4
+  printf '%s\n' "$(printf '%s' "$STALL_PAYLOAD" | cut -c21-)"
+}
+
+COVERED_SHELLS=0
 for sh in bash /bin/bash; do
   maj="$(shell_major "$sh")"
   if [ "$maj" -eq 0 ]; then
     echo "SKIP - $sh unavailable or version unreadable"
     continue
   fi
-  stall_guard "$sh"
-  asks "$STALL_OUT" \
-    && ok "late-EOF stall still asks ($sh = bash $maj, ${STALL_SECS}s)" \
+  COVERED_SHELLS=$((COVERED_SHELLS + 1))
+
+  feed_guard "$sh" write_late_eof
+  asks "$FEED_OUT" \
+    && ok "late-EOF stall still asks ($sh = bash $maj, ${FEED_SECS}s)" \
     || fail "late-EOF stall DISARMED the guard ($sh = bash $maj)"
-  if [ "$maj" -ge 4 ]; then
-    COVERED_GE4=1
-    [ "$STALL_SECS" -lt "$STALL_BOUND_CEILING" ] \
-      && ok "read is bounded on bash $maj (${STALL_SECS}s < ${STALL_WRITER_SLEEP}s close)" \
-      || fail "read NOT bounded on bash $maj: ${STALL_SECS}s — the -t bound is gone"
-  else
-    COVERED_LT4=1
-    [ "$STALL_SECS" -ge "$STALL_BOUND_CEILING" ] \
-      && ok "bash $maj keeps the unbounded read (${STALL_SECS}s, waited for EOF)" \
-      || fail "bash $maj returned in ${STALL_SECS}s — expected it to wait for EOF"
-  fi
+  [ "$FEED_SECS" -lt "$STALL_BOUND_CEILING" ] \
+    && ok "read is bounded on bash $maj (${FEED_SECS}s < ${STALL_WRITER_SLEEP}s close)" \
+    || fail "read NOT bounded on bash $maj: ${FEED_SECS}s — the bound is gone"
+
+  feed_guard "$sh" write_slow_sender
+  [ -z "$FEED_OUT" ] \
+    && ok "slow sender fails OPEN silently on bash $maj (truncated JSON, no bogus decision)" \
+    || fail "slow sender produced output on bash $maj: $FEED_OUT"
 done
-[ "$COVERED_GE4" -eq 1 ] || echo "SKIP - bash>=4 BOUNDED-read branch not covered on this host"
-[ "$COVERED_LT4" -eq 1 ] || echo "SKIP - bash 3.2 UNBOUNDED-read branch not covered on this host (no bash < 4 present)"
+[ "$COVERED_SHELLS" -gt 0 ] || fail "no usable bash found; the read bound was never exercised"
 
-# Slow SENDER, not slow closer: only part of the JSON has arrived when the
-# bound expires. Accepted, documented residual (see the guard's own comment) —
-# the guard must fail OPEN silently and never emit a decision from half a
-# payload. On bash 3.2 the unbounded read waits and the guard asks instead;
-# both outcomes are safe, neither may be a bogus decision.
-partial_send() {
-  local sh="$1" fifo w
-  fifo="$T/partial.$$"
-  rm -f "$fifo"; mkfifo "$fifo"
-  { printf '%s' "$(printf '%s' "$STALL_PAYLOAD" | cut -c1-20)"; sleep 4
-    printf '%s\n' "$(printf '%s' "$STALL_PAYLOAD" | cut -c21-)"; } > "$fifo" &
-  w=$!
-  PARTIAL_OUT="$("$sh" "$GUARD" < "$fifo")"
-  kill "$w" 2>/dev/null || true
-  wait "$w" 2>/dev/null || true
-  rm -f "$fifo"
-}
+# --- Payload SIZE must not bound the read ----------------------------------
+# Regression pin. A previous bound used bash `read -r -d '' -t 2`, which drains
+# a NON-SEEKABLE fd one byte per read(2) syscall (~1MB/s). That turned the
+# wall-clock bound into a payload-size cap: past roughly 2MB the JSON arrived
+# truncated, the parse failed, and the guard exited with NO decision — a large
+# Write silently clobbering an existing file. `tool_input.content` carries the
+# whole file body, so this is ordinary input, not an adversarial one.
+#
+# It reproduces ONLY over a pipe: with `< file` the fd is seekable and bash
+# reads in bulk, which is why it has to be piped here.
+SIZE_TARGET="$T/repo/size-victim.txt"
+echo "existing content" > "$SIZE_TARGET"
+for mb in 3 6; do
+  for sh in bash /bin/bash; do
+    [ "$(shell_major "$sh")" -eq 0 ] && continue
+    out="$(python3 -c "
+import json, sys
+n = int(sys.argv[1]) * 1000000
+print(json.dumps({'tool_name':'Write','tool_input':{'file_path':sys.argv[2],'content':'x'*n}}))" "$mb" "$SIZE_TARGET" | "$sh" "$GUARD")"
+    asks "$out" \
+      && ok "${mb}MB Write over a pipe still asks ($sh)" \
+      || fail "${mb}MB Write over a pipe produced no decision ($sh) — the read is size-bounded again"
+  done
+done
 
+# --- Normal path must not pay the bound ------------------------------------
+# The common case is ~100% of calls. A read that stopped seeing EOF would pass
+# every assertion above while making every Bash call wait the full bound —
+# strictly worse than the 10s stall this bound exists to fix.
 for sh in bash /bin/bash; do
-  maj="$(shell_major "$sh")"
-  [ "$maj" -eq 0 ] && continue
-  partial_send "$sh"
-  if [ "$maj" -ge 4 ]; then
-    [ -z "$PARTIAL_OUT" ] \
-      && ok "slow sender fails OPEN silently on bash $maj (truncated JSON, no bogus decision)" \
-      || fail "slow sender produced output on bash $maj: $PARTIAL_OUT"
-  else
-    asks "$PARTIAL_OUT" \
-      && ok "slow sender still asks on bash $maj (unbounded read waits for the rest)" \
-      || fail "slow sender neither asked nor stayed silent on bash $maj"
-  fi
+  [ "$(shell_major "$sh")" -eq 0 ] && continue
+  SECONDS=0
+  out="$(printf '%s\n' "$STALL_PAYLOAD" | "$sh" "$GUARD")"
+  el=$SECONDS
+  asks "$out" && [ "$el" -lt 2 ] \
+    && ok "ordinary payload returns immediately on $sh (${el}s, no bound paid)" \
+    || fail "ordinary payload took ${el}s on $sh (decision: ${out:-none})"
 done
 
 # KNOWN GAP, pre-existing and deliberately pinned: a command carrying invalid
@@ -403,12 +420,25 @@ s = json.dumps({'tool_name':'Bash','tool_input':{'command':sys.argv[1]}})
 sys.stdout.buffer.write(s.encode('utf-8','surrogatepass') + b'\n')" "$1"
 }
 
-out="$(invalid_utf8_payload 'rm -rf ~/x'$'\xed\xb3\xa9' | bash "$GUARD" 2>/dev/null || true)"
-[ -z "$out" ] && ok "KNOWN GAP pinned: invalid-UTF8 segment is skipped (fails open, pre-existing)" \
-  || ok "invalid-UTF8 segment now asks — gap closed, update this comment"
+out="$(invalid_utf8_payload 'rm -rf ~/x'$'\xed\xb3\xa9' | bash "$GUARD" 2>"$T/utf8.err")"
+rc=$?
+[ "$rc" -eq 0 ] || fail "guard exited $rc on invalid UTF-8: $(cat "$T/utf8.err")"
+# Both outcomes below are acceptable, but they are NOT the same outcome, so
+# each gets its own assertion and anything else FAILS. The earlier version
+# called ok() on both arms, which meant a malformed or truncated decision also
+# counted as a pass — the case pinned nothing while inflating the count.
+if [ -z "$out" ]; then
+  ok "KNOWN GAP pinned: invalid-UTF8 segment is skipped (fails open, pre-existing)"
+elif asks "$out"; then
+  ok "invalid-UTF8 segment now asks — gap closed, update this comment"
+else
+  fail "invalid-UTF8 segment produced a malformed decision: $out"
+fi
 
 out="$(invalid_utf8_payload 'echo bad'$'\xed\xb3\xa9''
-rm -rf ~/important' | bash "$GUARD" 2>/dev/null || true)"
+rm -rf ~/important' | bash "$GUARD" 2>"$T/utf8.err")"
+rc=$?
+[ "$rc" -eq 0 ] || fail "guard exited $rc on invalid UTF-8 (mixed segments): $(cat "$T/utf8.err")"
 asks "$out" && ok "valid segments still checked alongside an invalid-UTF8 one" \
   || fail "invalid UTF-8 in one segment suppressed the whole command"
 
@@ -419,6 +449,51 @@ asks "$out" && ok "rm -rf ~/data asks under /bin/bash" || fail "guard did not as
 
 out="$(python3 -c "import json,sys; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ./node_modules'}}))" | /bin/bash "$GUARD")"
 [ -z "$out" ] && ok "rm -rf ./node_modules silent under /bin/bash" || fail "allowlisted target asked under /bin/bash"
+
+# --- base64 decode path: the -D fallback and the no-decoder case -----------
+# `-d` is the GNU/newer-macOS decode flag; older macOS base64 only has `-D`.
+# On every host where `-d` works — all of CI, every modern Mac — a typo in the
+# `-D` fallback is invisible. These shim a fake `base64` onto PATH to force
+# each branch.
+B64_SHIM="$T/b64shim"
+mkdir -p "$B64_SHIM"
+
+# A base64 that rejects -d and only understands -D, like older macOS. It
+# translates -D to the real binary's -d rather than passing it through: GNU
+# base64 (every Linux runner) has no -D, so a pass-through shim would test
+# nothing there.
+REAL_B64="$(command -v base64)"
+cat > "$B64_SHIM/base64" <<SHIM
+#!/bin/sh
+args=""
+for a in "\$@"; do
+  [ "\$a" = "-d" ] && exit 1
+  [ "\$a" = "-D" ] && a="-d"
+  args="\$args \$a"
+done
+exec "$REAL_B64" \$args
+SHIM
+chmod +x "$B64_SHIM/base64"
+out="$(PATH="$B64_SHIM:$PATH" run_bash 'rm -rf ~/data')"
+asks "$out" && ok "base64 -D fallback still guards (no -d support)" \
+  || fail "guard went silent when base64 lacked -d — the -D fallback is broken"
+
+# No usable base64 at all: the guard must fail OPEN (exit 0, no decision) and
+# say why on stderr, rather than disarming itself invisibly on every call.
+cat > "$B64_SHIM/base64" <<'SHIM'
+#!/bin/sh
+exit 127
+SHIM
+chmod +x "$B64_SHIM/base64"
+out="$(PATH="$B64_SHIM:$PATH" run_bash 'rm -rf ~/data' 2>"$T/b64.err")"
+rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] \
+  && ok "missing base64 fails OPEN (documented), exit 0" \
+  || fail "missing base64: expected silent exit 0, got rc=$rc out=$out"
+grep -q base64 "$T/b64.err" \
+  && ok "missing base64 leaves a stderr breadcrumb instead of disarming silently" \
+  || fail "missing base64 produced no diagnostic: $(cat "$T/b64.err")"
+rm -rf "$B64_SHIM"
 
 echo "----"
 echo "$PASS passed, $FAIL failed"

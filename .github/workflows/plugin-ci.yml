@@ -8,6 +8,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -87,11 +88,11 @@ jobs:
           # "concurrency: lost update"). Unrelated to the hook guards, so it is
           # left out rather than blocking them; wire it in once those two
           # timing-dependent cases are made runner-safe.
-          # The stall cases probe each shell's bash major version and print a
-          # SKIP for any read branch this runner cannot cover. On ubuntu both
-          # `bash` and `/bin/bash` are bash 5, so the bash-3.2 unbounded-read
-          # branch is reported UNCOVERED here rather than silently passing --
-          # that branch is macOS-only and is covered on a dev machine.
+          # The guards' read bound lives inside their python3 call, so there
+          # is no bash-version branch left to cover: ubuntu (both shells bash
+          # 5) and macOS (/bin/bash 3.2) exercise the same code path. The
+          # suites still probe and print each shell's version, and fail loudly
+          # if no usable bash is found rather than passing with zero coverage.
 
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
