@@ -11,7 +11,7 @@ Your task is to resolve merge conflicts **intelligently and with justification**
 
 > **For any GitHub operation (`gh`, PRs, reviews, comments, status checks): always consult the `github-ops` skill** before executing. It defines the conventions, authentication, argument shapes, and error handling for this project. Load it before any `gh` call in this flow.
 
-> **Recommended subagents (when installed):** after resolution, delegate to `code-reviewer` to verify each merged hunk preserves intent on both sides; if a resolution introduces logic that fails at runtime, delegate the diagnosis to `debugger` (writes a regression test before fixing). Invoke via the `Agent` tool with the namespaced `subagent_type` from the session's agent list (`herow-dev:<name>` / `herow-core:<name>`); if it isn't listed, execute the steps below directly.
+> **Recommended subagents (when installed):** after resolution, delegate to `herow-core:code-reviewer` to verify each merged hunk preserves intent on both sides; if a resolution introduces logic that fails at runtime, delegate the diagnosis to `herow-core:debugger` (it specifies a regression test before the fix). Invoke via the `Agent` tool; if an agent isn't in the session's agent list, execute the steps below directly.
 
 ## Received argument
 
@@ -218,7 +218,7 @@ Once every file is `add`ed:
 
 These subagents ship with the herow-dev plugin and sharpen the output when installed. The command works without them.
 
-- **[`code-reviewer`](../../agents/code-reviewer.md)** — after every conflict file is resolved, before commit. Audits whether the union/picked-side preserved each side's intent, flags accidental semantic loss, and verifies no marker leaked.
-- **[`debugger`](../../agents/debugger.md)** — if tests fail after merge or the resolved code misbehaves at runtime. Runs root-cause analysis grounded in the merge history (not a fix-first reflex).
+- **[`code-reviewer`](../../../herow-core/agents/code-reviewer.md)** — after every conflict file is resolved, before commit. Audits whether the union/picked-side preserved each side's intent, flags accidental semantic loss, and verifies no marker leaked.
+- **[`debugger`](../../../herow-core/agents/debugger.md)** — if tests fail after merge or the resolved code misbehaves at runtime. Runs root-cause analysis grounded in the merge history (not a fix-first reflex).
 
 Each is optional. If none are installed, run the steps above inline.

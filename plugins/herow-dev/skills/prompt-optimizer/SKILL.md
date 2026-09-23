@@ -29,9 +29,9 @@ complete optimized prompt the user can paste and run.
 
 ## How It Works
 
-**Advisory only.** This skill's output is an analysis plus an optimized prompt; it doesn't
-write code, create files, or run commands, because the user runs the prompt themselves. If
-the user asks for execution, tell them to make a normal task request instead.
+**Advisory only.** Output an analysis plus an optimized prompt, and don't write code, create
+files, or run commands — the user runs the prompt themselves. If the user asks for execution,
+tell them to make a normal task request instead.
 
 Run this pipeline sequentially, then present results in the Output Format below.
 

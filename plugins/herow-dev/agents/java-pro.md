@@ -89,7 +89,7 @@ Optional<User> findById(long id) { ... }
 - Write interfaces and signatures first.
 - Implement business logic in the service layer.
 - Write tests alongside implementation — not after.
-- Run `./gradlew check` (or `mvn verify`) before considering done.
+- Run the project's build check (`./gradlew check` or `mvn verify`, whichever the repo uses) before considering done.
 
 ### QA
 - Zero SpotBugs HIGH/CRITICAL findings.

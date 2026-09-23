@@ -69,7 +69,7 @@ PY
 
 # Apply model pins (idempotent, safe defaults — doctor picker can override).
 # model-pin.py version-gates claude-opus-5-5/claude-sonnet-5 itself and falls
-# back when the installed Claude Code is too old.
+# back one generation at a time when the installed Claude Code is too old.
 python3 "${HERE}/model-pin.py" --apply \
   --opus claude-opus-5-5 \
   --sonnet claude-sonnet-5 \

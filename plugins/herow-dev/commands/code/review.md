@@ -39,24 +39,25 @@ and a lower confidence cutoff:
 
 | Effort | Agents | Confidence cutoff |
 |---|---|---|
-| `low` | `code-reviewer`, `security-reviewer` | ≥ 90 |
-| `medium` | above + `silent-failure-hunter`, `pr-test-analyzer` | ≥ 85 |
-| `high` *(default)* | above + `comment-analyzer`, `type-design-analyzer`, `code-simplifier` (all 7) | ≥ 80 |
+| `low` | `herow-core:code-reviewer`, `herow-dev:security-reviewer` | ≥ 90 |
+| `medium` | above + `herow-dev:silent-failure-hunter`, `herow-dev:pr-test-analyzer` | ≥ 85 |
+| `high` *(default)* | above + `herow-dev:comment-analyzer`, `herow-dev:type-design-analyzer`, `herow-dev:code-simplifier` (all 7) | ≥ 80 |
 | `max` | all 7, then a **verification pass** (see below) | ≥ 80 |
 
 Agent focus areas:
-1. `code-reviewer` — security, correctness, performance, test coverage
-2. `security-reviewer` — OWASP Top 10, secrets, SSRF, injection
-3. `silent-failure-hunter` — swallowed errors and dangerous fallbacks
-4. `pr-test-analyzer` — behavioral coverage gaps
-5. `comment-analyzer` — comment accuracy, rot, and completeness
-6. `type-design-analyzer` — type encapsulation and invariant enforcement
-7. `code-simplifier` — clarity and maintainability
+1. `herow-core:code-reviewer` — security, correctness, performance, test coverage
+2. `herow-dev:security-reviewer` — OWASP Top 10, secrets, SSRF, injection
+3. `herow-dev:silent-failure-hunter` — swallowed errors and dangerous fallbacks
+4. `herow-dev:pr-test-analyzer` — behavioral coverage gaps
+5. `herow-dev:comment-analyzer` — comment accuracy, rot, and completeness
+6. `herow-dev:type-design-analyzer` — type encapsulation and invariant enforcement
+7. `herow-dev:code-simplifier` — clarity and maintainability
 
 **Verification pass (`max` only):** after dedupe, launch one agent per surviving finding that
 tries to **refute** it — is it a false positive, a pre-existing issue, or on a line not in the
 diff? Drop any finding the refuter cannot confirm. Mirrors the confidence-scoring step in the
-built-in reviewer.
+built-in reviewer. A `partial review: N files not reviewed` finding is a coverage note, not a
+defect — skip the refuter for it and keep it in the report.
 
 ### Language-Aware Dispatch (Phase 2.5)
 
@@ -68,16 +69,16 @@ Table rows are **additive**: a diff touching both `.tsx` and `.py` dispatches ag
 
 | Extensions found in diff | Agents dispatched |
 |---|---|
-| `.tsx` or `.jsx` | `react-reviewer` + `typescript-reviewer` |
-| `.ts` or `.js` (no `.tsx`/`.jsx`) | `typescript-reviewer` only |
-| `.py` (FastAPI detected — see below) | `fastapi-reviewer` + `python-reviewer` |
-| `.py` (no FastAPI) | `python-reviewer` only |
+| `.tsx` or `.jsx` | `herow-dev:react-reviewer` + `herow-dev:typescript-reviewer` |
+| `.ts` or `.js` (no `.tsx`/`.jsx`) | `herow-dev:typescript-reviewer` only |
+| `.py` (FastAPI detected — see below) | `herow-dev:fastapi-reviewer` + `herow-dev:python-reviewer` |
+| `.py` (no FastAPI) | `herow-dev:python-reviewer` only |
 | Other extensions (`.vue`, `.svelte`, `.mjs`, etc.) | *(skip — log `⚠️ no language agent for <ext>`)* |
 | None of the above | *(skip — no language agents)* |
 
 **FastAPI detection:** Import lines are often unchanged in a PR. Check both the diff body AND the
 project files: grep `pyproject.toml`, `requirements*.txt`, and `setup.cfg` for `fastapi`. If any
-match → FastAPI project → dispatch `fastapi-reviewer` + `python-reviewer`. If no project-file
+match → FastAPI project → dispatch `herow-dev:fastapi-reviewer` + `herow-dev:python-reviewer`. If no project-file
 match, also grep the diff body for `from fastapi` / `import fastapi` as a secondary signal.
 
 **Availability guard.** Before dispatching each language agent, confirm its agent type is in the

@@ -99,4 +99,7 @@ Fix: concrete change.
 Levels are 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low — emit the emoji and the word, never
 `CRITICAL`/`HIGH`/`MEDIUM`. `confidence` is your calibrated 0-100 certainty that this is a real
 defect at that location; `/herow-dev:code:review` filters on it and re-ranks from the level.
-If exposed credentials are found, say that they must be rotated.
+When a finding exposes credentials, its `Fix:` line says they must be rotated.
+
+When dispatched as a review lane, report only — don't edit files; fixes go through the caller's
+`--fix` step.

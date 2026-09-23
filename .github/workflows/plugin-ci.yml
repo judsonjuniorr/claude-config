@@ -82,6 +82,7 @@ jobs:
           bash plugins/herow-core/scripts/tests/test-destructive-guard.sh
           bash plugins/herow-core/scripts/tests/test-doc-file-warning.sh
           python3 plugins/herow-core/skills/github-ops/hooks/tests/test_git_guard.py
+          python3 plugins/herow-core/scripts/setup/tests/test_model_pin.py
           # plugins/herow-dev/scripts/tests/test-blueprint-track.sh is NOT run
           # here yet: its lock-expiry and concurrent-writer cases fail on the
           # ubuntu runner ("stale lock: took 11s or record missing",

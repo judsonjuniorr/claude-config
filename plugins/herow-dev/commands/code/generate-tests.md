@@ -7,7 +7,7 @@ effort: medium
 
 # Generate Tests
 
-> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate the implementation to `fullstack-developer`; for **Python** targets, delegate to `python-pro`. After tests are written, optionally hand off to `code-reviewer` to validate coverage and quality. Invoke via the `Agent` tool with the namespaced `subagent_type` from the session's agent list (`herow-dev:<name>` / `herow-core:<name>`); if it isn't listed, execute the steps below directly.
+> **Recommended subagents (when installed):** for **TypeScript/JavaScript** targets, delegate the implementation to `herow-dev:fullstack-developer`; for **Python** targets, delegate to `herow-dev:python-pro`. After tests are written, optionally hand off to `herow-core:code-reviewer` to validate coverage and quality. Invoke via the `Agent` tool; if an agent isn't in the session's agent list, execute the steps below directly.
 
 Your task is to create a comprehensive test suite for the target specified in `$ARGUMENTS`.
 
@@ -73,6 +73,6 @@ These subagents ship with the herow-dev plugin and sharpen the output when insta
 
 - **[`fullstack-developer`](../../agents/fullstack-developer.md)** — when the target is TypeScript/JavaScript (Vitest, Jest, Testing Library). Best for React/Next.js components, tRPC procedures, or Drizzle queries.
 - **[`python-pro`](../../agents/python-pro.md)** — when the target is Python (pytest, pytest-mock). Brings ruff/mypy strict discipline to the generated suite.
-- **[`code-reviewer`](../../agents/code-reviewer.md)** — after tests are written, to audit coverage, mock hygiene, and flag anti-patterns before commit.
+- **[`code-reviewer`](../../../herow-core/agents/code-reviewer.md)** — after tests are written, to audit coverage, mock hygiene, and flag anti-patterns before commit.
 
 Each is optional. If none are installed, run the steps above inline.

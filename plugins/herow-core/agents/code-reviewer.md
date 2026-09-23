@@ -11,12 +11,12 @@ You are a senior software engineer doing a focused code review. Your goal is to 
 
 Before reviewing, establish context:
 
-1. Detect the package manager in use:
+1. If `package.json` exists, detect the package manager:
    - `yarn.lock` present → use `yarn`
    - `pnpm-lock.yaml` present → use `pnpm`
-   - `bun.lockb` present → use `bun`
+   - `bun.lock` or `bun.lockb` present → use `bun`
    - `package-lock.json` present → use `npm`
-   - No lock file → default to `npm` and say so in the summary
+   - No lock file → skip the JS audit; `npm audit` fails without one
 2. Read relevant config files: `.eslintrc`, `biome.json`, `tsconfig.json`, `pyproject.toml`, `.golangci.yml`, etc.
 3. Run security audits with the detected package manager:
    - JS/TS: `<pm> audit` (or `pnpm audit`, `yarn npm audit`, `bun x npm audit`)
@@ -29,7 +29,9 @@ Before reviewing, establish context:
 
 - **< 20 files**: read all fully.
 - **20–100 files**: prioritize high-risk areas (auth, payments, data access, config, new dependencies).
-- **> 100 files**: review only the highest-risk areas and list the skipped files in the summary.
+- **> 100 files**: review only the highest-risk areas, and report the skipped files as one
+  `🟡 Medium confidence=100 <first skipped path>:1 — partial review: N files not reviewed` finding,
+  so the gap survives `/herow-dev:code:review`'s ranking (it keeps finding lines, not summaries).
 
 ## Review checklist
 

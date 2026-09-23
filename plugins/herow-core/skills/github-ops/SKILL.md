@@ -210,11 +210,18 @@ Do not split automatically. Always ask.
 
 ## Installed hooks
 
-The `git-guard` hook (details in `README.md`) auto-allows read-only and non-destructive `gh`/`glab`
-calls, prompts on destructive verbs (`create`/`edit`/`close`/`delete`/`cancel`/`merge`), and hard-denies
-any command whose commit/PR/MR message carries attribution. A `;`/`|`/`&` inside a quoted argument
-falls through to a prompt. Post-process `--json` with `jq`, not `python3 -c`, so the call stays
-auto-allowed.
+The `git-guard` hook (details in `README.md`) hard-denies attribution written inline in a command
+(`-m`/`--message`/`--body`/`--description` text); it does not read `-F`/`--body-file` contents.
+Only `pr.sh` scrubs a body file — `issue.sh` and raw `git commit -F` / `gh … --body-file` pass it
+through unchecked, so keep attribution out of those files yourself. It auto-allows read-only and
+non-destructive `gh`/`glab` calls, and prompts
+on destructive verbs (`create`/`edit`/`close`/`delete`/`delete-asset`/`cancel`/`merge`, glab `update`)
+of `gh pr`/`issue`/`release`/`run`/`workflow` and `glab mr`/`issue`/`ci`/`release`, in any segment
+of a chain. Everything else gets no decision from the hook and normal Bash permission rules apply:
+other families (`gh secret delete`, `gh api -X DELETE`), a `;`/`|`/`&` inside a quoted argument,
+and the mutating script calls (`ship.sh`, `pr.sh create`). The match is textual, so a destructive
+phrase inside a message or search string (`git commit -m "fix gh pr merge flow"`) also prompts. Don't treat the hook as the confirmation gate for those —
+the Rules above are. Post-process `--json` with `jq`, not `python3 -c`, so the call stays auto-allowed.
 
 ## Platform support
 

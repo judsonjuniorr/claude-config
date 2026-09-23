@@ -15,42 +15,42 @@ When invoked:
 
 ## Review Priorities
 
-### CRITICAL — Security
+### 🔴 Critical — Security
 - **SQL Injection**: f-strings in queries — use parameterized queries
 - **Command Injection**: unvalidated input in shell commands — use subprocess with list args
 - **Path Traversal**: user-controlled paths — validate with normpath, reject `..`
 - **Eval/exec abuse**, **unsafe deserialization**, **hardcoded secrets**
 - **Weak crypto** (MD5/SHA1 for security), **YAML unsafe load**
 
-### CRITICAL — Error Handling
+### 🔴 Critical — Error Handling
 - **Bare except**: `except: pass` — catch specific exceptions
 - **Swallowed exceptions**: silent failures — log and handle
 - **Missing context managers**: manual file/resource management — use `with`
 
-### HIGH — Type Hints
+### 🟠 High — Type Hints
 - Public functions without type annotations
 - Using `Any` when specific types are possible
 - Missing `Optional` for nullable parameters
 
-### HIGH — Pythonic Patterns
+### 🟠 High — Pythonic Patterns
 - Use list comprehensions over C-style loops
 - Use `isinstance()` not `type() ==`
 - Use `Enum` not magic numbers
 - Use `"".join()` not string concatenation in loops
 - **Mutable default arguments**: `def f(x=[])` — use `def f(x=None)`
 
-### HIGH — Code Quality
+### 🟠 High — Code Quality
 - Functions > 50 lines, > 5 parameters (use dataclass)
 - Deep nesting (> 4 levels)
 - Duplicate code patterns
 - Magic numbers without named constants
 
-### HIGH — Concurrency
+### 🟠 High — Concurrency
 - Shared state without locks — use `threading.Lock`
 - Mixing sync/async incorrectly
 - N+1 queries in loops — batch query
 
-### HIGH — Memory Management
+### 🟠 High — Memory Management
 - **Unbounded materialization**: `f.read()`, `.readlines()`, `list(cursor)`, `pd.read_csv(huge)`, a
   comprehension over input the caller doesn't bound — use generators, `yield from`, `chunksize=`,
   `iter_content`, or Polars `scan_*` lazy frames (see `python.md` rules for generators/Polars).
@@ -61,7 +61,7 @@ When invoked:
   unregistered, an `except ... as e` stored beyond the handler (its traceback pins every frame's
   locals), reference cycles paired with `__del__`.
 - **Unreleased resources**: files, sockets, DB connections, `subprocess` pipes opened without `with` /
-  explicit `close()` (see CRITICAL — Error Handling's "missing context managers").
+  explicit `close()` (see 🔴 Critical — Error Handling's "missing context managers").
 - **Per-object overhead at high cardinality**: no `__slots__` / `@dataclass(slots=True)` on classes
   instantiated in the thousands.
 - **Async/concurrency growth**: unbounded `asyncio.Queue()`, task sets never `discard`ed,
@@ -71,10 +71,10 @@ When invoked:
   unclosed SQLAlchemy session (identity-map growth); large result sets without `yield_per` /
   server-side cursors.
 
-Severity: a leak in a long-lived process, or growth driven by user input, is **HIGH**; a pure
-efficiency win with no unbounded growth is **MEDIUM**.
+Severity: a leak in a long-lived process, or growth driven by user input, is **🟠 High**; a pure
+efficiency win with no unbounded growth is **🟡 Medium**.
 
-### MEDIUM — Best Practices
+### 🟡 Medium — Best Practices
 - PEP 8: import order, naming, spacing
 - Missing docstrings on public functions
 - `print()` instead of `logging`

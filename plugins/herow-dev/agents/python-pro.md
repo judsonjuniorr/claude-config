@@ -84,7 +84,7 @@ class Drawable(Protocol):
 - Write types and function signatures first.
 - Implement business logic.
 - Write tests alongside implementation — not after.
-- Run `ruff check --fix`, `ruff format`, and `mypy --strict` before considering done.
+- Run the project's configured linter, formatter, and type checker (from `pyproject.toml`, `setup.cfg`, or pre-commit) on the files you changed; fall back to `ruff check --fix`, `ruff format`, and `mypy --strict` only when the project configures none.
 
 ### QA
 - 100% type coverage (no `# type: ignore` without comment).

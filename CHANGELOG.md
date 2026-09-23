@@ -6,18 +6,23 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **`/herow-core:doctor` pins Opus 5.5.** `token-guard.sh` now pins `claude-opus-5-5`, and
-  `model-pin.py` lists it first. It needs Claude Code ≥ 2.1.280; older installs fall back to
-  Opus 4.7, the same way the Opus 5 pin already did.
+  `model-pin.py` lists it first. It needs Claude Code ≥ 2.1.280. On an older install the version
+  gate now steps down one generation at a time (Opus 5.5 → 5 → 4.8 → 4.7) to the newest model
+  that install can select, instead of jumping straight to 4.7. It also gates `[1m]` and dated
+  snapshot IDs, which used to bypass it. Covered by `setup/tests/test_model_pin.py`, now in CI.
 - **Prompt audit against Opus 5.5.** Prompt text across the plugins was trimmed where it
   prescribed method instead of outcome: the research skill and `search-specialist` state a
-  stop rule instead of source counts, the builder agents keep their definition of done but
-  drop the "analyze first" phase, and all-caps constraints now read at normal volume.
-  `ui-ux-designer` names the current generic defaults to flag instead of prescribing new ones.
+  stop rule instead of source counts (`search-specialist` keeps a 3-round ceiling, since
+  `/organizze` fans it out per category), `java-pro` / `python-pro` keep their definition of done
+  but drop the "analyze first" phase and run the project's own tooling, and all-caps
+  constraints in prompt bodies now read at normal volume. `ui-ux-designer` names the current
+  generic defaults to flag instead of prescribing new ones.
 - The SEO suite states its rules without the Reddit-thread provenance, and
   `technical-seo-auditor` / `content-engineer` pin `model: sonnet`, so cost-guard's cheap tier
-  is actually enforced.
-- `github-ops`' hook section is down to the four facts the model acts on; the full `git-guard`
-  behavior stays in its README.
+  is actually enforced. `seo-strategist` stays on the session model (Opus under `opusplan`
+  plan mode); the docs no longer claim it is pinned to Opus.
+- `github-ops`' hook section is down to what the model acts on, including what the hook does
+  *not* gate; the full `git-guard` behavior stays in its README.
 
 ### Fixed
 - **`security-reviewer` findings survived no `/code:review` cutoff.** The agent had no
@@ -26,14 +31,26 @@ All notable changes to this project will be documented in this file.
 - **Agent delegation checked `~/.claude/agents/`, which plugin installs never populate.**
   `github-ops` always skipped its code-reviewer pass, and `/herow-finance:organizze` warned
   "not installed" on every run before falling back to `general-purpose`. Every delegation now
-  names the namespaced agent (`herow-core:code-reviewer`, `herow-finance:financial-analyst`, …)
-  and falls back only when it is missing from the session's agent list.
+  names the namespaced agent (`herow-core:code-reviewer`, `herow-finance:financial-analyst`, …),
+  since the Agent tool rejects bare plugin-agent names — including `/code:review`'s dispatch
+  tables, whose bare names failed with "Agent type 'code-reviewer' not found".
 - Removed the "1M context needs usage credits" check from `/quick`, `/execute` and
-  `/fix-cves`. Sonnet 5 and Opus 4.7+ run native 1M with no credits, and the probe read a
-  settings key that is never set, so it could not fire.
-- Subagents no longer "ask the user" (they can't): `code-reviewer` and `search-specialist`
-  state their assumption and proceed. `code-reviewer`, `python-reviewer` and `react-reviewer`
-  use the emoji severity levels their own output contract requires.
+  `/fix-cves`. Sonnet 5 and Opus 4.7+ run native 1M with no credits, and the probe only read
+  `$CLAUDE_MODEL` (unset) and `settings.json`'s `model` (the `opusplan` alias), so a `[1m]`
+  session never tripped it.
+- Subagents no longer "ask the user" (they can't): `code-reviewer` reports a partial review as a
+  finding and `search-specialist` states its interpretation. `security-reviewer` is report-only
+  as a review lane. `code-reviewer`, `python-reviewer` and `react-reviewer` use the emoji
+  severity levels their own output contract requires.
+- **`git-guard` now asks on chained destructive `gh`/`glab` commands.** It found the
+  destructive verb anywhere in a chain, but chose the script to suggest from the command's
+  first word, so `cd x && gh pr merge 1`, `GH_REPO=a/b gh pr merge 1` and
+  `git push && gh pr create …` got no decision at all. The suggestion now comes from the
+  matched segment, and a separator with no surrounding space (`cd x&&gh pr merge 1`,
+  `(gh pr merge 1)`) now starts a segment too; eight regression cases pin it. Because the
+  match is textual, a destructive phrase inside a commit message or search string now
+  prompts as well (fails safe). The docs also say plainly that only `pr.sh` scrubs body files;
+  `issue.sh` and raw `-F`/`--body-file` calls are not scanned for attribution.
 - `tdd-guide` triggers on test-first requests instead of on every feature, fix, or refactor,
   and its upstream "v1.8" addendum is gone. `/code:review` and the research skill name the
   `Agent` tool instead of `Task`.

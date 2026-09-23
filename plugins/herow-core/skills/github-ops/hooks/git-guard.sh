@@ -208,8 +208,8 @@ if [ "$all_safe" = 1 ]; then
   # find — an open-ended commitment for a cosmetic classification nicety.
   # So this hook does not attempt it: segments are split directly on raw
   # `$CHK`, matching every other read-only/write-tier check in this file,
-  # and a delimiter-bearing quoted argument correctly falls through to
-  # `ask` (safe direction) rather than risk a wrongful `allow`.
+  # and a delimiter-bearing quoted argument misses the fast-allow and gets no
+  # decision from this hook (normal Bash rules decide) rather than a wrongful `allow`.
   oldIFS="$IFS"; IFS='|&;'$'\n'; set -f          # split on | & ; (covers || &&) and newlines; disable globbing
   for seg in $CHK; do
     s="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -269,14 +269,17 @@ fi
 # hook's `ask` either (no destructive gh/glab verb in it) — not a real loss of
 # protection, since `rm -rf` still answers to normal Bash permission rules and
 # to destructive-guard.sh, which matches the same PreToolUse/Bash event.
-destructive_re='(^|[[:space:]])(gh (pr|issue|release|run|workflow)|glab (mr|issue|ci|release))[[:space:]]+(create|edit|close|delete|delete-asset|cancel|merge|update)([[:space:]]|$)'
-printf '%s' "$CMD" | grep -qE "$destructive_re" || exit 0
+destructive_re='(^|[[:space:];&|(])(gh (pr|issue|release|run|workflow)|glab (mr|issue|ci|release))[[:space:]]+(create|edit|close|delete|delete-asset|cancel|merge|update)([[:space:]]|$)'
+destructive_hit=$(printf '%s' "$CMD" | grep -oE "$destructive_re" | head -n 1)
+[ -n "$destructive_hit" ] || exit 0
 
+# Classify the matched segment, not the command's first word, so a chained or
+# env-prefixed call (`cd x && gh pr merge 1`, `GH_REPO=a/b gh pr merge 1`) still asks.
 suggest=""
-case "$CMD" in
-  gh\ pr\ *|glab\ mr\ *)                          suggest="pr.sh" ;;
-  gh\ issue\ *|glab\ issue\ *)                    suggest="issue.sh" ;;
-  gh\ release\ *|gh\ run\ *|gh\ workflow\ *|glab\ ci\ *|glab\ release\ *) suggest="repo.sh" ;;
+case "$destructive_hit" in
+  *gh\ pr\ *|*glab\ mr\ *)                          suggest="pr.sh" ;;
+  *gh\ issue\ *|*glab\ issue\ *)                    suggest="issue.sh" ;;
+  *gh\ release\ *|*gh\ run\ *|*gh\ workflow\ *|*glab\ ci\ *|*glab\ release\ *) suggest="repo.sh" ;;
 esac
 
 [ -n "$suggest" ] || exit 0

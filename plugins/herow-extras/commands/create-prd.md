@@ -52,7 +52,7 @@ Rounds (run all for *comprehensive*; run the ★ subset for *lean*):
    - **Guardrail** — a metric that must **not** regress.
 7. ★ **Risks** — Top risks, each with likelihood (low/med/high) and a mitigation.
 8. **UX requirements** *(comprehensive)* — Key states, empty/error/loading behavior, accessibility or responsive expectations, and the acceptance-criteria style the user wants.
-9. **Technical considerations** *(comprehensive)* — Offer to delegate to `backend-architect` for high-level architecture notes, dependencies, and trade-offs. If declined or unavailable, capture them inline and keep them high-level (no implementation detail).
+9. **Technical considerations** *(comprehensive)* — Offer to delegate to `herow-dev:backend-architect` for high-level architecture notes, dependencies, and trade-offs. If declined or unavailable, capture them inline and keep them high-level (no implementation detail).
 
 Stop the discovery loop once every required field for the chosen depth is filled or explicitly deferred to open questions.
 
@@ -84,7 +84,7 @@ Render the document directly in chat (Markdown). Use the section set for the cho
    - **Definition of Done** checklist (AC pass, analytics fire, error states handled, responsive verified, accessibility standard met, performance threshold).
 9. **Success metrics** — primary · secondary · guardrail
 10. **UX requirements** — key states, accessibility, responsive notes
-11. **Technical considerations** — high-level only (from `backend-architect` if used)
+11. **Technical considerations** — high-level only (from `herow-dev:backend-architect` if used)
 12. **Risks & mitigations**
 13. **Dependencies** — teams, services, prerequisites
 14. **Open questions / Assumptions**
@@ -107,4 +107,4 @@ Ask with `AskUserQuestion` whether to write the PRD to a file or keep it chat-on
 
 This subagent ships with the herow-dev plugin and sharpens the output when installed. The command works without it.
 
-- **[`backend-architect`](../../agents/backend-architect.md)** — for the **Technical considerations** section: surfaces dependencies, integration points, and build/buy or stack trade-offs at PRD altitude (no implementation). Optional; if absent, the command fills the section inline.
+- **[`backend-architect`](../../herow-dev/agents/backend-architect.md)** — for the **Technical considerations** section: surfaces dependencies, integration points, and build/buy or stack trade-offs at PRD altitude (no implementation). Optional; if absent, the command fills the section inline.
