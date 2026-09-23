@@ -75,6 +75,19 @@ jobs:
           fi
           echo "versionless OK"
 
+      - name: Hook guard test suites
+        run: |
+          set -e
+          bash plugins/herow-core/scripts/tests/test-destructive-guard.sh
+          bash plugins/herow-core/scripts/tests/test-doc-file-warning.sh
+          bash plugins/herow-dev/scripts/tests/test-blueprint-track.sh
+          python3 plugins/herow-core/skills/github-ops/hooks/tests/test_git_guard.py
+          # The stall cases probe each shell's bash major version and print a
+          # SKIP for any read branch this runner cannot cover. On ubuntu both
+          # `bash` and `/bin/bash` are bash 5, so the bash-3.2 unbounded-read
+          # branch is reported UNCOVERED here rather than silently passing --
+          # that branch is macOS-only and is covered on a dev machine.
+
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
