@@ -48,8 +48,8 @@ All notable changes to this project will be documented in this file.
   `git push && gh pr create …` got no decision at all. The suggestion now comes from the
   matched segment, and a separator with no surrounding space (`cd x&&gh pr merge 1`,
   `(gh pr merge 1)`) now starts a segment too; eight regression cases pin it. Because the
-  match is textual, a destructive phrase inside a commit message or search string now
-  prompts as well (fails safe). The docs also say plainly that only `pr.sh` scrubs body files;
+  match is textual, a destructive phrase followed by a space inside a commit message or
+  search string (`git commit -m "fix gh pr merge flow"`) now prompts as well (fails safe). The docs also say plainly that only `pr.sh` scrubs body files;
   `issue.sh` and raw `-F`/`--body-file` calls are not scanned for attribution.
 - `tdd-guide` triggers on test-first requests instead of on every feature, fix, or refactor,
   and its upstream "v1.8" addendum is gone. `/code:review` and the research skill name the

@@ -18,7 +18,8 @@
 #      nudges toward the matching github-ops script. Gated on the VERB, not
 #      just the family: a read-only or non-destructive-write command that
 #      merely fails the tier-1/2 fast-allow (piped to an unrecognized helper,
-#      a `;`/`|` inside a quoted arg) gets NO decision here — it falls through
+#      a `;`/`|` inside a quoted arg) gets NO decision here unless the text
+#      itself contains a destructive gh/glab phrase — it falls through
 #      to normal Bash permission rules instead of an unhelpful "prefer the
 #      script" nudge on a command the script tier has nothing to do with. A
 #      destructive verb on a gh/glab command family this hook doesn't classify
@@ -209,7 +210,8 @@ if [ "$all_safe" = 1 ]; then
   # So this hook does not attempt it: segments are split directly on raw
   # `$CHK`, matching every other read-only/write-tier check in this file,
   # and a delimiter-bearing quoted argument misses the fast-allow and gets no
-  # decision from this hook (normal Bash rules decide) rather than a wrongful `allow`.
+  # decision from this hook (normal Bash rules decide) rather than a wrongful
+  # `allow` — unless it contains a destructive phrase, which asks below.
   oldIFS="$IFS"; IFS='|&;'$'\n'; set -f          # split on | & ; (covers || &&) and newlines; disable globbing
   for seg in $CHK; do
     s="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -261,9 +263,10 @@ fi
 # for destructive verbs; for everything else this hook stays silent and
 # normal Bash permission rules decide. NOT anchored at `^`: the destructive
 # verb can be in any segment of a chain (`gh pr list && gh pr merge 42`) —
-# same `(^|[[:space:]])` shape already used for the attribution-verb check
-# above. End boundary keeps `delete` from prefix-matching `delete-asset`
-# (listed explicitly).
+# the attribution check's `(^|[[:space:]])` start, widened to also start after
+# `;`, `&`, `|` and `(` so `cd x&&gh pr merge 1` is caught. The match is
+# textual, so the phrase inside quoted text also asks (fail-safe). End boundary
+# keeps `delete` from prefix-matching `delete-asset` (listed explicitly).
 #
 # Conscious side effect: `gh pr view 42; rm -rf /tmp/x` no longer gets this
 # hook's `ask` either (no destructive gh/glab verb in it) — not a real loss of

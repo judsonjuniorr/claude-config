@@ -1,6 +1,6 @@
 # seo
 
-SEO/GEO growth slash commands. They live in the `herow-seo` plugin's `commands/`, so each is invoked as **`/herow-seo:<name>`** (Claude Code's path-as-namespace convention, same as `/herow-finance:*`).
+SEO/GEO growth slash commands. They live in the `herow-seo` plugin's `commands/`, so each is invoked as **`/herow-seo:<name>`** (the prefix is the plugin name, as with `/herow-finance:*`).
 
 This suite encodes an SEO+GEO playbook as standalone commands: optimize CTR + conversion (not vanity impressions), gate on indexation, weight GEO (AI citation) heavily, treat backlinks as human work, enforce an information-gain quality bar, and control token cost. Every command **runs standalone** (native tools) and **delegates to the `toprank` plugin when installed**. Every command ends at a **human gate** — nothing is ever auto-published.
 
@@ -24,7 +24,7 @@ This suite encodes an SEO+GEO playbook as standalone commands: optimize CTR + co
 
 ## The three agents (the "team")
 
-The commands delegate to three specialist agents in [`../agents/`](../agents/) (and fall back to `general-purpose` when an agent isn't installed — same precedent as `finance/organizze`):
+The commands delegate to three specialist agents in [`../agents/`](../agents/) (and fall back to `general-purpose` when an agent isn't installed — same precedent as `/herow-finance:organizze`):
 
 - [`seo-strategist`](../agents/seo-strategist.md) (session model — Opus under `opusplan` plan mode; **no Write**) — analyzes GSC/data, finds patterns, makes the call. Decisions only.
 - [`content-engineer`](../agents/content-engineer.md) (pinned `model: sonnet`) — drafts content + FAQ schema + internal links, with a hard **information-gain gate** (refuses to finalize commodity reworded-web content).
@@ -48,6 +48,10 @@ If no data source resolves, a command does **not** fabricate data. It detects to
 ## Layout
 
 ```
+agents/
+├── seo-strategist.md
+├── content-engineer.md
+└── technical-seo-auditor.md
 reference/
 └── gsc-data-contract.md # this file
 commands/
