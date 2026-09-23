@@ -29,12 +29,12 @@ SETTINGS = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
 MODELS_API_LIMIT = 100
 MODELS_API_TIMEOUT_S = 5
 
-# Static fallback — 3 most recent per family as of 2026-09-13.
+# Static fallback — 3 most recent per family as of 2026-09-23.
 # Updated here whenever new models ship; the live --list path stays current.
 STATIC_FALLBACK = [
+    ("opus", "claude-opus-5-5", "Opus 5.5"),
     ("opus", "claude-opus-5", "Opus 5"),
     ("opus", "claude-opus-4-8", "Opus 4.8"),
-    ("opus", "claude-opus-4-7", "Opus 4.7"),
     ("sonnet", "claude-sonnet-5", "Sonnet 5"),
     ("sonnet", "claude-sonnet-4-6", "Sonnet 4.6"),
     ("sonnet", "claude-sonnet-4-5", "Sonnet 4.5"),
@@ -44,23 +44,25 @@ STATIC_FALLBACK = [
 # code.claude.com/docs/en/model-config release notes. Models absent here
 # have no known minimum-version gate.
 MODEL_MIN_VERSION = {
+    "claude-opus-5-5": (2, 1, 280),
     "claude-opus-5": (2, 1, 219),
     "claude-sonnet-5": (2, 1, 197),
     "claude-opus-4-8": (2, 1, 154),
 }
 
-# Fallback to substitute when the installed Claude Code is below a model's
+# Next-older model to try when the installed Claude Code is below a model's
 # minimum version. Absent entry -> drop the pin instead of substituting.
-#
-# Every value here MUST be a model with no MODEL_MIN_VERSION entry of its own:
-# _version_gate() returns the fallback id directly without re-gating it, so a
-# gated fallback would be pinned on a version that cannot select it. That is why
-# opus falls back to 4-7 (ungated) and not 4-8 (gated at 2.1.154).
+# _version_gate() re-gates each fallback, so a chain steps down one generation
+# at a time; it must end on an ungated model and never loop.
 MODEL_VERSION_FALLBACK = {
-    "claude-opus-5": "claude-opus-4-7",
+    "claude-opus-5-5": "claude-opus-5",
+    "claude-opus-5": "claude-opus-4-8",
     "claude-opus-4-8": "claude-opus-4-7",
     "claude-sonnet-5": "claude-sonnet-4-6",
 }
+
+_VARIANT_SUFFIX = re.compile(r"\[[^\]]*\]$")
+_DATE_SUFFIX = re.compile(r"-\d{8}$")
 
 
 def _label(model_id):
@@ -208,31 +210,48 @@ def _installed_cc_version():
     return tuple(int(g) for g in m.groups())
 
 
+def _gate_key(model_id):
+    """Strip a `[1m]`-style variant and a dated snapshot so `claude-opus-5-5[1m]` gates as `claude-opus-5-5`."""
+    return _DATE_SUFFIX.sub("", _VARIANT_SUFFIX.sub("", model_id))
+
+
 def _version_gate(model_id):
-    """Return model_id, or a fallback/None if the installed Claude Code is below its minimum version.
+    """Return model_id, the newest fallback the installed Claude Code can select, or None.
 
     Fails open (returns model_id unchanged) when the installed version can't
     be determined — the minimum-version requirement is still documented in
     CHANGELOG.md/doctor.md for the user to verify manually.
     """
-    min_v = MODEL_MIN_VERSION.get(model_id)
-    if not min_v:
-        return model_id
-    installed = _installed_cc_version()
-    if installed is None or installed >= min_v:
-        return model_id
-    fallback = MODEL_VERSION_FALLBACK.get(model_id)
-    print(
-        "warn|model-pin|%s requires Claude Code >= %s (installed: %s) — %s"
-        % (
-            model_id,
-            ".".join(map(str, min_v)),
-            ".".join(map(str, installed)),
-            ("pinning %s instead" % fallback) if fallback else "skipping this pin",
-        ),
-        file=sys.stderr,
-    )
-    return fallback
+    installed = None
+    current = model_id
+    seen = set()
+    while current is not None:
+        if current in seen:
+            return None
+        seen.add(current)
+        key = _gate_key(current)
+        min_v = MODEL_MIN_VERSION.get(key)
+        if not min_v:
+            return current
+        if installed is None:
+            installed = _installed_cc_version()
+            if installed is None:
+                return current
+        if installed >= min_v:
+            return current
+        fallback = MODEL_VERSION_FALLBACK.get(key)
+        print(
+            "warn|model-pin|%s requires Claude Code >= %s (installed: %s) — %s"
+            % (
+                current,
+                ".".join(map(str, min_v)),
+                ".".join(map(str, installed)),
+                ("trying %s instead" % fallback) if fallback else "skipping this pin",
+            ),
+            file=sys.stderr,
+        )
+        current = fallback
+    return None
 
 
 def cmd_apply(opus_id, sonnet_id, dry_run):

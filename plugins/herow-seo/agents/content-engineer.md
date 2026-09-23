@@ -2,6 +2,7 @@
 name: content-engineer
 description: SEO/GEO content engineer. Drafts question-intent articles, landing copy, FAQ schema, and quick-answer blocks from a strategist brief, behind an information-gain gate. Emits artifacts for human review. Use when a /herow-seo:* command needs content/schema.
 tools: Read, Write, Edit, WebSearch, Grep, Glob
+model: sonnet
 effort: medium
 ---
 

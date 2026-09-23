@@ -19,13 +19,6 @@ effort: medium
 Scope: **third-party dependency vulnerabilities only.** First-party code security review is
 `/security-review` or the `security-reviewer` agent — don't duplicate that here.
 
-## Model check (1M context)
-
-Same check as `/herow-dev:quick` — this command doesn't pin a model, so a 1M-context session
-inherits it and needs usage credits. If `~/.claude/settings.json`'s `model` (or `$CLAUDE_MODEL`)
-ends in `[1m]`, warn once and offer switching to a non-`[1m]` model via `/model`; otherwise proceed
-without warning (fail open — this check is advisory only).
-
 ## Non-interactive / headless sessions
 
 Detect this before worktree creation: no TTY attached to stdin, or `AskUserQuestion` is not

@@ -220,6 +220,17 @@ must_ask = [
     # when it's not the first segment of a chain — a `^`-anchored version
     # would wrongly drop this to NO-DECISION.
     "gh pr list && gh pr merge 42",
+    # The script suggestion is classified from the destructive segment, not the
+    # command's first word — a non-gh first segment must not drop the ask.
+    "cd /tmp && gh pr merge 42",
+    "GH_REPO=a/b gh pr merge 42",
+    "git push && gh pr create --title x",
+    "true; gh issue close 7",
+    "cd /tmp && glab mr update 5",
+    # Separators with no surrounding whitespace still start a segment.
+    "cd /tmp&&gh pr merge 1",
+    "x=1;gh pr merge 1",
+    "(gh pr merge 1)",
 ]
 
 # Non-destructive gh/glab writes — newly allowed outright (no prompt), one
@@ -362,9 +373,7 @@ def run_stalled(cmd, shell="bash"):
     payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}})
     r, w = os.pipe()
     try:
-        p = subprocess.Popen(
-            [shell, HOOK], stdin=r, stdout=subprocess.PIPE, text=True
-        )
+        p = subprocess.Popen([shell, HOOK], stdin=r, stdout=subprocess.PIPE, text=True)
     except BaseException:
         os.close(w)
         raise
@@ -548,9 +557,7 @@ def report_shell_parity():
             good = d == want
             ok = ok and good
             n += 1
-            print(
-                f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): {what}"
-            )
+            print(f"{'OK ' if good else 'FAIL'} [{d:12}] {shell} (bash {maj}): {what}")
             # A read that stopped seeing EOF would satisfy every assertion above
             # while making every single call wait the full bound.
             quick = elapsed < 1.0

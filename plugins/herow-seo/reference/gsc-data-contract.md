@@ -1,34 +1,34 @@
 # seo
 
-SEO/GEO growth slash commands. Nested under `commands/seo/`, so each is invoked as **`/herow-seo:<name>`** (Claude Code's path-as-namespace convention, same as `/herow-finance:*`).
+SEO/GEO growth slash commands. They live in the `herow-seo` plugin's `commands/`, so each is invoked as **`/herow-seo:<name>`** (the prefix is the plugin name, as with `/herow-finance:*`).
 
-This suite encodes the validated Agensi/Reddit SEO+GEO playbook — **with the skeptic corrections built in as first-class commands**: optimize CTR + conversion (not vanity impressions), gate on indexation, weight GEO (AI citation) heavily, treat backlinks as human work, enforce an information-gain quality bar, and control token cost. Every command **runs standalone** (native tools) and **delegates to the `toprank` plugin when installed**. Every command ends at a **human gate** — nothing is ever auto-published.
+This suite encodes an SEO+GEO playbook as standalone commands: optimize CTR + conversion (not vanity impressions), gate on indexation, weight GEO (AI citation) heavily, treat backlinks as human work, enforce an information-gain quality bar, and control token cost. Every command **runs standalone** (native tools) and **delegates to the `toprank` plugin when installed**. Every command ends at a **human gate** — nothing is ever auto-published.
 
-> **The tool is not the lever — persistence is.** The founder in the source post shipped 100+ articles over months before results. These commands give you a small team's execution speed; you still have to run `/herow-seo:content-sprint` (and friends) repeatedly, for months. Don't judge results at 10 articles.
+> **The tool is not the lever — persistence is.** Expect 100+ articles over months before results. These commands give you a small team's execution speed; you still have to run `/herow-seo:content-sprint` (and friends) repeatedly, for months. Don't judge results at 10 articles.
 
 ## Commands
 
-| Command | Pillar / correction | One-liner |
+| Command | Focus | One-liner |
 |---|---|---|
-| [`/herow-seo:content-sprint`](./content-sprint.md) | Pillar 1 (the 80%) | GSC keyword gap → cluster → draft + FAQ schema + internal links → human gate. |
-| [`/herow-seo:weekly-audit`](./weekly-audit.md) | Pillar 3 | Weekly habit: export GSC → "what's broken" → prioritized ~10 fixes. |
-| [`/herow-seo:indexation-check`](./indexation-check.md) | Correction (indexation) | Diagnose coverage; resolve "Discovered/Crawled – not indexed". |
-| [`/herow-seo:geo-optimize`](./geo-optimize.md) | Pillar 2 (GEO) | Typed JSON-LD + quick-answers + AI-referral tracking for AI citation. |
-| [`/herow-seo:catalog-pages`](./catalog-pages.md) | Pillar 4 | Programmatic long-tail pages; uniqueness + cannibalization checks. |
-| [`/herow-seo:ctr-tune`](./ctr-tune.md) | Correction (CTR) | High-impression/low-CTR queries → better titles/meta, ranked by clicks-at-risk. |
-| [`/herow-seo:conversion-track`](./conversion-track.md) | Correction (conversion) | Join traffic ↔ conversion; flag high-traffic/low-conversion pages. |
-| [`/herow-seo:backlink-outreach`](./backlink-outreach.md) | Correction (human work) | Finds targets, drafts outreach, tracks status. **Cannot build links** — that's human work. |
-| [`/herow-seo:cost-guard`](./cost-guard.md) | Correction (token cost) | Model-tiering policy the suite honors (cheap tier for parsing, Opus for decisions). |
-| [`/herow-seo:report`](./report.md) | Metrics loop | Consolidated dashboard: CTR, indexation, AI-citation, conversion. |
-| [`/herow-seo:launch`](./launch.md) | Orchestrator (heavy) | Runs the full playbook end-to-end for a new project; sequences the agents inline with cost + indexation gates. **Most expensive command.** |
+| [`/herow-seo:content-sprint`](../commands/content-sprint.md) | Content volume (the 80%) | GSC keyword gap → cluster → draft + FAQ schema + internal links → human gate. |
+| [`/herow-seo:weekly-audit`](../commands/weekly-audit.md) | Weekly audit | Weekly habit: export GSC → "what's broken" → prioritized ~10 fixes. |
+| [`/herow-seo:indexation-check`](../commands/indexation-check.md) | Indexation | Diagnose coverage; resolve "Discovered/Crawled – not indexed". |
+| [`/herow-seo:geo-optimize`](../commands/geo-optimize.md) | GEO (AI citation) | Typed JSON-LD + quick-answers + AI-referral tracking for AI citation. |
+| [`/herow-seo:catalog-pages`](../commands/catalog-pages.md) | Programmatic pages | Programmatic long-tail pages; uniqueness + cannibalization checks. |
+| [`/herow-seo:ctr-tune`](../commands/ctr-tune.md) | CTR | High-impression/low-CTR queries → better titles/meta, ranked by clicks-at-risk. |
+| [`/herow-seo:conversion-track`](../commands/conversion-track.md) | Conversion | Join traffic ↔ conversion; flag high-traffic/low-conversion pages. |
+| [`/herow-seo:backlink-outreach`](../commands/backlink-outreach.md) | Outreach (human work) | Finds targets, drafts outreach, tracks status. **Cannot build links** — that's human work. |
+| [`/herow-seo:cost-guard`](../commands/cost-guard.md) | Token cost | Model-tiering policy the suite honors (cheap tier for parsing, Opus for decisions). |
+| [`/herow-seo:report`](../commands/report.md) | Metrics loop | Consolidated dashboard: CTR, indexation, AI-citation, conversion. |
+| [`/herow-seo:launch`](../commands/launch.md) | Orchestrator (heavy) | Runs the full playbook end-to-end for a new project; sequences the agents inline with cost + indexation gates. **Most expensive command.** |
 
 ## The three agents (the "team")
 
-The commands delegate to three specialist agents in [`../../agents/`](../../agents/) (and fall back to `general-purpose` when an agent file isn't installed — same precedent as `finance/organizze`):
+The commands delegate to three specialist agents in [`../agents/`](../agents/) (and fall back to `general-purpose` when an agent isn't installed — same precedent as `/herow-finance:organizze`):
 
-- [`seo-strategist`](../../agents/seo-strategist.md) (Opus, **no Write**) — analyzes GSC/data, finds patterns, makes the call. Decisions only.
-- [`content-engineer`](../../agents/content-engineer.md) (Sonnet) — drafts content + FAQ schema + internal links, with a hard **information-gain gate** (refuses to finalize commodity reworded-web content).
-- [`technical-seo-auditor`](../../agents/technical-seo-auditor.md) (Sonnet) — parses GSC exports → prioritized fix list + indexation coverage + CTR diagnostics.
+- [`seo-strategist`](../agents/seo-strategist.md) (session model — Opus under `opusplan` plan mode; **no Write**) — analyzes GSC/data, finds patterns, makes the call. Decisions only.
+- [`content-engineer`](../agents/content-engineer.md) (pinned `model: sonnet`) — drafts content + FAQ schema + internal links, with a hard **information-gain gate** (refuses to finalize commodity reworded-web content).
+- [`technical-seo-auditor`](../agents/technical-seo-auditor.md) (pinned `model: sonnet`) — parses GSC exports → prioritized fix list + indexation coverage + CTR diagnostics.
 
 ## GSC data contract (canonical)
 
@@ -48,8 +48,13 @@ If no data source resolves, a command does **not** fabricate data. It detects to
 ## Layout
 
 ```
-commands/seo/
-├── README.md            # this file
+agents/
+├── seo-strategist.md
+├── content-engineer.md
+└── technical-seo-auditor.md
+reference/
+└── gsc-data-contract.md # this file
+commands/
 ├── content-sprint.md    # /herow-seo:content-sprint
 ├── weekly-audit.md      # /herow-seo:weekly-audit
 ├── indexation-check.md  # /herow-seo:indexation-check

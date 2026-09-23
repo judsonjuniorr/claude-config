@@ -11,7 +11,7 @@ effort: low
 > **Human gate:** never silently changes behavior. Any policy edit is presented for your approval before it's written.
 > **No runaway cost:** never run the whole suite on the most expensive tier — Opus is reserved for the final decision call.
 
-Skeptic correction (Ok_Priority_5044): running *everything* through Claude makes token cost climb fast. This command defines and persists the **model-tiering policy** the rest of the suite honors — cheap tier for bulk work, Opus only where judgment actually matters — plus a per-run token budget the heavier commands check.
+Running *everything* through Claude makes token cost climb fast. This command defines and persists the **model-tiering policy** the rest of the suite honors — cheap tier for bulk work, Opus only where judgment actually matters — plus a per-run token budget the heavier commands check.
 
 ## Relationship to the data commands
 
@@ -34,7 +34,7 @@ The data commands (`/herow-seo:content-sprint`, `/herow-seo:launch`, etc.) accep
 
 ## Output artifact
 
-The persisted tiering + token-budget policy (`cost-policy.md`) that the other /herow-seo:* commands read before choosing a model or fanning out work. Nothing else is produced.
+The persisted tiering + token-budget policy (`cost-policy.md`) that the other /herow-seo:* commands read before choosing a model or fanning out work. Nothing else is produced. The cheap-tier default is enforced in code: `technical-seo-auditor` and `content-engineer` pin `model: sonnet` in their frontmatter. `seo-strategist` is not pinned and runs on the session model, which is Opus under `opusplan` plan mode. A command that honors a different tier from this policy must pass it as the Agent tool's `model` parameter, which overrides the frontmatter pin.
 
 ## Guardrails
 

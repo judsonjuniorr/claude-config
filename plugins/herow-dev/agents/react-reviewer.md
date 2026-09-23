@@ -32,7 +32,7 @@ For a JSX/TSX PR, invoke both agents. For a pure `.ts` change with no React impo
    - Local review: prefer `git diff --staged -- '*.tsx' '*.jsx'` then `git diff -- '*.tsx' '*.jsx'`.
    - If history is shallow or single-commit, fall back to `git show --patch HEAD -- '*.tsx' '*.jsx'`.
 2. Before reviewing a PR, inspect merge readiness if metadata is available (`gh pr view --json mergeStateStatus,statusCheckRollup`). If checks are red or there are merge conflicts, stop and report.
-3. Run the project's lint command if present (`npm/pnpm/yarn/bun run lint`) — confirm `eslint-plugin-react-hooks` is configured. If the project lacks `react-hooks/rules-of-hooks` or `react-hooks/exhaustive-deps`, flag this as a HIGH config issue.
+3. Run the project's lint command if present (`npm/pnpm/yarn/bun run lint`) — confirm `eslint-plugin-react-hooks` is configured. If the project lacks `react-hooks/rules-of-hooks` or `react-hooks/exhaustive-deps`, flag this as a 🟠 High config issue.
 4. Run the project's typecheck command if present (`npm/pnpm/yarn/bun run typecheck` or `tsc --noEmit -p <tsconfig>`). Skip cleanly for JS-only projects.
 5. If no JSX/TSX changes are present in the diff, defer to `typescript-reviewer` and stop.
 6. Focus on modified `.tsx`/`.jsx` files; read surrounding context before commenting.
@@ -42,7 +42,7 @@ You DO NOT refactor or rewrite code — you report findings only.
 
 ## Review Priorities (React-specific only)
 
-### CRITICAL -- React Security
+### 🔴 Critical -- React Security
 
 - **`dangerouslySetInnerHTML` with unsanitized input**: User-controlled HTML rendered without DOMPurify or equivalent allowlist sanitizer. Halt review until source is documented and sanitization is at the same call site.
 - **`href` / `src` with unvalidated user URLs**: `javascript:` and `data:` schemes execute code. Require URL scheme validation.
@@ -50,13 +50,13 @@ You DO NOT refactor or rewrite code — you report findings only.
 - **Secret in client bundle**: `NEXT_PUBLIC_*`, `VITE_*`, `REACT_APP_*`, or any client-imported env var holding a private key, token, or service-side secret.
 - **`localStorage`/`sessionStorage` for session tokens**: Accessible to any XSS. Require httpOnly cookies.
 
-### CRITICAL -- Hook Rules
+### 🔴 Critical -- Hook Rules
 
 - **Conditional hook call**: Hook inside `if`, `for`, `&&`, ternary, or after early return. `eslint-plugin-react-hooks` should already catch this; flag if the lint rule is disabled.
 - **Hook called outside a component or custom hook**: `useState` in a regular function.
 - **Mutating state directly**: `state.push(x)`, `obj.foo = 1` followed by `setObj(obj)`. Mutation does not trigger re-render and breaks `===` checks in memoized children.
 
-### HIGH -- Hook Correctness
+### 🟠 High -- Hook Correctness
 
 - **Missing dependency in `useEffect`/`useMemo`/`useCallback`**: Reactive value referenced inside but absent from the dep array. Flag every `// eslint-disable-next-line react-hooks/exhaustive-deps` without a justification comment.
 - **Effect for derived state**: `setX(computed(props.y))` inside `useEffect([props.y])`. Compute during render instead.
@@ -64,14 +64,14 @@ You DO NOT refactor or rewrite code — you report findings only.
 - **Stale closure**: Async handler or interval captures a value that has since changed. Fix with functional updater or ref.
 - **Custom hook not prefixed `use`**: Breaks lint detection — rename.
 
-### HIGH -- Server/Client Boundary (Next.js App Router / RSC)
+### 🟠 High -- Server/Client Boundary (Next.js App Router / RSC)
 
 - **Server-only import in Client Component**: `"use client"` file imports a module marked `"server-only"` or known DB client (Prisma client root, AWS SDK with secrets).
 - **`"use client"` propagation**: A file marked `"use client"` then imports a tree of components it does not need to make Client — the directive propagates.
 - **Sensitive data leaked via props**: Server Component passes a full user record (including hashed passwords, tokens) to a Client Component.
 - **Server Action without auth check**: `"use server"` function accessible without confirming the current user has authorization for the operation.
 
-### HIGH -- Accessibility
+### 🟠 High -- Accessibility
 
 - **Interactive element without keyboard reachability**: `<div onClick>` instead of `<button>`. Mouse-only interaction excludes keyboard and assistive-tech users.
 - **Form input without label**: `<input>` without an associated `<label htmlFor>` or `aria-label`/`aria-labelledby`.
@@ -81,16 +81,16 @@ You DO NOT refactor or rewrite code — you report findings only.
 - **Heading order violation**: Skipping levels (`<h1>` then `<h3>`).
 - **Color used as sole indicator**: Errors signaled only by red text without an icon or text label.
 
-### HIGH -- Rendering and State Correctness
+### 🟠 High -- Rendering and State Correctness
 
 - **`key={index}` in dynamic list**: Reordering, insertion, or deletion attaches state to the wrong row. Use stable database IDs.
 - **Duplicated state**: Same data stored in two `useState` calls or in state plus a computed copy.
 - **`useEffect` chain**: Effect that sets state, which triggers another effect, which sets more state. Refactor to derive during render or consolidate.
 - **Initializing state from a prop without `key`**: Component does not reset when the prop changes; fix with `key={propValue}` on the parent.
 
-### HIGH -- Memory Lifecycle and Retention
+### 🟠 High -- Memory Lifecycle and Retention
 
-The "Effect missing cleanup" bullet above (HIGH — Hook Correctness) and the first item below are
+The "Effect missing cleanup" bullet above (🟠 High -- Hook Correctness) and the first item below are
 the same defect seen from two angles (correctness vs. retention) — report it once, under whichever
 framing fits the finding, not twice.
 
@@ -114,7 +114,7 @@ framing fits the finding, not twice.
 - **Server-side module state (RSC/Node)**: per-request data stored in a module-level variable leaks
   across requests — `React.cache()` is per-request, a module `Map` is not.
 
-### MEDIUM -- Performance
+### 🟡 Medium -- Performance
 
 - **Over-memoization**: `useMemo`/`useCallback` without a measured win — props change on most renders, or the value is not used by a memoized child or another hook's deps.
 - **New object/function inline as prop to memoized child**: Defeats `React.memo`.
@@ -124,14 +124,14 @@ framing fits the finding, not twice.
   and inflating DOM node count.
 - **`useContext` for high-frequency value**: All consumers re-render on every change.
 
-### MEDIUM -- Forms
+### 🟡 Medium -- Forms
 
 - **Form without semantic `<form>` element**: Loses native submit-on-Enter, browser form integration, accessibility tree.
 - **`onSubmit` without `preventDefault()`**: Page navigates, state lost (unless using React 19 form actions, which handle it).
 - **Roll-your-own validation in non-trivial form**: Recommend React Hook Form, TanStack Form, or React 19 `useActionState`.
 - **Missing `name` attribute on inputs inside a form**: Cannot be read via `FormData`.
 
-### MEDIUM -- Composition
+### 🟡 Medium -- Composition
 
 - **Prop drilling beyond 3 levels**: Consider Context or composition with `children` instead.
 - **Component over 200 lines**: Extract subcomponents or a custom hook.
@@ -161,9 +161,9 @@ If `eslint-plugin-react-hooks` or `eslint-plugin-jsx-a11y` is not in the project
 
 ## Approval Criteria
 
-- **Approve**: No CRITICAL or HIGH issues
-- **Warning**: MEDIUM issues only (merge with caution)
-- **Block**: CRITICAL or HIGH issues found
+- **Approve**: no 🔴 or 🟠 findings
+- **Warning**: 🟡 findings only (can merge with caution)
+- **Block**: any 🔴 or 🟠 finding
 
 ## Output Format
 
@@ -187,7 +187,3 @@ Always include the file path and line number. Quote the offending snippet when i
 
 - Agents: `typescript-reviewer` (generic TS/JS, invoked alongside on `.tsx`/`.jsx`), `security-reviewer` (project-wide audit)
 - Authoring rules (the canonical source the lanes above map onto — `herow-core/rules/react/`): `coding-style.md`, `patterns.md`, `performance.md`, `security.md`, `testing.md`. The review lanes here are the review-time checklist; consult these files for the authoring guidance behind each check rather than re-copying it. `performance.md` owns re-render/bundle cost; the Memory Lifecycle lane above owns retention.
-
----
-
-Review with the mindset: "Would this code pass review at a top React shop or well-maintained open-source library?"

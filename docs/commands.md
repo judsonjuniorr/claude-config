@@ -155,7 +155,7 @@ Audits UI/UX against a **consolidated** ruleset — Vercel's Web Interface Guide
 Some commands are grouped under a namespace directory, invoked as **`/<namespace>:<name>`** (Claude Code's path-as-namespace convention). Each suite self-documents in its own README:
 
 - [`finance`](./finance.md) — personal finance: [`/herow-finance:organizze`](./finance.md), `/herow-finance:goal`, `/herow-finance:context`.
-- [`seo/`](../plugins/herow-seo/commands/) — SEO/GEO growth suite: 11 `/herow-seo:*` commands (content-sprint, weekly-audit, indexation-check, geo-optimize, catalog-pages, ctr-tune, conversion-track, backlink-outreach, cost-guard, report, launch) + the `seo-strategist` / `content-engineer` / `technical-seo-auditor` agents. Encodes the Agensi SEO+GEO playbook with the skeptic corrections (CTR & conversion over impressions, indexation gate, GEO weighting, backlinks-are-human, information-gain bar, cost tiering); standalone with optional `toprank` delegation; every command ends at a human gate.
+- [`seo/`](../plugins/herow-seo/commands/) — SEO/GEO growth suite: 11 `/herow-seo:*` commands (content-sprint, weekly-audit, indexation-check, geo-optimize, catalog-pages, ctr-tune, conversion-track, backlink-outreach, cost-guard, report, launch) + the `seo-strategist` / `content-engineer` / `technical-seo-auditor` agents. Encodes an SEO+GEO playbook (CTR & conversion over impressions, indexation gate, GEO weighting, backlinks-are-human, information-gain bar, cost tiering); standalone with optional `toprank` delegation; every command ends at a human gate.
 
 ## Adding a new command
 

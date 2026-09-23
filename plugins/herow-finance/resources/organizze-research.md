@@ -43,7 +43,7 @@ Before firing a new agent, **check the cache** (default TTL 14 days): if a recen
    To force re-research of everything (ignore cache), use `--max-age-days 0`. For a longer TTL (e.g.: 30 days), `--max-age-days 30`.
 
 4. If ALL are cache-hits, skip to Step 6 (render prompt and invoke analyst — no agents). Otherwise, **fire ALL pending agents IN A SINGLE MESSAGE with multiple parallel `Agent` tool calls** (1 per cache-miss category). DO NOT run in series. Configuration per call:
-   - `subagent_type`: `search-specialist`
+   - `subagent_type`: `herow-dev:search-specialist` (`general-purpose` if it's not in the session's agent list)
    - `description`: `Market research: <category>`
    - `prompt`:
      ```

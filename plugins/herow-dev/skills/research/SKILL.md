@@ -10,9 +10,7 @@ description: (herow) Multi-source research with cited reports via Exa/web MCPs. 
 > or quoting live source counts.
 
 Produce thorough, cited research reports from multiple web sources, and route lighter
-asks to the cheapest path that answers them. This is the single research entry point —
-it absorbs the "classify the ask, take the lightest useful path first" routing and the
-evidence-labeling discipline that used to live in a separate research-ops skill.
+asks to the cheapest path that answers them. This is the single research entry point.
 
 ## When to Activate
 
@@ -58,39 +56,23 @@ Ask 1-2 quick clarifying questions:
 
 If the user says "just research it" — skip ahead with reasonable defaults.
 
-### Step 2: Plan the Research
+### Steps 2–4: Plan, search, deep-read
 
-Break the topic into 3-5 research sub-questions. Example:
-- Topic: "Impact of AI on healthcare"
-  - What are the main AI applications in healthcare today?
-  - What clinical outcomes have been measured?
-  - What are the regulatory challenges?
-  - What companies are leading this space?
-  - What's the market size and growth trajectory?
-
-### Step 3: Execute Multi-Source Search
-
-For EACH sub-question, search using the configured tools:
+Split the topic into the sub-questions a decision actually hinges on. Search each with varied
+phrasings, mixing general and news-focused queries and favoring academic, official, and reputable
+news sources over blogs and forums:
 
 ```
 web_search_exa(query: "<sub-question keywords>", numResults: 8)
 ```
 
-**Search strategy:**
-- Use 2-3 different keyword variations per sub-question
-- Mix general and news-focused queries
-- Aim for 15-30 unique sources total
-- Prioritize: academic, official, reputable news > blogs > forums
-
-### Step 4: Deep-Read Key Sources
-
-For the most promising URLs, fetch full content — don't rely on snippets alone:
+Fetch full text for the sources your conclusions rest on — don't rely on snippets alone:
 
 ```
 web_fetch_exa(url: "<url>")   # for any URL, including GitHub/SO/docs pages for code & API detail
 ```
 
-Read 3-5 key sources in full for depth.
+Stop when every sub-question has corroborated evidence or a stated gap.
 
 ### Step 5: Synthesize and Write Report
 
@@ -135,16 +117,8 @@ freshness-sensitive answers.
 
 ## Parallel Research with Subagents
 
-For broad topics, use Claude Code's Task tool to parallelize:
-
-```
-Launch 3 research agents in parallel:
-1. Agent 1: Research sub-questions 1-2
-2. Agent 2: Research sub-questions 3-4
-3. Agent 3: Research sub-question 5 + cross-cutting themes
-```
-
-Each agent searches, reads sources, and returns findings. The main session synthesizes
+For broad topics, use the Agent tool to split the sub-questions across parallel agents, with
+cross-cutting themes assigned to one of them. Each agent searches, reads sources, and returns findings. The main session synthesizes
 into the final report.
 
 ## Quality Rules

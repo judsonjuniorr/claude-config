@@ -5,7 +5,7 @@ argument-hint: "[gsc-export-path | --since N | --site URL]"
 effort: low
 ---
 
-# /herow-seo:indexation-check — the indexation gate the skeptics demanded
+# /herow-seo:indexation-check — indexation gate
 
 > **Requires:** a GSC export (Performance / Bulk Export, **or** a Page Indexing / Coverage CSV) **or** the `toprank` plugin's GSC integration. With no data, this command prints the 3-step export guide and stops.
 > **Human gate:** never auto-applies. Ends by presenting the not-indexed list + cause + unblock actions for your approval.
@@ -29,8 +29,8 @@ Beyond the Performance / Bulk Export, this command also accepts a **GSC Page Ind
 ## Flow
 
 1. **Resolve data.** Detect `toprank` (look for its `seo-analysis` skill). If present, prefer delegating the GSC/coverage pull to it. Else read the export at `gsc-export-path` (Page Indexing / Coverage CSV preferred for this command, Performance / Bulk Export as fallback). If neither resolves → print the 3-step guide (including the Page Indexing export steps above) and stop. Error clearly on a missing/empty/malformed file — never silently pass.
-2. **Coverage breakdown.** Delegate to the **`technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent file isn't installed — same precedent as finance/organizze) to break down indexed vs `Discovered – currently not indexed` vs `Crawled – currently not indexed` vs excluded, with counts by state and the full not-indexed page list. Summarize large exports — never dump raw rows.
-3. **Infer cause + unblock.** Delegate to the **`seo-strategist`** agent (fallback `general-purpose`) to infer the likely cause per not-indexed page — thin/commodity content, orphan = no internal links, crawl budget, or duplicate — and the concrete unblock for each (add internal links, improve info-gain, submit in sitemap, consolidate duplicates).
+2. **Coverage breakdown.** Delegate to the **`herow-seo:technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent isn't in the session's agent list — same precedent as finance/organizze) to break down indexed vs `Discovered – currently not indexed` vs `Crawled – currently not indexed` vs excluded, with counts by state and the full not-indexed page list. Summarize large exports — never dump raw rows.
+3. **Infer cause + unblock.** Delegate to the **`herow-seo:seo-strategist`** agent (fallback `general-purpose`) to infer the likely cause per not-indexed page — thin/commodity content, orphan = no internal links, crawl budget, or duplicate — and the concrete unblock for each (add internal links, improve info-gain, submit in sitemap, consolidate duplicates).
 4. **HUMAN GATE.** Present the ranked not-indexed list — each row: URL, coverage state, inferred cause, concrete unblock — plus counts by state. Ask via `AskUserQuestion` what to action (e.g. add internal links to orphans / improve info-gain on thin pages / consolidate duplicates / submit in sitemap). **Never auto-apply** any fix — the founder chooses, you hand the brief to the right agent or human.
 
 ## Output artifact

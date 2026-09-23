@@ -7,7 +7,7 @@ effort: medium
 
 # Validate UI
 
-> **AUDIT ONLY.** This command NEVER edits files — it only reads, fetches the official rules, and reports. If the user wants fixes, they ask afterward. `Bash` is used solely to detect/start a dev server and locate files; never to modify source.
+> **Audit only:** read, fetch the official rules, and report — don't edit files; fixes come in a follow-up request. `Bash` is used solely to detect/start a dev server and locate files; never to modify source.
 
 Audits the UI files in `$ARGUMENTS` against a **consolidated** set of UI/UX guidelines, fetches the rules fresh on every run, validates on screen when possible, and produces a terse prioritized report.
 

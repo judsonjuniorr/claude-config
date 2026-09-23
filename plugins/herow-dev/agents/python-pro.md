@@ -78,18 +78,15 @@ class Drawable(Protocol):
 - **Matplotlib / Seaborn** for static plots. **Plotly** for interactive.
 - **Numba JIT** (`@njit`) for hot numerical loops that cannot be vectorized.
 
-## Three-phase workflow
+## Definition of done
 
-### Phase 1 — Analysis
-Read the codebase. Identify: Python version, package manager, testing framework, linting setup, async vs sync, type strictness level. Do not assume.
-
-### Phase 2 — Implementation
+### Implementation
 - Write types and function signatures first.
 - Implement business logic.
 - Write tests alongside implementation — not after.
-- Run `ruff check --fix`, `ruff format`, and `mypy --strict` before considering done.
+- Run the project's configured linter, formatter, and type checker (from `pyproject.toml`, `setup.cfg`, or pre-commit) on the files you changed; fall back to `ruff check --fix`, `ruff format`, and `mypy --strict` only when the project configures none.
 
-### Phase 3 — QA
+### QA
 - 100% type coverage (no `# type: ignore` without comment).
 - 95%+ test coverage on critical paths.
 - Security scan: no `eval`/`exec` on user input, no hardcoded secrets, dependencies audited via `pip-audit`.

@@ -11,7 +11,7 @@ effort: medium
 > **Human gate:** never auto-applies fixes. Ends by presenting the ranked fix list for your approval.
 > **No vanity metrics:** ranks problems by CTR / indexation / clicks-at-risk, never impressions alone.
 
-Pillar 3 of the corrected Agensi playbook: a once-a-week ritual, not a one-off. Export GSC → feed the auditor → "what's broken" → a prioritized ~10-fix list the founder can action in one sitting. The point is the **cadence** — run it every week and let problems surface before they compound.
+A once-a-week ritual, not a one-off. Export GSC → feed the auditor → "what's broken" → a prioritized ~10-fix list the founder can action in one sitting. The point is the **cadence** — run it every week and let problems surface before they compound.
 
 ## GSC data contract (shared across the suite)
 
@@ -25,7 +25,7 @@ If no data source resolves, do **not** fabricate data. Detect toprank's GSC inte
 ## Flow
 
 1. **Resolve data.** Detect `toprank` (look for its `seo-analysis` / `broken-link-checker` skills). If present, prefer delegating the GSC pull / crawl to it. Else read the export at `gsc-export-path`. If neither resolves → print the 3-step guide and stop. Error clearly on a missing/empty/malformed file — never silently pass.
-2. **Audit.** Delegate to the **`technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent file isn't installed — same precedent as finance/organizze). Have it hunt the classic failures: duplicate/conflicting schema across many URLs, hydration/render bugs causing high bounce on article pages, http→https→www redirect chains, titles truncated >60 chars, missing canonical, slow Core Web Vitals, orphan pages. Use `WebFetch` to confirm a live symptom when a URL is given.
+2. **Audit.** Delegate to the **`herow-seo:technical-seo-auditor`** agent via the `Agent` tool (fall back to `general-purpose` if the agent isn't in the session's agent list — same precedent as finance/organizze). Have it hunt the classic failures: duplicate/conflicting schema across many URLs, hydration/render bugs causing high bounce on article pages, http→https→www redirect chains, titles truncated >60 chars, missing canonical, slow Core Web Vitals, orphan pages. Use `WebFetch` to confirm a live symptom when a URL is given.
 3. **Rank.** The auditor returns a prioritized **~10 fixes**, highest-impact first — each with: what / where (URL or pattern + count) / why it matters / the concrete fix. On a large export it **summarizes** (top-N, aggregates) rather than dumping rows.
 4. **HUMAN GATE.** Present the fix list and ask via `AskUserQuestion` which fixes to action this week (top recommendation first). **Never auto-apply** — fixes are actioned manually by the founder or routed onward.
 

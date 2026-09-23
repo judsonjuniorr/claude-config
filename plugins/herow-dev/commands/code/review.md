@@ -1,7 +1,7 @@
 ---
 description: (herow) Multi-agent code review for local changes or a PR — color-ranked findings including a dedicated memory-management lane for Python/React, optional --fix or --comment, an advisor-first second opinion, and an interactive finish that can submit a request-changes review with inline suggestions or commit+push applied fixes, in the repo's language.
 argument-hint: "[pr-number | pr-url | branch] [low|medium|high|max] [--fix] [--comment]"
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Task, advisor
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, advisor
 effort: medium
 ---
 
@@ -34,29 +34,30 @@ Without `--comment`, an interactive run ends with the *Finish* prompt (see *Fini
 
 ## Effort → Dispatch
 
-Run these agents via the Task tool **in parallel** against the diff. Higher effort = more agents
+Run these agents via the Agent tool **in parallel** against the diff. Higher effort = more agents
 and a lower confidence cutoff:
 
 | Effort | Agents | Confidence cutoff |
 |---|---|---|
-| `low` | `code-reviewer`, `security-reviewer` | ≥ 90 |
-| `medium` | above + `silent-failure-hunter`, `pr-test-analyzer` | ≥ 85 |
-| `high` *(default)* | above + `comment-analyzer`, `type-design-analyzer`, `code-simplifier` (all 7) | ≥ 80 |
+| `low` | `herow-core:code-reviewer`, `herow-dev:security-reviewer` | ≥ 90 |
+| `medium` | above + `herow-dev:silent-failure-hunter`, `herow-dev:pr-test-analyzer` | ≥ 85 |
+| `high` *(default)* | above + `herow-dev:comment-analyzer`, `herow-dev:type-design-analyzer`, `herow-dev:code-simplifier` (all 7) | ≥ 80 |
 | `max` | all 7, then a **verification pass** (see below) | ≥ 80 |
 
 Agent focus areas:
-1. `code-reviewer` — security, correctness, performance, test coverage
-2. `security-reviewer` — OWASP Top 10, secrets, SSRF, injection
-3. `silent-failure-hunter` — swallowed errors and dangerous fallbacks
-4. `pr-test-analyzer` — behavioral coverage gaps
-5. `comment-analyzer` — comment accuracy, rot, and completeness
-6. `type-design-analyzer` — type encapsulation and invariant enforcement
-7. `code-simplifier` — clarity and maintainability
+1. `herow-core:code-reviewer` — security, correctness, performance, test coverage
+2. `herow-dev:security-reviewer` — OWASP Top 10, secrets, SSRF, injection
+3. `herow-dev:silent-failure-hunter` — swallowed errors and dangerous fallbacks
+4. `herow-dev:pr-test-analyzer` — behavioral coverage gaps
+5. `herow-dev:comment-analyzer` — comment accuracy, rot, and completeness
+6. `herow-dev:type-design-analyzer` — type encapsulation and invariant enforcement
+7. `herow-dev:code-simplifier` — clarity and maintainability
 
-**Verification pass (`max` only):** after dedupe, launch one Task agent per surviving finding that
+**Verification pass (`max` only):** after dedupe, launch one agent per surviving finding that
 tries to **refute** it — is it a false positive, a pre-existing issue, or on a line not in the
 diff? Drop any finding the refuter cannot confirm. Mirrors the confidence-scoring step in the
-built-in reviewer.
+built-in reviewer. A `partial review: N files not reviewed` finding is a coverage note, not a
+defect — skip the refuter for it and keep it in the report.
 
 ### Language-Aware Dispatch (Phase 2.5)
 
@@ -68,16 +69,16 @@ Table rows are **additive**: a diff touching both `.tsx` and `.py` dispatches ag
 
 | Extensions found in diff | Agents dispatched |
 |---|---|
-| `.tsx` or `.jsx` | `react-reviewer` + `typescript-reviewer` |
-| `.ts` or `.js` (no `.tsx`/`.jsx`) | `typescript-reviewer` only |
-| `.py` (FastAPI detected — see below) | `fastapi-reviewer` + `python-reviewer` |
-| `.py` (no FastAPI) | `python-reviewer` only |
+| `.tsx` or `.jsx` | `herow-dev:react-reviewer` + `herow-dev:typescript-reviewer` |
+| `.ts` or `.js` (no `.tsx`/`.jsx`) | `herow-dev:typescript-reviewer` only |
+| `.py` (FastAPI detected — see below) | `herow-dev:fastapi-reviewer` + `herow-dev:python-reviewer` |
+| `.py` (no FastAPI) | `herow-dev:python-reviewer` only |
 | Other extensions (`.vue`, `.svelte`, `.mjs`, etc.) | *(skip — log `⚠️ no language agent for <ext>`)* |
 | None of the above | *(skip — no language agents)* |
 
 **FastAPI detection:** Import lines are often unchanged in a PR. Check both the diff body AND the
 project files: grep `pyproject.toml`, `requirements*.txt`, and `setup.cfg` for `fastapi`. If any
-match → FastAPI project → dispatch `fastapi-reviewer` + `python-reviewer`. If no project-file
+match → FastAPI project → dispatch `herow-dev:fastapi-reviewer` + `herow-dev:python-reviewer`. If no project-file
 match, also grep the diff body for `from fastapi` / `import fastapi` as a secondary signal.
 
 **Availability guard.** Before dispatching each language agent, confirm its agent type is in the
@@ -374,7 +375,7 @@ Check availability in priority order:
 advisor tool present in this session's tool list  → use the advisor  (preferred)
 which codex                                        → exit 0 → use Codex
 which agy                                           → exit 0 → use Agy
-otherwise                                           → Claude subagent fallback (Task tool)
+otherwise                                           → Claude subagent fallback (Agent tool)
 ```
 
 `advisor` is availability-gated (check the session's tool list), not shell-probed like the others —
@@ -408,7 +409,7 @@ Use this prompt verbatim (with the sanitized JSON substituted in):
 - **Agy**: run `agy --help` first to find the prompt-passing flag. Prefer `--file` or stdin
   (`agy ... < prompt.txt`) over inline quoting. If `--help` output does not reveal a
   prompt-string flag, fall back to the Claude subagent — do not guess a CLI invocation.
-- **Claude fallback**: spawn a Task subagent with the prompt above.
+- **Claude fallback**: spawn a subagent via the Agent tool with the prompt above.
 
 ### Step 3a — Advisor invocation (when chosen)
 
