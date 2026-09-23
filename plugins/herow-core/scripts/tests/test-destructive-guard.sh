@@ -7,17 +7,23 @@ set -eu
 GUARD="$(cd "$(dirname "$0")/.." && pwd)/destructive-guard.sh"
 [ -f "$GUARD" ] || { echo "guard not found: $GUARD" >&2; exit 1; }
 
-T="$(mktemp -d)"
+# The sandbox must NOT live under a path the guard allowlists as scratch
+# space, or every relative target inside it silently passes and the Write and
+# compound-command cases assert nothing. `mktemp -d` defaults to $TMPDIR, which
+# is /var/folders/... on macOS (harmless) but /tmp on Linux — and the guard
+# hardcodes /tmp and /private/tmp alongside $TMPDIR. That difference hid three
+# broken assertions until these suites started running in CI on ubuntu.
+# $HOME is not allowlisted on either platform.
+T="$(mktemp -d "${HOME}/.destructive-guard-test.XXXXXXXX")"
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/repo/.claude/plans"
 cd "$T/repo"
 git init -q .
 
-# The sandbox itself lives under macOS's $TMPDIR (mktemp's default root), which
-# the guard's own scratchpad allowlist is designed to exempt — so leaving
-# TMPDIR set here would make every relative target inside $T look like scratch
-# space and silently pass. Unset it so the guard sees these as ordinary paths;
-# the hardcoded /tmp and /private/tmp cases below don't depend on $TMPDIR.
+# Belt and braces with the sandbox relocation above: an inherited $TMPDIR would
+# exempt targets inside it the same way. Unset it so the guard sees these as
+# ordinary paths; the hardcoded /tmp and /private/tmp cases below pass literal
+# paths and do not depend on $TMPDIR.
 unset TMPDIR
 
 PASS=0
@@ -261,6 +267,233 @@ out="$(printf '' | bash "$GUARD")"
 
 out="$(printf 'not json' | bash "$GUARD")"
 [ -z "$out" ] && ok "malformed stdin silent, exit 0" || fail "malformed stdin produced output"
+
+# --- Bounded stdin read: bound must EXIST and must not disarm the guard -----
+# The guard bounds its stdin read so a harness slow to CLOSE stdin costs ~2s
+# instead of the full 10s hook timeout. That stall shape is a LATE EOF: the
+# payload has already arrived and only the close is pending, so the guard must
+# still evaluate the real command and ask. "Returns fast but silently
+# unguarded" is the one outcome that must never happen in a data-loss guard.
+#
+# The bound lives INSIDE the guard's python3 call, which reads in blocks
+# against a wall-clock deadline and keeps what arrived. That behaves the same
+# on bash 3.2 and bash 5, so there is no version branch to cover any more --
+# but the shell is still probed and printed, because the guard must keep
+# working under stock macOS /bin/bash as well as a brew bash.
+#
+# Two things are asserted per shell, and BOTH matter:
+#   1. the guard still asks (the bound did not drop the payload), and
+#   2. the elapsed time proves the bound actually fired.
+# Without (2) these tests pass against a guard whose bound was removed — the
+# writer closes on its own, so "it asked" is true either way. (2) is the only
+# assertion that pins the bound itself.
+shell_major() {
+  local v
+  v="$("$1" -c 'echo ${BASH_VERSINFO[0]}' 2>/dev/null || true)"
+  case "$v" in ''|*[!0-9]*) echo 0 ;; *) echo "$v" ;; esac
+}
+
+# Payload is built ONCE, outside the writer subshell: a python3 cold start
+# inside the fork would race the guard's own 2s bound on a loaded machine and
+# produce a false "guard was disarmed" failure.
+STALL_PAYLOAD="$(python3 -c "import json; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ~/important'}}))")"
+# MUST exceed the guard's bound, or the bound never fires and these degrade
+# into ordinary-EOF tests that pass while covering nothing.
+STALL_WRITER_SLEEP=6
+# $SECONDS is whole-second resolution and counts tick boundaries crossed, so a
+# genuine 2.1s bounded read can read as 3. The ceiling sits between the 2s
+# bound and the 6s close with two seconds of slack on each side; at 3 (one
+# second of slack below) this flaked. Do not narrow the gap without switching
+# to sub-second timing.
+STALL_BOUND_CEILING=4
+
+# One FIFO harness for both stall shapes. `writer` is the name of a function
+# that writes the payload into the pipe; it runs in the background and is
+# reaped here, so each case only has to describe its own write pattern.
+feed_guard() {
+  local sh="$1" writer="$2" fifo w
+  fifo="$T/feed.$$"
+  rm -f "$fifo"; mkfifo "$fifo"
+  "$writer" > "$fifo" &
+  w=$!
+  SECONDS=0
+  FEED_OUT="$("$sh" "$GUARD" < "$fifo")"
+  FEED_SECS=$SECONDS
+  kill "$w" 2>/dev/null || true
+  wait "$w" 2>/dev/null || true
+  rm -f "$fifo"
+}
+
+# LATE EOF: the whole payload arrives at once, only the close is pending.
+write_late_eof() { printf '%s\n' "$STALL_PAYLOAD"; sleep "$STALL_WRITER_SLEEP"; }
+
+# Slow SENDER, not slow closer: only part of the JSON has arrived when the
+# bound expires. Accepted, documented residual (see the guard's own comment) —
+# the guard must fail OPEN silently and never emit a decision from half a
+# payload.
+write_slow_sender() {
+  printf '%s' "$(printf '%s' "$STALL_PAYLOAD" | cut -c1-20)"
+  sleep 4
+  printf '%s\n' "$(printf '%s' "$STALL_PAYLOAD" | cut -c21-)"
+}
+
+COVERED_SHELLS=0
+for sh in bash /bin/bash; do
+  maj="$(shell_major "$sh")"
+  if [ "$maj" -eq 0 ]; then
+    echo "SKIP - $sh unavailable or version unreadable"
+    continue
+  fi
+  COVERED_SHELLS=$((COVERED_SHELLS + 1))
+
+  feed_guard "$sh" write_late_eof
+  asks "$FEED_OUT" \
+    && ok "late-EOF stall still asks ($sh = bash $maj, ${FEED_SECS}s)" \
+    || fail "late-EOF stall DISARMED the guard ($sh = bash $maj)"
+  [ "$FEED_SECS" -lt "$STALL_BOUND_CEILING" ] \
+    && ok "read is bounded on bash $maj (${FEED_SECS}s < ${STALL_WRITER_SLEEP}s close)" \
+    || fail "read NOT bounded on bash $maj: ${FEED_SECS}s — the bound is gone"
+
+  feed_guard "$sh" write_slow_sender
+  [ -z "$FEED_OUT" ] \
+    && ok "slow sender fails OPEN silently on bash $maj (truncated JSON, no bogus decision)" \
+    || fail "slow sender produced output on bash $maj: $FEED_OUT"
+done
+[ "$COVERED_SHELLS" -gt 0 ] || fail "no usable bash found; the read bound was never exercised"
+
+# --- Payload SIZE must not bound the read ----------------------------------
+# Regression pin. A previous bound used bash `read -r -d '' -t 2`, which drains
+# a NON-SEEKABLE fd one byte per read(2) syscall (~1MB/s). That turned the
+# wall-clock bound into a payload-size cap: past roughly 2MB the JSON arrived
+# truncated, the parse failed, and the guard exited with NO decision — a large
+# Write silently clobbering an existing file. `tool_input.content` carries the
+# whole file body, so this is ordinary input, not an adversarial one.
+#
+# It reproduces ONLY over a pipe: with `< file` the fd is seekable and bash
+# reads in bulk, which is why it has to be piped here.
+SIZE_TARGET="$T/repo/size-victim.txt"
+echo "existing content" > "$SIZE_TARGET"
+for mb in 3 6; do
+  for sh in bash /bin/bash; do
+    [ "$(shell_major "$sh")" -eq 0 ] && continue
+    out="$(python3 -c "
+import json, sys
+n = int(sys.argv[1]) * 1000000
+print(json.dumps({'tool_name':'Write','tool_input':{'file_path':sys.argv[2],'content':'x'*n}}))" "$mb" "$SIZE_TARGET" | "$sh" "$GUARD")"
+    asks "$out" \
+      && ok "${mb}MB Write over a pipe still asks ($sh)" \
+      || fail "${mb}MB Write over a pipe produced no decision ($sh) — the read is size-bounded again"
+  done
+done
+
+# --- Normal path must not pay the bound ------------------------------------
+# The common case is ~100% of calls. A read that stopped seeing EOF would pass
+# every assertion above while making every Bash call wait the full bound —
+# strictly worse than the 10s stall this bound exists to fix.
+for sh in bash /bin/bash; do
+  [ "$(shell_major "$sh")" -eq 0 ] && continue
+  SECONDS=0
+  out="$(printf '%s\n' "$STALL_PAYLOAD" | "$sh" "$GUARD")"
+  el=$SECONDS
+  asks "$out" && [ "$el" -lt 2 ] \
+    && ok "ordinary payload returns immediately on $sh (${el}s, no bound paid)" \
+    || fail "ordinary payload took ${el}s on $sh (decision: ${out:-none})"
+done
+
+# KNOWN GAP, pre-existing and deliberately pinned: a command carrying invalid
+# UTF-8 (a lone surrogate) makes the segment loop's `sed`/`grep` abort with
+# "illegal byte sequence" under a UTF-8 locale, so that segment is skipped and
+# a destructive command in it is MISSED. Verified present before this change
+# too (the old three-python3 extraction crashed on the text-mode write and
+# dropped the whole command instead), so this is not a regression -- and the
+# base64 framing is strictly better here, because segments WITHOUT invalid
+# bytes still get checked. Not fixed in this pass: the obvious fix, forcing
+# LC_ALL=C, cannot be applied globally because it would make python3 read
+# stdin as ASCII and break every legitimately non-ASCII payload (verified: an
+# emoji command currently guards correctly). Fixing it means scoping the
+# locale to the matching calls only. These two cases pin both halves so the
+# behavior cannot silently change.
+invalid_utf8_payload() {
+  python3 -c "
+import json, sys
+s = json.dumps({'tool_name':'Bash','tool_input':{'command':sys.argv[1]}})
+sys.stdout.buffer.write(s.encode('utf-8','surrogatepass') + b'\n')" "$1"
+}
+
+out="$(invalid_utf8_payload 'rm -rf ~/x'$'\xed\xb3\xa9' | bash "$GUARD" 2>"$T/utf8.err")"
+rc=$?
+[ "$rc" -eq 0 ] || fail "guard exited $rc on invalid UTF-8: $(cat "$T/utf8.err")"
+# Both outcomes below are acceptable, but they are NOT the same outcome, so
+# each gets its own assertion and anything else FAILS. The earlier version
+# called ok() on both arms, which meant a malformed or truncated decision also
+# counted as a pass — the case pinned nothing while inflating the count.
+if [ -z "$out" ]; then
+  ok "KNOWN GAP pinned: invalid-UTF8 segment is skipped (fails open, pre-existing)"
+elif asks "$out"; then
+  ok "invalid-UTF8 segment now asks — gap closed, update this comment"
+else
+  fail "invalid-UTF8 segment produced a malformed decision: $out"
+fi
+
+out="$(invalid_utf8_payload 'echo bad'$'\xed\xb3\xa9''
+rm -rf ~/important' | bash "$GUARD" 2>"$T/utf8.err")"
+rc=$?
+[ "$rc" -eq 0 ] || fail "guard exited $rc on invalid UTF-8 (mixed segments): $(cat "$T/utf8.err")"
+asks "$out" && ok "valid segments still checked alongside an invalid-UTF8 one" \
+  || fail "invalid UTF-8 in one segment suppressed the whole command"
+
+# Normal (prompt-EOF) payload under /bin/bash: the 3.2 branch must behave
+# identically to the default shell for ordinary input, not just under stall.
+out="$(python3 -c "import json,sys; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ~/data'}}))" | /bin/bash "$GUARD")"
+asks "$out" && ok "rm -rf ~/data asks under /bin/bash" || fail "guard did not ask under /bin/bash"
+
+out="$(python3 -c "import json,sys; print(json.dumps({'tool_name':'Bash','tool_input':{'command':'rm -rf ./node_modules'}}))" | /bin/bash "$GUARD")"
+[ -z "$out" ] && ok "rm -rf ./node_modules silent under /bin/bash" || fail "allowlisted target asked under /bin/bash"
+
+# --- base64 decode path: the -D fallback and the no-decoder case -----------
+# `-d` is the GNU/newer-macOS decode flag; older macOS base64 only has `-D`.
+# On every host where `-d` works — all of CI, every modern Mac — a typo in the
+# `-D` fallback is invisible. These shim a fake `base64` onto PATH to force
+# each branch.
+B64_SHIM="$T/b64shim"
+mkdir -p "$B64_SHIM"
+
+# A base64 that rejects -d and only understands -D, like older macOS. It
+# translates -D to the real binary's -d rather than passing it through: GNU
+# base64 (every Linux runner) has no -D, so a pass-through shim would test
+# nothing there.
+REAL_B64="$(command -v base64)"
+cat > "$B64_SHIM/base64" <<SHIM
+#!/bin/sh
+args=""
+for a in "\$@"; do
+  [ "\$a" = "-d" ] && exit 1
+  [ "\$a" = "-D" ] && a="-d"
+  args="\$args \$a"
+done
+exec "$REAL_B64" \$args
+SHIM
+chmod +x "$B64_SHIM/base64"
+out="$(PATH="$B64_SHIM:$PATH" run_bash 'rm -rf ~/data')"
+asks "$out" && ok "base64 -D fallback still guards (no -d support)" \
+  || fail "guard went silent when base64 lacked -d — the -D fallback is broken"
+
+# No usable base64 at all: the guard must fail OPEN (exit 0, no decision) and
+# say why on stderr, rather than disarming itself invisibly on every call.
+cat > "$B64_SHIM/base64" <<'SHIM'
+#!/bin/sh
+exit 127
+SHIM
+chmod +x "$B64_SHIM/base64"
+out="$(PATH="$B64_SHIM:$PATH" run_bash 'rm -rf ~/data' 2>"$T/b64.err")"
+rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] \
+  && ok "missing base64 fails OPEN (documented), exit 0" \
+  || fail "missing base64: expected silent exit 0, got rc=$rc out=$out"
+grep -q base64 "$T/b64.err" \
+  && ok "missing base64 leaves a stderr breadcrumb instead of disarming silently" \
+  || fail "missing base64 produced no diagnostic: $(cat "$T/b64.err")"
+rm -rf "$B64_SHIM"
 
 echo "----"
 echo "$PASS passed, $FAIL failed"

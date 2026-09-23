@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.3.0] - 2026-09-23
+
+### Fixed
+- **Bash commands no longer stall for 10 seconds when a hook is slow to receive its input.**
+  The `destructive-guard` and `git-guard` PreToolUse hooks waited for the harness to close
+  their input stream before doing anything. When that close was slow, each hook burned its
+  full 10-second timeout and was then cancelled — which means it made no decision at all, so
+  the wait bought nothing and the command ran unguarded anyway. Measured over one week:
+  120 such cancellations for `destructive-guard` and 14 for `git-guard`, every one pinned at
+  the timeout. The hooks now cap that wait at ~2 seconds and still make their decision from
+  the input that already arrived, so a slow close costs 2 seconds instead of 10.
+  The wait is bounded inside the same `python3` call that parses the payload, which reads in
+  blocks against a wall-clock deadline and keeps whatever already arrived. That behaves the
+  same under stock macOS `/bin/bash` (3.2) and bash 5, so no shell-version branch is needed —
+  and, unlike a bash `read -t`, it bounds *time* rather than *size*: bash drains a pipe one
+  byte per syscall, so a timed `read` silently truncated payloads past roughly 2MB and let a
+  large Write through unguarded.
+- **`destructive-guard` starts one interpreter per command instead of three.** It runs on
+  every single Bash command, so the two extra startups were pure overhead on a path that
+  exits early most of the time. Measured end-to-end: 126ms → 76ms per command.
+
+### Changed
+- Both guards now document their accepted failure modes in place: a harness slow to *send*
+  (rather than slow to close) leaves the guard failing open, and a command containing invalid
+  UTF-8 can skip a segment. Both are pinned by tests so they cannot change unnoticed.
+
+### Added
+- Hook guard test suites now run in CI. Previously `plugin-ci` only checked that these files
+  parsed, so none of their assertions ever ran on a pull request.
+- Tests for both guards now assert *elapsed time*, not just the decision — the only way to
+  catch the wait cap being removed — pin a multi-MB payload so the cap can never regress into
+  a size limit, and probe each shell's bash version instead of assuming it, failing loudly if
+  no usable shell is found rather than passing with zero coverage.
+- `destructive-guard` now checks that its `base64` decoder actually round-trips, and says so on
+  stderr if none works, instead of silently decoding every field to empty and disarming itself.
+
 ## [0.11.2.0] - 2026-09-13
 
 ### Added
