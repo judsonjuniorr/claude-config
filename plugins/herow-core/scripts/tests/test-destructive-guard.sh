@@ -7,17 +7,23 @@ set -eu
 GUARD="$(cd "$(dirname "$0")/.." && pwd)/destructive-guard.sh"
 [ -f "$GUARD" ] || { echo "guard not found: $GUARD" >&2; exit 1; }
 
-T="$(mktemp -d)"
+# The sandbox must NOT live under a path the guard allowlists as scratch
+# space, or every relative target inside it silently passes and the Write and
+# compound-command cases assert nothing. `mktemp -d` defaults to $TMPDIR, which
+# is /var/folders/... on macOS (harmless) but /tmp on Linux — and the guard
+# hardcodes /tmp and /private/tmp alongside $TMPDIR. That difference hid three
+# broken assertions until these suites started running in CI on ubuntu.
+# $HOME is not allowlisted on either platform.
+T="$(mktemp -d "${HOME}/.destructive-guard-test.XXXXXXXX")"
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/repo/.claude/plans"
 cd "$T/repo"
 git init -q .
 
-# The sandbox itself lives under macOS's $TMPDIR (mktemp's default root), which
-# the guard's own scratchpad allowlist is designed to exempt — so leaving
-# TMPDIR set here would make every relative target inside $T look like scratch
-# space and silently pass. Unset it so the guard sees these as ordinary paths;
-# the hardcoded /tmp and /private/tmp cases below don't depend on $TMPDIR.
+# Belt and braces with the sandbox relocation above: an inherited $TMPDIR would
+# exempt targets inside it the same way. Unset it so the guard sees these as
+# ordinary paths; the hardcoded /tmp and /private/tmp cases below pass literal
+# paths and do not depend on $TMPDIR.
 unset TMPDIR
 
 PASS=0
