@@ -23,10 +23,8 @@ Description:
    echo "ensure-ignored exit=$?"
    ```
 
-   The exit code decides what to print, but never whether to continue — this step is
-   non-blocking either way. Exit `0` → covered, nothing else to do. Exit `1` or `3` →
-   print the manual fix line the script gave, and continue. Exit `2` → print the
-   `git rm -r --cached .claude/plans` command the script gave, and continue.
+   Non-blocking: exit `0` → nothing to do; any non-zero → relay what the script printed
+   and continue.
 
    The repo-local half stays as before, keeping the legacy `.plans/` line:
 
@@ -44,9 +42,8 @@ Description:
    ```
    `mkdir` is atomic at the filesystem level: if the directory already exists (same-second + same-slug collision across parallel sessions), the loop picks a new suffix. **Never** use `mkdir -p` for the claim.
 5. **Activate the harness tracker (session-scoped marker).** Bash exposes the session id
-   as `CLAUDE_CODE_SESSION_ID` (equal to the hook payload's `session_id`); the older,
-   unset-in-Bash variable name below is kept only as a fallback for forward
-   compatibility:
+   as `CLAUDE_CODE_SESSION_ID` (equal to the hook payload's `session_id`); the legacy
+   `CLAUDE_SESSION_ID` below is only a fallback:
 
    ```bash
    SID="${CLAUDE_CODE_SESSION_ID:-$CLAUDE_SESSION_ID}"

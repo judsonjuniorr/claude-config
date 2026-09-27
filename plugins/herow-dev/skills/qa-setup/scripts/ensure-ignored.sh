@@ -8,7 +8,7 @@
 #
 # Exit codes:
 #   0  covered and untracked
-#   1  not covered (after --apply: still not covered)
+#   1  not covered (after --apply: still not covered), or un-ignored by a repo-level rule
 #   2  tracked files exist under <root>/<pattern> (prints the git rm --cached fix)
 #   3  environment error (git missing, HOME unset, excludesfile unwritable, bad args)
 set -u
@@ -43,7 +43,8 @@ command -v git >/dev/null 2>&1 || { echo "ensure-ignored: git not found" >&2; ex
 [ -n "${HOME:-}" ] || { echo "ensure-ignored: HOME is unset" >&2; exit 3; }
 [ -d "$ROOT" ] || { echo "ensure-ignored: root not found: $ROOT" >&2; exit 3; }
 
-ROOT="$(cd "$ROOT" && pwd)"
+# Physical path: must share a prefix with `git rev-parse --show-toplevel`.
+ROOT="$(cd "$ROOT" && pwd -P)"
 PATTERN_DIR="${PATTERN%/}"
 [ -n "$PATTERN_DIR" ] || { echo "ensure-ignored: --pattern must not be empty" >&2; exit 3; }
 
@@ -62,8 +63,7 @@ PROBE_REL="$PATTERN_DIR/probe-file"
 : > "$PROBE/$PROBE_REL"
 
 # --- Resolve the effective global excludesfile ---------------------------------------------
-# `git config --type=path --get` (no scope flag) merges system/global/local config with
-# includes honored, and expands a literal `~` — see reference.md "Excludesfile resolution".
+# No scope flag: merges system/global config with includes honored and expands a literal `~`.
 resolve_excludesfile() {
   local resolved
   resolved="$(cd "$PROBE" && git config --type=path --get core.excludesfile 2>/dev/null)" || true
@@ -96,6 +96,12 @@ add_tracked() { # $1 = repo, $2 = pattern path relative to repo
 "
 }
 
+SCANNED_LINES=""
+add_scanned() { # $1 = repo, $2 = pattern path relative to repo
+  SCANNED_LINES="${SCANNED_LINES}${1}|${2}
+"
+}
+
 CONTAINING_REPO="$(cd "$ROOT" && git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$CONTAINING_REPO" ]; then
   REL_FROM_REPO="${ROOT#"$CONTAINING_REPO"}"
@@ -105,6 +111,7 @@ if [ -n "$CONTAINING_REPO" ]; then
   else
     REL_PATTERN="$PATTERN_DIR"
   fi
+  add_scanned "$CONTAINING_REPO" "$REL_PATTERN"
   if [ -n "$(ls_tracked "$CONTAINING_REPO" "$REL_PATTERN")" ]; then
     add_tracked "$CONTAINING_REPO" "$REL_PATTERN"
   fi
@@ -114,11 +121,12 @@ while IFS= read -r gitdir; do
   [ -n "$gitdir" ] || continue
   nested_repo="$(dirname "$gitdir")"
   [ "$nested_repo" = "$CONTAINING_REPO" ] && continue
+  add_scanned "$nested_repo" "$PATTERN_DIR"
   if [ -n "$(ls_tracked "$nested_repo" "$PATTERN_DIR")" ]; then
     add_tracked "$nested_repo" "$PATTERN_DIR"
   fi
 done <<EOF
-$(find "$ROOT" -mindepth 1 -maxdepth 4 -type d -name .git 2>/dev/null)
+$(find "$ROOT" -mindepth 1 -maxdepth 4 -name .git \( -type d -o -type f \) 2>/dev/null)
 EOF
 
 if [ -n "$TRACKED_LINES" ]; then
@@ -130,7 +138,27 @@ if [ -n "$TRACKED_LINES" ]; then
   exit 2
 fi
 
+# A repo's own .gitignore / info/exclude / core.excludesfile (e.g. `!.qa/`) beats the global one.
+repo_overrides() {
+  local repo rel err rc found=1
+  while IFS='|' read -r repo rel; do
+    [ -n "$repo" ] || continue
+    err="$(git -C "$repo" check-ignore -q --no-index -- "$rel/probe-file" 2>&1)"; rc=$?
+    case "$rc" in
+      0) ;;
+      1)
+        echo "ensure-ignored: '$PATTERN' is covered globally but un-ignored in $repo ($rel) by a repo-level rule — remove the negation from its .gitignore, .git/info/exclude, or repo-local core.excludesfile" >&2
+        found=0 ;;
+      *) echo "ensure-ignored: git check-ignore failed in $repo: $err" >&2; exit 3 ;;
+    esac
+  done <<EOF
+$SCANNED_LINES
+EOF
+  return $found
+}
+
 if is_covered; then
+  repo_overrides && exit 1
   exit 0
 fi
 
@@ -147,15 +175,13 @@ if [ ! -e "$EXCLUDES" ]; then
 fi
 [ -w "$EXCLUDES" ] || { echo "ensure-ignored: $EXCLUDES is not writable" >&2; exit 3; }
 
-if [ -s "$EXCLUDES" ]; then
-  # Last byte is a newline iff piping it through `tail -c1` yields exactly one line.
-  if [ "$(tail -c1 "$EXCLUDES" | wc -l | tr -d ' ')" = "0" ]; then
-    printf '\n' >> "$EXCLUDES"
-  fi
+if [ -s "$EXCLUDES" ] && [ -n "$(tail -c1 "$EXCLUDES")" ]; then
+  printf '\n' >> "$EXCLUDES"
 fi
 printf '%s\n' "$PATTERN" >> "$EXCLUDES"
 
 if is_covered; then
+  repo_overrides && exit 1
   echo "ensure-ignored: appended '$PATTERN' to $EXCLUDES"
   exit 0
 fi

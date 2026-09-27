@@ -197,7 +197,7 @@ command or config key>.` plus a resume hint when one applies.
 | Code | Problem | Fix |
 |---|---|---|
 | `schema-newer` | `config.yml`'s `schema_version` is newer than this skill | Update the plugin, or edit the config by hand |
-| `ignore-not-covered` | `ensure-ignored.sh --apply` still isn't covered after running | Add the printed line to the printed excludesfile by hand |
+| `ignore-not-covered` | `ensure-ignored.sh --apply` still isn't covered after running | Follow the printed message: add the pattern to the printed excludesfile by hand, or remove the repo-level negation it names |
 | `memory-tracked` | `.qa/` (or the adopted store) has git-tracked files | Run the printed `git rm -r --cached .qa` (or the store's path) |
 | `env-error` | git missing, `HOME` unset, or the excludesfile is unwritable | Fix the environment cause named in the script's output |
 | `env-var-missing` | a `credentials_env` var isn't set | Export it (shell profile or `.envrc`), restart Claude Code, re-run — resumes at the smoke walk |

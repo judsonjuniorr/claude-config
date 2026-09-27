@@ -213,7 +213,7 @@ command or config key>.` plus a resume hint when one applies.
 | `no-config` | no `.qa/config.yml` found walking up from cwd | Run `/herow-dev:qa-setup` |
 | `schema-newer` | config's `schema_version` is newer than this skill | Update the plugin, or edit the config |
 | `config-invalid` | a required key is missing or invalid | Edit that key, or re-run `/herow-dev:qa-setup` |
-| `ignore-not-covered` | `ensure-ignored.sh --check` exits 1 | Re-run `/herow-dev:qa-setup` |
+| `ignore-not-covered` | `ensure-ignored.sh --check` exits 1 | Re-run `/herow-dev:qa-setup`, or remove the repo-level negation the script names |
 | `memory-tracked` | `ensure-ignored.sh --check` exits 2 | Run the printed `git rm -r --cached .qa` |
 | `env-error` | `ensure-ignored.sh --check` exits 3 | Fix the environment cause printed |
 | `services-down` | a `services[]` preflight curl failed | Start it with the printed `start_hint`, re-run |
