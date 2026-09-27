@@ -35,7 +35,7 @@ jobs:
       - name: Guard — hook scripts parse
         run: |
           set -e
-          for f in plugins/herow-core/scripts/*.sh plugins/herow-core/scripts/setup/*.sh plugins/herow-core/skills/github-ops/hooks/*.sh plugins/herow-core/skills/github-ops/scripts/*.sh plugins/herow-dev/scripts/*.sh migrate.sh; do
+          for f in plugins/herow-core/scripts/*.sh plugins/herow-core/scripts/setup/*.sh plugins/herow-core/skills/github-ops/hooks/*.sh plugins/herow-core/skills/github-ops/scripts/*.sh plugins/herow-dev/scripts/*.sh plugins/herow-dev/skills/*/scripts/*.sh migrate.sh; do
             bash -n "$f"
           done
           for f in plugins/herow-core/scripts/*.js; do
@@ -75,6 +75,31 @@ jobs:
             echo "::error::plugin.json pins a version — remove it so every push is a new version"; exit 1
           fi
           echo "versionless OK"
+
+      - name: Guard — no project-specific literals under the qa skills (must stay project-agnostic)
+        env:
+          # Kept in a secret so the literals never land in this public repo or its logs.
+          PATTERN: ${{ secrets.QA_LITERAL_GUARD_PATTERN }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          set -e
+          if [ -z "$PATTERN" ]; then
+            if [ "$IS_FORK" = "true" ]; then
+              echo "::warning::QA_LITERAL_GUARD_PATTERN unavailable on fork PRs; literal guard skipped"; exit 0
+            fi
+            echo "::error::secret QA_LITERAL_GUARD_PATTERN is not set"; exit 1
+          fi
+          # -l prints file paths only, so a hit never echoes the literal into the log.
+          if hits="$(grep -rliE -e "$PATTERN" plugins/herow-dev/skills/qa-*/)"; then
+            echo "::error::project-specific literal found in: $hits"; exit 1
+          fi
+          echo "qa skills are project-agnostic OK"
+
+      - name: QA skill test suites
+        run: |
+          set -e
+          bash plugins/herow-dev/scripts/tests/test-qa-ensure-ignored.sh
+          bash plugins/herow-dev/scripts/tests/test-qa-change-surface.sh
 
       - name: Hook guard test suites
         run: |

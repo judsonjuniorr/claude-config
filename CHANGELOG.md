@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0.0] - 2026-09-27
+
+### Added
+- **`/herow-dev:qa-setup` + `/herow-dev:qa-run`.** Generalizes a proven
+  project-specific `qa-ticket` live-app QA method into two project-agnostic herow-dev skills. `qa-setup`
+  resolves the project root, detects services/repos/gates/knowledge stores from the
+  codebase, writes `<root>/.qa/config.yml` (never under `.claude/`), seeds or safely
+  adopts a knowledge store, ensures `.qa/` is covered by git's global excludesfile
+  (`ensure-ignored.sh`, handling the tilde-literal/include/system-scope/symlink edge
+  cases), and proves the whole config with a live Playwright smoke walk. `qa-run` QAs a
+  ticket — from a per-project Jira/Brain/GitHub/generic-MCP source, or free text — against
+  the live app with interaction-proof discipline: capped regression + bug-hypothesis probe
+  passes (`change-surface.sh`), a staleness check on stored navigation recipes, an
+  incremental report with a draft ticket comment, and an opt-in freeze of a passing walk
+  into a proven, mutation-tested Playwright spec. Config validation, opt-in credential
+  auto-fill (never snapshotted), and a stop-code table cover the failure paths. Both
+  scripts ship bash 3.2/5-portable test suites (`test-qa-ensure-ignored.sh`,
+  `test-qa-change-surface.sh`), wired into CI alongside a guard against project-specific
+  literals leaking into the skill files.
+- `plugins/herow-dev/commands/blueprint.md` now reuses `qa-setup`'s `ensure-ignored.sh`
+  (`--pattern .claude/plans/`, non-blocking) instead of its own tilde-unsafe guard, and its
+  session marker reads `CLAUDE_CODE_SESSION_ID` (falling back to the empty
+  `CLAUDE_SESSION_ID`) instead of writing a bare `.active-` file when no session id is
+  available.
+
 ## [0.11.4.0] - 2026-09-23
 
 ### Changed

@@ -16,12 +16,21 @@ Description:
 
 0. **Pull latest first (fail-open, automatic).** A `UserPromptSubmit` hook (`scripts/pull-latest.sh`) fast-forwards the current branch to its upstream (`git pull --ff-only`) on the main tree **before** this command runs, so planning always reflects the freshest code. It's fail-open (offline/detached/no-upstream/diverged all warn and continue, never block) and opt-out via `HEROW_SKIP_PULL=1`. You don't invoke it — just be aware the base is already fresh.
 1. `mkdir -p .claude/plans` and sweep dead markers from old sessions (inert, but they accumulate): `find .claude/plans -maxdepth 1 -name '.active-*' -mtime +7 -delete 2>/dev/null || true`
-2. **Ensure `.claude/plans/` is gitignored (idempotent).** Run the guard below — it appends `.claude/plans/` to git's global excludesfile (only if missing) and to the repo's `.gitignore` (only if missing), **keeping** the legacy `.plans/` line:
+2. **Ensure `.claude/plans/` is gitignored (idempotent).** The global half reuses the herow-dev `qa-setup` skill's excludesfile guard — same plugin, so a same-plugin script call is fine — which handles the tilde-literal, include/system-scope, and symlinked-excludesfile edge cases this repo has hit before. It is **non-blocking**: a failure here only prints the manual fix, it never stops blueprint.
 
    ```bash
-   GI="$(git config --global core.excludesfile)"; GI="${GI:-$HOME/.gitignore}"
-   [ -f "$GI" ] || : > "$GI"
-   grep -qxF '.claude/plans/' "$GI" || printf '%s\n' '.claude/plans/' >> "$GI"
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/qa-setup/scripts/ensure-ignored.sh" --apply "$(git rev-parse --show-toplevel)" --pattern .claude/plans/
+   echo "ensure-ignored exit=$?"
+   ```
+
+   The exit code decides what to print, but never whether to continue — this step is
+   non-blocking either way. Exit `0` → covered, nothing else to do. Exit `1` or `3` →
+   print the manual fix line the script gave, and continue. Exit `2` → print the
+   `git rm -r --cached .claude/plans` command the script gave, and continue.
+
+   The repo-local half stays as before, keeping the legacy `.plans/` line:
+
+   ```bash
    if [ -f .gitignore ] && ! grep -qxF '.claude/plans/' .gitignore; then
      printf '%s\n' '.claude/plans/' >> .gitignore
    fi
@@ -34,12 +43,27 @@ Description:
    mkdir -p ".claude/plans/$SLUG/artifacts"
    ```
    `mkdir` is atomic at the filesystem level: if the directory already exists (same-second + same-slug collision across parallel sessions), the loop picks a new suffix. **Never** use `mkdir -p` for the claim.
-5. **Activate the harness tracker (session-scoped marker):**
+5. **Activate the harness tracker (session-scoped marker).** Bash exposes the session id
+   as `CLAUDE_CODE_SESSION_ID` (equal to the hook payload's `session_id`); the older,
+   unset-in-Bash variable name below is kept only as a fallback for forward
+   compatibility:
 
    ```bash
-   echo "$SLUG" > ".claude/plans/.active-$CLAUDE_SESSION_ID"
+   SID="${CLAUDE_CODE_SESSION_ID:-$CLAUDE_SESSION_ID}"
+   if [ -n "$SID" ]; then
+     echo "$SLUG" > ".claude/plans/.active-$SID"
+   else
+     echo "Tracker disabled: no session id available — state.json won't auto-populate; build the gstack Artifacts section manually at consolidation."
+   fi
    ```
-   The marker is tied to **your** session (`$CLAUDE_SESSION_ID`), so parallel blueprints in the same repo **don't collide** and the hook never logs another session's skills against this plan. From here on, the herow-dev plugin's `PostToolUse:Skill` hook (`blueprint-track.sh`) automatically logs each executed skill to `.claude/plans/$SLUG/state.json`; artifacts are detected by mtime diffing **inside `.claude/plans/$SLUG/artifacts/`** — write any orchestration output you want tracked there. You **don't** need to take manual snapshots.
+   An empty `SID` writes **no** marker (never `.active-` with nothing after it). The
+   marker is tied to **your** session (`$SID`), so parallel blueprints in the same repo
+   **don't collide** and the hook never logs another session's skills against this plan.
+   From here on, the herow-dev plugin's `PostToolUse:Skill` hook (`blueprint-track.sh`)
+   automatically logs each executed skill to `.claude/plans/$SLUG/state.json`; artifacts
+   are detected by mtime diffing **inside `.claude/plans/$SLUG/artifacts/`** — write any
+   orchestration output you want tracked there. You **don't** need to take manual
+   snapshots.
 6. **Don't create `plan.md` now.** `plan.md` is written exactly once, at final consolidation — its absence marks a plan as still in progress, so an aborted blueprint is never resolved by `/herow-dev:execute`.
 
 ## Language of generated artifacts
@@ -59,7 +83,7 @@ Just run them in order — the hook handles persistence:
 
 ## Final consolidation
 
-Order matters — the tracker (`.claude/plans/.active-$CLAUDE_SESSION_ID`) stays active until step 7, so that skills triggered in step 4 also get logged.
+Order matters — the tracker (`.claude/plans/.active-$SID`, when a session id was available) stays active until step 7, so that skills triggered in step 4 also get logged.
 
 1. **Read state.json:** `cat .claude/plans/$SLUG/state.json` — contains the list of executed skills (`skills[].skill`, already normalized without namespace/leading slash: e.g. `office-hours`) and detected artifacts.
    - **If state.json doesn't exist** (hook not registered or failed): warn explicitly, build the "gstack Artifacts" section manually from the outputs you observed each skill produce, and mark as ✅ in the checklist below the steps you know ran in this session.
@@ -76,7 +100,15 @@ Order matters — the tracker (`.claude/plans/.active-$CLAUDE_SESSION_ID`) stays
 4. **Run the selected skills** (the tracker is still active, so they land in the same state.json) and **re-read state.json**.
 5. Use the final artifact list to fill in the plan's "gstack Artifacts" section (paths + role of each). If there was source material, save it to `.claude/plans/$SLUG/source.md`.
 6. **Write the plan** to `.claude/plans/$SLUG/plan.md` (once — this is what marks the plan as ready for `/herow-dev:execute`). There is **no** more `latest.txt`: `/herow-dev:execute` resolves the most recent plan by directory, and you print the exact command in the final report.
-7. **Deactivate the tracker and clean up snapshots:** `rm -f ".claude/plans/.active-$CLAUDE_SESSION_ID"` and `rm -rf ".claude/plans/$SLUG/.snap"` (important — otherwise future skills in this session would keep being logged against this plan).
+7. **Deactivate the tracker and clean up snapshots.** Shell variables don't survive between
+   Bash tool calls, so recompute `SID` in this same call rather than relying on step 5's:
+
+   ```bash
+   SID="${CLAUDE_CODE_SESSION_ID:-$CLAUDE_SESSION_ID}"
+   [ -n "$SID" ] && rm -f ".claude/plans/.active-$SID"
+   rm -rf ".claude/plans/$SLUG/.snap"
+   ```
+   (important — otherwise future skills in this session would keep being logged against this plan).
 
 ## Required format of `.claude/plans/$SLUG/plan.md`
 
