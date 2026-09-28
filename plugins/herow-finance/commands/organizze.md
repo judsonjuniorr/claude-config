@@ -23,8 +23,8 @@ Optional arguments (parse from `$ARGUMENTS`):
 **Absolute paths**:
 - Global scripts (provider-agnostic): `${CLAUDE_PLUGIN_ROOT}/scripts/finance/`
 - Organizze scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/organizze/`
-- Global storage: `~/finance/` (`memory.md`, `plans.md`, `profile.md`)
-- Organizze storage: `~/finance/organizze/` (`snapshots/`, `reports/`, `budget-suggestions/`, `.auth`, `.config`, `balances.json`)
+- Global storage: `~/.herow/finance/` (`memory.md`, `plans.md`, `profile.md`)
+- Organizze storage: `~/.herow/finance/organizze/` (`snapshots/`, `reports/`, `budget-suggestions/`, `.auth`, `.config`, `balances.json`)
 - System prompt (read by `analyze.py`): `${CLAUDE_PLUGIN_ROOT}/agents/financial-analyst.md`
 
 > **On-demand resources** — detailed sub-flows live in `${CLAUDE_PLUGIN_ROOT}/resources/` and are loaded only when this command reaches them. When a step says *"read `<resource>` and follow it"*, open that file, execute its instructions inline (the GLOBAL RULE and the paths above still apply), then return here:
@@ -63,7 +63,7 @@ When genuinely unsure between the 3 destinations, ask the user with `AskUserQues
 ## Step 1 — Verify auth
 
 ```bash
-ls ~/finance/organizze/.auth 2>/dev/null
+ls ~/.herow/finance/organizze/.auth 2>/dev/null
 ```
 
 - **File exists** → skip to Step 3.
@@ -82,7 +82,7 @@ Before pulling, optionally fill missing profile fields (improves personalization
 ## Step 3 — Pull snapshot
 
 ```bash
-SNAP=~/finance/organizze/snapshots/$(date +%F-%H%M).json
+SNAP=~/.herow/finance/organizze/snapshots/$(date +%F-%H%M).json
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/pull.py \
   --out "$SNAP" \
   --history-days <N or 180> \
@@ -93,12 +93,12 @@ The script prints `info|...` lines on stderr (counts per endpoint) and a final `
 
 > **CRITICAL — snapshot path between steps:** each bash block runs in a new shell, so the variable `SNAP` **does not persist**. NEVER re-derive `SNAP=...$(date +%F-%H%M).json` in a later step (the timestamp changes and the file won't exist → `FileNotFoundError`). In **all** subsequent steps (3.5, 4, 5, 5.6, 7), resolve the most recent snapshot at the start of the block:
 > ```bash
-> SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+> SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
 > ```
 > This is the canonical path. Always use it whenever you need `$SNAP` in a new block.
 
 Error handling (reads now go through the `organizze` CLI — see `_cli.py`'s exit-code map):
-- `err|auth|...` → token rejected. Delete `~/finance/organizze/.auth` and return to Step 2.
+- `err|auth|...` → token rejected. Delete `~/.herow/finance/organizze/.auth` and return to Step 2.
 - `err|no-cli|...` → the `organizze` CLI isn't on PATH. Run `scripts/setup/install-stack.sh` or `/herow-core:doctor`.
 - `err|network|...` → fail fast, report to the user.
 
@@ -112,13 +112,13 @@ After pull.py runs successfully, print:
 ## Step 3.1 — Sanitize snapshot (PII removal)
 
 ```bash
-SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
-SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
+SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+SNAP_SAN=~/.herow/finance/organizze/snapshot_sanitized.json
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/sanitize.py \
   --snapshot "$SNAP" --out "$SNAP_SAN"
 ```
 
-Reads `$SNAP`, tokenizes account IDs (replaces with `acct_<sha256[:8]>`), strips CPF/CNPJ patterns, masks medical descriptions as `[MEDICAL_EXPENSE]`. Saves to `$SNAP_SAN`. Map stored at `~/finance/organizze/.id-map.json`.
+Reads `$SNAP`, tokenizes account IDs (replaces with `acct_<sha256[:8]>`), strips CPF/CNPJ patterns, masks medical descriptions as `[MEDICAL_EXPENSE]`. Saves to `$SNAP_SAN`. Map stored at `~/.herow/finance/organizze/.id-map.json`.
 
 On error: print the error and continue with `$SNAP_SAN` absent (analyze.py degrades gracefully when `--snapshot-sanitized` is not provided).
 
@@ -127,14 +127,14 @@ If `--refresh` was passed in `$ARGUMENTS`, run sanitize.py unconditionally regar
 ## Step 3.2 — Compute deterministic metrics
 
 ```bash
-SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
+SNAP_SAN=~/.herow/finance/organizze/snapshot_sanitized.json
 if [ -f "$SNAP_SAN" ]; then
   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/compute.py \
-    --snapshot "$SNAP_SAN" --out ~/finance/organizze/metrics.json
+    --snapshot "$SNAP_SAN" --out ~/.herow/finance/organizze/metrics.json
 fi
 ```
 
-Writes `~/finance/organizze/metrics.json` with pre-computed burn, runway, category totals, and spending velocity alerts. `analyze.py` loads this inside `render_prompt` — no arithmetic by the LLM.
+Writes `~/.herow/finance/organizze/metrics.json` with pre-computed burn, runway, category totals, and spending velocity alerts. `analyze.py` loads this inside `render_prompt` — no arithmetic by the LLM.
 
 If `--refresh` was passed in `$ARGUMENTS`, run compute.py unconditionally (pass `--out` to overwrite existing metrics.json).
 
@@ -152,10 +152,10 @@ Print the snapshot path and totals (use `jq '.meta.totais' "$SNAP"`). Do not cal
 
 ```bash
 TS=$(date +%F-%H%M)
-REPORT=~/finance/organizze/reports/$TS.md
-RESEARCH_DIR=~/finance/organizze/research/$TS
+REPORT=~/.herow/finance/organizze/reports/$TS.md
+RESEARCH_DIR=~/.herow/finance/organizze/research/$TS
 mkdir -p "$RESEARCH_DIR"
-PROMPT_FILE=~/finance/organizze/reports/$TS.prompt.md
+PROMPT_FILE=~/.herow/finance/organizze/reports/$TS.prompt.md
 ```
 
 Do not invoke `analyze.py` yet — first we need to fire the research (Step 5.5) and then render the prompt with `--research-dir` pointing to it.
@@ -164,7 +164,7 @@ Do not invoke `analyze.py` yet — first we need to fire the research (Step 5.5)
 
 > **Pre-flight — personalization data.** Before rendering, check which global state files exist:
 > ```bash
-> for f in memory plans profile; do [ -f ~/finance/$f.md ] || echo "missing: ~/finance/$f.md"; done
+> for f in memory plans profile; do [ -f ~/.herow/finance/$f.md ] || echo "missing: ~/.herow/finance/$f.md"; done
 > ```
 > `analyze.py` injects these silently — a missing `memory.md` (restrictions/context) or `plans.md` (goals) is dropped with no warning, and a missing `profile.md` renders as `(no data)`. If any are missing, tell the user in 1 line: "No <memory/plans/profile> on file — this analysis will be less personalized; you can add context via `/herow-finance:context`, goals via `/herow-finance:goal`, profile via `/herow-finance:profile`." Then continue (do not block).
 
@@ -190,15 +190,15 @@ Save the subagent's response to `$REPORT`.
 ## Step 6.7 — Append to audit log
 
 ```bash
-SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
-METRICS=~/finance/organizze/metrics.json
+SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+METRICS=~/.herow/finance/organizze/metrics.json
 if [ -f "$METRICS" ]; then
   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/audit_log.py \
     --snapshot "$SNAP" --metrics "$METRICS"
 fi
 ```
 
-Appends a JSONL entry to `~/finance/logs/YYYY-MM.jsonl`. Skips silently if the snapshot hash matches the last entry (duplicate run). Never fails fatally.
+Appends a JSONL entry to `~/.herow/finance/logs/YYYY-MM.jsonl`. Skips silently if the snapshot hash matches the last entry (duplicate run). Never fails fatally.
 
 ## Step 7 — Suggest budget updates
 
@@ -212,7 +212,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/suggest_budgets.py \
 The script:
 - Calculates, per category, `max(3m median, 6m p75)`, ensures ≥ current month's realized amount, rounds to R$ 10.
 - Prints a markdown table: Current | Realized | 3m Median | 6m p75 | **Suggested** | Δ | Confidence.
-- Saves JSON to `~/finance/organizze/budget-suggestions/YYYY-MM-DD-HHMM.json` with the payloads (current_month + next_month).
+- Saves JSON to `~/.herow/finance/organizze/budget-suggestions/YYYY-MM-DD-HHMM.json` with the payloads (current_month + next_month).
 
 Show the table to the user.
 
@@ -220,19 +220,19 @@ Show the table to the user.
 
 The Organizze REST API can't write budgets ("limite de gastos"), but the web app can. `apply_budgets.py` reuses the same `.session` created for scraping (Step 3.5) to set each category's limit on `/<wsid>/limite-de-gastos`, matching by `category_id` (so duplicate category names are disambiguated). It defaults to **DRY-RUN**; `--apply` writes and verifies each value by reading it back. `Transferências` and `Pagamento de fatura` are skipped automatically (not real spending limits).
 
-Only run this when the scraping `.session` exists (it does whenever Step 3.5 did not degrade). If `~/finance/organizze/.session` is missing, **skip to the manual fallback** below.
+Only run this when the scraping `.session` exists (it does whenever Step 3.5 did not degrade). If `~/.herow/finance/organizze/.session` is missing, **skip to the manual fallback** below.
 
 1. Dry-run and show the diff to the user:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/apply_budgets.py \
-     --suggestions "$(ls -t ~/finance/organizze/budget-suggestions/*.json | head -1)"
+     --suggestions "$(ls -t ~/.herow/finance/organizze/budget-suggestions/*.json | head -1)"
    ```
    Output: `dry|would-set|<cat>|R$ a -> R$ b` lines + `dry|summary|would-apply=N,already=M,unmatched=U,failed=0`.
 
 2. If `would-apply` > 0, **ask the user to confirm via `AskUserQuestion`** (single question, options "Apply / Skip") before writing — show the would-set diff in the question. Only on explicit confirmation, apply live:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/apply_budgets.py \
-     --suggestions "$(ls -t ~/finance/organizze/budget-suggestions/*.json | head -1)" --apply
+     --suggestions "$(ls -t ~/.herow/finance/organizze/budget-suggestions/*.json | head -1)" --apply
    ```
    Report the `ok|summary|applied=N,already=M,unmatched=U,failed=F` line. If `unmatched` > 0 or `failed` > 0, list those categories so the user can set them manually.
 
@@ -285,9 +285,9 @@ After the Step 8 chat output, render a **self-contained, interactive HTML dashbo
 Every source below may be absent at runtime — resolve what exists and degrade per source, never crash:
 
 ```bash
-SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
-METRICS=~/finance/organizze/metrics.json                                   # may be absent
-BUDGETS=$(ls -t ~/finance/organizze/budget-suggestions/*.json 2>/dev/null | head -1)  # may be absent
+SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+METRICS=~/.herow/finance/organizze/metrics.json                                   # may be absent
+BUDGETS=$(ls -t ~/.herow/finance/organizze/budget-suggestions/*.json 2>/dev/null | head -1)  # may be absent
 TRENDS=$(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/compute.py --compare-months 6 2>/dev/null)  # "not enough months" when <2
 ```
 
@@ -317,7 +317,7 @@ Financial figures stay in **R$** in both languages. Everything else (labels + `a
 ### 9d — Build and render the artifact
 
 1. Load the `artifact-design` **and** `dataviz` skills first (calibration + chart-form heuristics), then author the HTML per the **Artifact content spec** below.
-2. Write the HTML to `~/finance/organizze/reports/<same TS as $REPORT>.artifact.html` (for archival; the `Artifact` tool renders from the file).
+2. Write the HTML to `~/.herow/finance/organizze/reports/<same TS as $REPORT>.artifact.html` (for archival; the `Artifact` tool renders from the file).
 3. Call the `Artifact` tool: `favicon` 💰, a **stable** title (`Análise financeira` / `Financial analysis` + the month), a one-sentence `description`.
 4. Print the artifact URL as part of the final output block (see below).
 
@@ -383,16 +383,16 @@ If the artifact was degraded, add **one** line naming which sections were limite
 ## General rules
 
 - **Do not pre-inspect** the filesystem before Step 1. Go straight.
-- **Never commit** `~/finance/`. It is outside the repo.
+- **Never commit** `~/.herow/finance/`. It is outside the repo.
 - **Never expose** the token in logs or messages. If it must be shown, mask it as `org_xxx…xxx`.
 - If the user runs twice in a row, each run generates files with a distinct timestamp — no corruption.
-- Legacy migration from `~/finance-organizze/` → `~/finance/{,organizze/}` is automatic on the first run of any script. Do not run anything manually.
+- Legacy migration from `~/finance-organizze/` → `~/.herow/finance/{,organizze/}` is automatic on the first run of any script. Do not run anything manually.
 
 ## Related commands
 
-- **`/herow-finance:goal`** — CRUD of financial goals (`~/finance/plans.md`).
-- **`/herow-finance:context`** — CRUD of restrictions/context (`~/finance/memory.md`).
-- **`/herow-finance:profile`** — CRUD of the personal profile (`~/finance/profile.md`) — used to personalize recommendations.
+- **`/herow-finance:goal`** — CRUD of financial goals (`~/.herow/finance/plans.md`).
+- **`/herow-finance:context`** — CRUD of restrictions/context (`~/.herow/finance/memory.md`).
+- **`/herow-finance:profile`** — CRUD of the personal profile (`~/.herow/finance/profile.md`) — used to personalize recommendations.
 
 All three are provider-agnostic: any future provider consumes the same storage.
 

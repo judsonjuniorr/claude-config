@@ -4,7 +4,7 @@ Read alongside `SKILL.md`, one section at a time, at the phase noted in each hea
 
 ## Required-key list (Phase −1)
 
-Validate `<root>/.qa/config.yml` against this list before doing anything else. Any
+Validate `<QA>/config.yml` against this list before doing anything else. Any
 missing key, wrong type, or out-of-range value → stop `[config-invalid]` naming the exact
 key.
 
@@ -32,7 +32,7 @@ key.
 | `ticket.sources[].status` | string | one of `verified \| pending`, required unless `kind: text` |
 | `ticket.sources[].id_pattern` | string | required unless `kind: text` |
 | `repos[].name` | string | unique within the list |
-| `repos[].path` | string | must exist relative to `<root>` |
+| `repos[].path` | string | must exist relative to `<CHECKOUT_ROOT>` (`herow-project.sh checkout-root`: the enclosing workspace root when `<QA>` resolved to one, else the current checkout's git toplevel or the cwd — see qa-setup's step 1) |
 | `repos[].bug_tag` | string | non-empty |
 
 `freeze.*` and `gotchas[]` are optional and unvalidated beyond basic type — their absence
@@ -40,7 +40,7 @@ just means freeze is never offered.
 
 ## Report template (Phase 5)
 
-Report dir: `<root>/.qa/reports/<id>-<YYYY-MM-DD-HHMM>/`, where `<id>` is the Jira-style
+Report dir: `<QA>/reports/<id>-<YYYY-MM-DD-HHMM>/`, where `<id>` is the Jira-style
 key, `gh-<repo>-<N>`, `brain-<first 8 chars of the uuid>`, `<source>-<id slug>` for a
 generic adapter, or `text-<slug>` (kebab-case, ≤40 chars) for free text.
 
@@ -87,7 +87,7 @@ paste); for a `text` source, drop the Markdown syntax and keep it plain.
 
 ## Knowledge entry shapes (Phase 6)
 
-Only **stable, reusable** facts go into `.qa/knowledge/` — ticket-specific results stay in
+Only **stable, reusable** facts go into `<QA>/knowledge/` — ticket-specific results stay in
 the run's report dir. Every new or refreshed entry carries an `Env:` tag: this run's
 `session.env`, or `any` only for a fact that holds regardless of environment (a component
 behavior, not a routing/URL fact). An untagged entry is a bug in this skill's output —
@@ -140,6 +140,16 @@ section. Offer eligible rows via `AskUserQuestion` with `multiSelect: true`, in 
 at most 4.
 
 **Readiness gate — before writing anything:**
+0. Resolve `<freeze.repo>`'s absolute path (`"<CHECKOUT_ROOT>/<repos[freeze.repo].path>"`)
+   and cover it against the global excludesfile — qa-setup never writes anything in-repo
+   any more, so freeze is the **one remaining writer** under `<freeze.repo>/.qa/`, and this
+   is the one place left that still needs to `--apply` (not just `--check`) the rule:
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/qa-setup/scripts/ensure-ignored.sh" --apply "<freeze.repo abs path>"
+   ```
+   Non-zero → stop with the matching code: exit `1` → `ignore-not-covered`, `2` →
+   `memory-tracked`, `3` → `env-error`. **No spec is written while `.qa/frozen/` could end
+   up committed.**
 1. From `<freeze.repo>`: `node_modules/@playwright/test` exists, and `<freeze.runner>
    --version` reports that installed version.
 2. The browser executable resolves: `node -e
@@ -151,7 +161,12 @@ Any failure → "freeze environment not ready" with the exact fix (`<freeze.runn
 <browser>`, or install `@playwright/test`); **no spec is written**.
 
 **Location and naming.** `<freeze.repo>/.qa/frozen/<run-id>-<row-slug>.qa-frozen.mjs` —
-covered by the global `.qa/` ignore rule at any depth. The `.qa-frozen.mjs` suffix matches
+covered by the global `.qa/` ignore rule at any depth (applied by step 0 above). A spike
+confirmed frozen specs must stay in-repo: Node resolves `@playwright/test` (a bare ESM
+specifier) relative to the spec file's own ancestor `node_modules/`, so a spec placed under
+`$HEROW_HOME` instead fails with "Cannot find package '@playwright/test'" — this is why
+`config.yml`/`knowledge/`/`reports/` moved to the herow store but `frozen/` did not. The
+`.qa-frozen.mjs` suffix matches
 no default Playwright/Vitest/Jest pattern, so an explicit `testMatch` is required (below)
 and it's also invisible to the project's own test runs.
 
@@ -210,12 +225,12 @@ command or config key>.` plus a resume hint when one applies.
 
 | Code | Problem | Fix |
 |---|---|---|
-| `no-config` | no `.qa/config.yml` found walking up from cwd | Run `/herow-dev:qa-setup` |
+| `no-config` | no `<QA>/config.yml` found (herow-project.sh's project store) | Run `/herow-dev:qa-setup` |
 | `schema-newer` | config's `schema_version` is newer than this skill | Update the plugin, or edit the config |
 | `config-invalid` | a required key is missing or invalid | Edit that key, or re-run `/herow-dev:qa-setup` |
-| `ignore-not-covered` | `ensure-ignored.sh --check` exits 1 | Re-run `/herow-dev:qa-setup`, or remove the repo-level negation the script names |
-| `memory-tracked` | `ensure-ignored.sh --check` exits 2 | Run the printed `git rm -r --cached .qa` |
-| `env-error` | `ensure-ignored.sh --check` exits 3 | Fix the environment cause printed |
+| `ignore-not-covered` | Phase 5c's `ensure-ignored.sh --apply` still isn't covered after running | Follow the printed message: add the pattern to the printed excludesfile by hand, or remove the repo-level negation it names |
+| `memory-tracked` | `<freeze.repo>/.qa/` has git-tracked files | Run the printed `git rm -r --cached .qa` |
+| `env-error` | git missing, `HOME` unset, or the excludesfile is unwritable | Fix the environment cause printed |
 | `services-down` | a `services[]` preflight curl failed | Start it with the printed `start_hint`, re-run |
 | `source-unavailable` | a routed ticket source's MCP server isn't connected | Enable via `/mcp`, `mcp-restore.sh <name>` + restart, or re-run qa-setup |
 | `source-pending` | the routed source is saved `status: pending` | Re-run `/herow-dev:qa-setup` to verify it |

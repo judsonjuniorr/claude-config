@@ -2,12 +2,14 @@
 import argparse
 import datetime as dt
 import json
+import os
 import pathlib
 import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from pull import compute_totals  # noqa: E402
+from _paths import FINANCE_BASE  # noqa: E402
 
 
 def normalize_name(s: str) -> str:
@@ -69,7 +71,9 @@ def apply_transactions(snapshot: dict, scrape: dict) -> tuple[int, list[str]]:
 
     scrape_txs = scrape.get("transactions") or []
 
-    snap_txs = snapshot.get("transactions_past", []) + snapshot.get("transactions_future", [])
+    snap_txs = snapshot.get("transactions_past", []) + snapshot.get(
+        "transactions_future", []
+    )
 
     # Index snap txs by dom_id
     snap_by_dom: dict[str, dict] = {}
@@ -148,12 +152,12 @@ def main() -> None:
         print(f"err|malformed-scrape|{snap_path.name}|{e}")
         sys.exit(1)
 
-    scrape_dir = pathlib.Path(
-        __import__("os").environ.get(
-            "ORGANIZZE_HOME",
-            str(pathlib.Path.home() / "finance" / "organizze"),
-        )
-    ) / "scrape"
+    # Read ORGANIZZE_HOME dynamically (not the frozen import-time _paths.HOME) so
+    # callers that set the env var right before invoking main() are honored.
+    scrape_dir = (
+        pathlib.Path(os.environ.get("ORGANIZZE_HOME", str(FINANCE_BASE / "organizze")))
+        / "scrape"
+    )
 
     if not scrape_dir.exists():
         print("err|scrape-dir-not-found|scrape dir does not exist")
@@ -222,7 +226,9 @@ def main() -> None:
 
     snap_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))
 
-    summary = f"accounts={total_accounts},transactions={total_txs},invoices={total_invoices}"
+    summary = (
+        f"accounts={total_accounts},transactions={total_txs},invoices={total_invoices}"
+    )
     if has_warn:
         n_ua = len(unrec_accounts)
         n_ut = len(unrec_txs)

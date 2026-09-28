@@ -100,6 +100,7 @@ jobs:
           set -e
           bash plugins/herow-dev/scripts/tests/test-qa-ensure-ignored.sh
           bash plugins/herow-dev/scripts/tests/test-qa-change-surface.sh
+          bash plugins/herow-dev/scripts/tests/test-herow-project.sh
 
       - name: Hook guard test suites
         run: |
@@ -119,6 +120,18 @@ jobs:
           # 5) and macOS (/bin/bash 3.2) exercise the same code path. The
           # suites still probe and print each shell's version, and fail loudly
           # if no usable bash is found rather than passing with zero coverage.
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python test suites
+        run: |
+          set -e
+          python3 -m pip install --quiet pytest
+          # Separate runs: both trees ship a top-level `tests` package that collides in one session.
+          python3 -m pytest plugins/herow-finance -q
+          python3 -m pytest plugins/herow-core/scripts/doctor -q
 
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code

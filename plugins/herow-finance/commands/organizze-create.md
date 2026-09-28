@@ -23,7 +23,7 @@ This is the **first write path** of the Organizze integration (everything else i
 ## Steps (follow exactly, skip none)
 
 ### 1. First-run / auth
-If `~/finance/organizze/.auth` does not exist, **do not** run the script: it's the same `.auth` as `/herow-finance:organizze` (read+write scope — no new credential needed). **Read `${CLAUDE_PLUGIN_ROOT}/resources/organizze-onboarding.md` and follow §Step 2 (token setup)** to create `.auth`. Stop here until `.auth` exists.
+If `~/.herow/finance/organizze/.auth` does not exist, **do not** run the script: it's the same `.auth` as `/herow-finance:organizze` (read+write scope — no new credential needed). **Read `${CLAUDE_PLUGIN_ROOT}/resources/organizze-onboarding.md` and follow §Step 2 (token setup)** to create `.auth`. Stop here until `.auth` exists.
 
 ### 2. Intent parse (natural language → flags)
 From `$ARGUMENTS`, extract whatever you can: description, amount, sign (spent/paid → `--despesa`; received/earned → `--receita`), relative date (yesterday/today/"day X"), target (on card X → `--cartao`; transfer from A to B → `--transferencia --de A --para B`), installments ("3x" → `--parcelas 3`), recurrence ("every month"/"fixed" → `--recorrente`). Whatever **cannot** be confidently inferred becomes a question in step 3 — never guess the amount, account, or sign.
@@ -55,7 +55,7 @@ Read `info|resolve|...`, `info|category|...`, `info|dry-run|...`, and `info|payl
 After a successful write, delete the cached metrics so the next `/herow-finance:organizze` run recomputes fresh values:
 
 ```bash
-rm -f ~/finance/organizze/metrics.json
+rm -f ~/.herow/finance/organizze/metrics.json
 ```
 
 This ensures the next analysis reflects the new transaction. Silent if the file doesn't exist.
@@ -79,7 +79,7 @@ python3 "$SCRIPT" --apply [--force] <same flags as the dry-run>
 - `err|no-auth|...` → "No credential. Set up the token: `resources/organizze-onboarding.md` §Step 2."
 - `err|bad-auth|missing <k>` → "`.auth` file incomplete (missing `<k>`). Redo the token: `resources/organizze-onboarding.md` §Step 2."
 - `err|duplicate|...` → "A matching recent entry already exists (shown above). Confirm creating it anyway → re-run with `--force`, or cancel."
-- `err|http-401|...` → "Token rejected. Re-authenticate (delete `~/finance/organizze/.auth` and redo the setup)."
+- `err|http-401|...` → "Token rejected. Re-authenticate (delete `~/.herow/finance/organizze/.auth` and redo the setup)."
 - `err|http-422|<body>` → show the Organizze message + the field; offer to reopen the field via AskUserQuestion.
 - `err|resolve|<hint>` → "Couldn't find account/card '<hint>'." + AskUserQuestion with the list.
 - `err|invoice-unresolved|<card>` → "Couldn't map the invoice for that date." + AskUserQuestion with the invoices.

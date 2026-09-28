@@ -47,7 +47,7 @@ _EXIT_CODE_ERR = {
 
 
 def load_auth() -> tuple[str, str, str]:
-    """Return (email, token, user_agent) from ~/finance/organizze/.auth.
+    """Return (email, token, user_agent) from ~/.herow/finance/organizze/.auth.
 
     Lifted verbatim from _http.py so the CLI path shares one auth contract.
     """

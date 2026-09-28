@@ -9,7 +9,7 @@ effort: low
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`. Data lives in `~/finance/profile.md` (format `key: value`, hand-editable) and is injected into **every analysis** (`/herow-finance:organizze` and future providers) as personal context — to calibrate recommendations by age, income, dependents, housing, city, risk tolerance.
+Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`. Data lives in `~/.herow/finance/profile.md` (format `key: value`, hand-editable) and is injected into **every analysis** (`/herow-finance:organizze` and future providers) as personal context — to calibrate recommendations by age, income, dependents, housing, city, risk tolerance.
 
 Absolute path of the script:
 `${CLAUDE_PLUGIN_ROOT}/scripts/finance/profile.py`
@@ -105,6 +105,6 @@ At the end, show the updated state with `profile.py get` and say: "Next `/herow-
 
 - **Do not call `/herow-finance:organizze`** automatically. This command is CRUD; analysis is separate.
 - The script runs legacy migration automatically on the first run.
-- Storage is hand-editable (`~/finance/profile.md`).
+- Storage is hand-editable (`~/.herow/finance/profile.md`).
 - **Per-session limit**: if called by `/herow-finance:organizze` during the interview flow, ask at most **6 fields** per turn to avoid fatigue. The rest will be asked on the next run.
 - **Monetary conversion**: user says "12k" → save `1200000`. User says "R$ 1,200.50" → save `120050`. Confirm in 1 line before saving when the value is ambiguous.

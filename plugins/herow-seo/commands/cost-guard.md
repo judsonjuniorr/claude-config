@@ -27,7 +27,7 @@ The data commands (`/herow-seo:content-sprint`, `/herow-seo:launch`, etc.) accep
 
 ## Flow
 
-1. **Read.** Load the current policy artifact if it exists (`~/.claude/seo/cost-policy.md`). If none exists, hold the defaults above in memory as the starting point.
+1. **Read.** If `~/.claude/seo/cost-policy.md` exists (old path), `mv` it to `~/.herow/seo/cost-policy.md` first (`mkdir -p ~/.herow/seo` beforehand). Load the current policy artifact if it exists (`~/.herow/seo/cost-policy.md`). If none exists, hold the defaults above in memory as the starting point.
 2. **Show.** With `show` (or no args), print the current policy: each work-type → tier mapping and the token budget. With no args, also offer to edit it via `AskUserQuestion`.
 3. **Propose — HUMAN GATE.** With `set` or free-text (e.g. "cap each run at 200k tokens", "force diagnostics to Sonnet"), translate the request into a concrete proposed policy and present the full proposed mapping + budget. Ask via `AskUserQuestion`: approve / revise / cancel. Do not write on anything but approve.
 4. **Persist.** Only after approval, write/update the policy artifact. Confirm the path written.

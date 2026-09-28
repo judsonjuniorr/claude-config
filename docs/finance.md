@@ -12,8 +12,8 @@ Code namespaces plugin commands by plugin name). Two providers: **Organizze**
 |---|---|
 | [`/herow-finance:organizze`](#herow-financeorganizze) | Pull Organizze data via the official `organizze` CLI, build a snapshot, delegate to the [`financial-analyst`](../plugins/herow-finance/agents/financial-analyst.md) subagent for a prioritized action plan. |
 | [`/herow-finance:organizze-create`](#herow-financeorganizze-create) | **Write path.** Create a transaction in Organizze (account / card / specific invoice / transfer) via REST API. DRY-RUN by default, single Apply confirm, read-back verify. |
-| [`/herow-finance:goal`](#herow-financegoal) | CRUD of financial goals (`~/finance/plans.md`). Provider-agnostic. |
-| [`/herow-finance:context`](#herow-financecontext) | CRUD of restrictions/context (`~/finance/memory.md`). Provider-agnostic. |
+| [`/herow-finance:goal`](#herow-financegoal) | CRUD of financial goals (`~/.herow/finance/plans.md`). Provider-agnostic. |
+| [`/herow-finance:context`](#herow-financecontext) | CRUD of restrictions/context (`~/.herow/finance/memory.md`). Provider-agnostic. |
 | [`/herow-finance:profile`](#herow-financeprofile) | CRUD of the personal profile (age, profession, income, family, housing, city, risk) used to personalize analyses. Provider-agnostic. |
 | [`/herow-finance:nf-tomada`](#herow-financenf-tomada) | Register a received NF (nota fiscal) in Contabilizei from a PDF/XML — headless login with the email code via Gmail, duplicate check, confirm before sending. |
 
@@ -37,7 +37,7 @@ plugins/herow-finance/
 │   └── organizze-scrape.md      # Playwright scrape sub-flow
 └── scripts/
     ├── finance/                 # provider-agnostic
-    │   ├── _storage.py          # BASE=~/finance paths + legacy migration (migrate_legacy)
+    │   ├── _storage.py          # BASE=~/.herow/finance paths + legacy migration (migrate_legacy, auto_migrate)
     │   ├── memory.py            # add/list/render/prune financial memory
     │   ├── plans.py             # add/list/render/done/status/prune goals
     │   └── profile.py           # personal profile CRUD
@@ -45,21 +45,21 @@ plugins/herow-finance/
     │   ├── _common.sh           # load_auth, curl_organizze, die, read_keychain_password
     │   ├── _cli.py              # read path: wraps the official `organizze` CLI (accounts/categories/cards/invoices/transactions/budgets)
     │   ├── _http.py             # write path only: http_post against REST v2 (reads moved to _cli.py)
-    │   ├── _paths.py            # HOME/AUTH/CONFIG/... + re-exports migrate_legacy
+    │   ├── _paths.py            # HOME/AUTH/CONFIG/RESEARCH/METRICS/ID_MAP/LOGS + re-exports auto_migrate
     │   ├── setup_auth.sh        # onboarding (stdin: email\ntoken\npassword) — installs the `organizze` CLI, validates via `organizze status`
     │   ├── setup_scrape.sh      # idempotent playwright+chromium scrape setup
     │   ├── pull.py              # CLI-backed read path + snapshot consolidation
     │   ├── create.py            # write path: lookups via _cli.py, create transaction/transfer via REST (dry-run/apply/verify)
     │   ├── reconcile.py         # one-shot balance offset calibration
     │   ├── balance_on.py        # balance + forecast per account on a target date
-    │   ├── config.py            # ~/finance/organizze/.config helper
+    │   ├── config.py            # ~/.herow/finance/organizze/.config helper
     │   ├── cashflow.py          # per-account daily balance projection
     │   ├── suggest_budgets.py   # budget suggestions for current + next month
     │   ├── apply_budgets.py     # write budget limits to the web app via Playwright
     │   ├── analyze.py           # snapshot + memory + plans + framework → subagent prompt
     │   ├── sanitize.py          # PII removal (CPF/CNPJ, medical, account tokenization) → LLM-safe snapshot
     │   ├── compute.py           # deterministic metrics engine, reads sanitized snapshot
-    │   ├── audit_log.py         # append-only JSONL log of analysis runs (~/finance/logs/)
+    │   ├── audit_log.py         # append-only JSONL log of analysis runs (~/.herow/finance/logs/)
     │   ├── enrichment_rules.yaml # category alias map + medical-keyword list (used by sanitize.py/compute.py)
     │   ├── organizze_login.py   # Playwright headless login → .session (storageState)
     │   ├── scrape_slice.py      # scraper for 1 slice (dashboard | tx | invoice)
@@ -82,7 +82,7 @@ plugins/herow-finance/
 ```
 
 ```
-~/finance/                       # storage (chmod 700, never in git)
+~/.herow/finance/                       # storage (chmod 700, never in git)
 ├── memory.md                    # global: restrictions / context
 ├── plans.md                     # global: goals
 ├── profile.md                   # global: personal profile
@@ -100,14 +100,14 @@ plugins/herow-finance/
     └── extracted/               # extracted NF JSON + TXT
 ```
 
-> **Legacy migration**: pre-refactor data in `~/finance-organizze/` is moved automatically on the first run of any script (Python or shell). `memory.md`/`plans.md` go to `~/finance/`; the rest goes to `~/finance/organizze/`. Idempotent.
+> **Legacy migration**: pre-refactor data in `~/finance-organizze/` is moved automatically on the first run of any script (Python or shell). `memory.md`/`plans.md` go to `~/.herow/finance/`; the rest goes to `~/.herow/finance/organizze/`. Idempotent.
 
 ## Conventions
 
-- Local-only storage under `~/finance/` (chmod 600 on credentials, never committed).
+- Local-only storage under `~/.herow/finance/` (chmod 600 on credentials, never committed).
 - Python scripts use stdlib only, **except** `playwright` (new dependency, authorized; installed automatically by `setup_auth.sh`).
 - Bash scripts follow the repo-wide pipe-delimited output (`ok|...`, `info|...`, `err|...`).
-- Memory and plans are **provider-agnostic** — any future provider (Nubank scraper, manual CSV, etc.) consumes the same `~/finance/{memory,plans}.md`.
+- Memory and plans are **provider-agnostic** — any future provider (Nubank scraper, manual CSV, etc.) consumes the same `~/.herow/finance/{memory,plans}.md`.
 
 ## Design notes
 
@@ -119,7 +119,7 @@ Step 3.5 of `/herow-finance:organizze` uses **raw Playwright (Python lib + Chrom
 
 ### SCRAPE_MAX_AGENTS
 
-Controls the maximum number of simultaneous Chromium browsers (each consumes ~150-200 MB). Default: 4. Configure in `~/finance/organizze/.config`:
+Controls the maximum number of simultaneous Chromium browsers (each consumes ~150-200 MB). Default: 4. Configure in `~/.herow/finance/organizze/.config`:
 
 ```
 SCRAPE_MAX_AGENTS=4
@@ -129,9 +129,9 @@ Reduce to 2 on low-RAM machines; increase to 6-8 on machines with 16+ GB.
 
 ### Credentials
 
-- **API token** → `~/finance/organizze/.auth` (plain text, chmod 600, outside git).
+- **API token** → `~/.herow/finance/organizze/.auth` (plain text, chmod 600, outside git).
 - **Web password** → macOS Keychain (`security add-generic-password -s organizze-login`). **Never on disk in plain text.**
-- **Playwright session** → `~/finance/organizze/.session` (storageState JSON, chmod 600). Reused across runs; automatic re-login on expiration detection.
+- **Playwright session** → `~/.herow/finance/organizze/.session` (storageState JSON, chmod 600). Reused across runs; automatic re-login on expiration detection.
 
 ### API-only degradation
 
@@ -170,7 +170,7 @@ Run `/herow-finance:organizze`. The command will:
 1. Detect missing credentials.
 2. Open `https://app.organizze.com.br/configuracoes/api-keys` in Playwright (existing MCP session is reused).
 3. Ask for your email, the generated API token, **and your web login password** via `AskUserQuestion`.
-4. Install the official `organizze` CLI if missing (brew cask, curl fallback), then validate credentials via `organizze status`; store the token in `~/finance/organizze/.auth` (chmod 600). Store password in macOS Keychain — **never on disk in plain text**.
+4. Install the official `organizze` CLI if missing (brew cask, curl fallback), then validate credentials via `organizze status`; store the token in `~/.herow/finance/organizze/.auth` (chmod 600). Store password in macOS Keychain — **never on disk in plain text**.
 5. Install `playwright` + Chromium if not already present.
 6. After the first pull, show the real per-account balance from the CLI's `accounts get` and confirm it matches the app — no offset to seed anymore (see [Balance reconciliation](#balance-reconciliation)).
 
@@ -204,7 +204,7 @@ python3 scripts/organizze/reconcile.py --snapshot <latest-snapshot.json> \
 # Example: 1234567=80174 7654321=194746  (R$ 801.74 and R$ 1,947.46 — sample IDs)
 ```
 
-This writes `~/finance/organizze/balances.json` (per-`account_id` offset in cents, added on top of the real balance). Future pulls apply it automatically. Skip this entirely in the common case.
+This writes `~/.herow/finance/organizze/balances.json` (per-`account_id` offset in cents, added on top of the real balance). Future pulls apply it automatically. Skip this entirely in the common case.
 
 The **consolidated balance** uses only `checking`/`savings` accounts that are **not archived** and **not caixinhas** (`institution_id != "cofrinho"`) — matches the app's "Saldo geral" widget. Caixinhas and auxiliary accounts are listed separately in the report, never summed into the total.
 
@@ -254,7 +254,7 @@ python3 scripts/finance/plans.py status "<ts>" paused
 python3 scripts/finance/plans.py prune --older-than-done 365
 ```
 
-Storage: `~/finance/plans.md` (hand-editable). Inline header: `## <ts> [target=… · deadline=… · account=… · priority=… · status=…]`.
+Storage: `~/.herow/finance/plans.md` (hand-editable). Inline header: `## <ts> [target=… · deadline=… · account=… · priority=… · status=…]`.
 
 `analyze.py` injects the rendered version (`plans.py render`) into every analysis.
 
@@ -275,7 +275,7 @@ python3 scripts/finance/memory.py list --recent 10
 python3 scripts/finance/memory.py prune --older-than 365
 ```
 
-Storage: `~/finance/memory.md` (hand-editable).
+Storage: `~/.herow/finance/memory.md` (hand-editable).
 
 `analyze.py` injects the rendered version (`memory.py render`) and instructs the subagent not to contradict any item.
 
@@ -296,7 +296,7 @@ python3 scripts/finance/profile.py set <key> <value>
 python3 scripts/finance/profile.py list
 ```
 
-Storage: `~/finance/profile.md` (hand-editable, provider-agnostic). `analyze.py` injects the rendered profile into every analysis.
+Storage: `~/.herow/finance/profile.md` (hand-editable, provider-agnostic). `analyze.py` injects the rendered profile into every analysis.
 
 ---
 
@@ -308,7 +308,7 @@ The **Contabilizei** provider — registers a received NF (nota fiscal, an incom
 /herow-finance:nf-tomada ~/Downloads/nota-fiscal.pdf
 ```
 
-- `extract_nf.py` parses the PDF/XML → JSON + TXT under `~/finance/contabilizei/extracted/`.
+- `extract_nf.py` parses the PDF/XML → JSON + TXT under `~/.herow/finance/contabilizei/extracted/`.
 - `setup.sh` is idempotent (creates dirs, installs `pdfplumber`).
 - The flow asks for confirmation before any write to Contabilizei.
 
@@ -316,7 +316,7 @@ The **Contabilizei** provider — registers a received NF (nota fiscal, an incom
 
 ## Privacy
 
-- Everything local (`~/finance/`). Nothing goes to git, nothing goes to the cloud.
+- Everything local (`~/.herow/finance/`). Nothing goes to git, nothing goes to the cloud.
 - Organizze API is HTTPS-only.
 - Credentials in `.auth` and `balances.json` with `chmod 600`.
 - Commands never log the token; if shown in a message, it is masked.
@@ -326,4 +326,4 @@ The **Contabilizei** provider — registers a received NF (nota fiscal, an incom
 - **API-first**: reads go through the official `organizze` CLI, transaction writes go through the REST API directly (no CAPTCHA, no expired cookie, no fragile selector). Playwright is used only for token onboarding, optional dashboard scraping enrichment, and the two web-only writes below.
 - The system prompt is read from `agents/financial-analyst.md` by `analyze.py` (YAML frontmatter is stripped). Updating `financial-analyst.md` updates the analysis without touching code.
 - **Write paths**: transactions/transfers are writable via REST (`create.py`, dry-run + verify). **Budgets** ("limite de gastos") are *not* in the REST API, so `apply_budgets.py` writes them through the web app via Playwright; `suggest_budgets.py` produces the table + JSON it consumes.
-- **Provider-agnostic**: `scripts/finance/{memory,plans,profile}.py` do not depend on Organizze. To add Nubank/Banco do Brasil/manual CSV in the future, create a `<provider>.md` command + `scripts/<provider>/` consuming the same `~/finance/{memory,plans,profile}.md`.
+- **Provider-agnostic**: `scripts/finance/{memory,plans,profile}.py` do not depend on Organizze. To add Nubank/Banco do Brasil/manual CSV in the future, create a `<provider>.md` command + `scripts/<provider>/` consuming the same `~/.herow/finance/{memory,plans,profile}.md`.

@@ -371,10 +371,14 @@ print(st.st_size)
     */coverage/*|*/.gradle/*|*.pyc|*.log|*.tmp|/tmp/*|/private/tmp/*) exit 0 ;;
   esac
 
-  repo_root="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)"
-  if [ -n "$repo_root" ]; then
+  # herow project store (plans/qa artifacts under $HEROW_HOME/projects/) lives outside any
+  # repo, so this check doesn't need a repo_root. Normalize HEROW_HOME the same way `abs`
+  # was normalized above, or a crafted "$HEROW_HOME/projects/../../.ssh/config" target
+  # would match the raw prefix while actually resolving elsewhere.
+  herow_home_abs="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${HEROW_HOME:-$HOME/.herow}" 2>/dev/null || true)"
+  if [ -n "$herow_home_abs" ]; then
     case "$abs" in
-      "$repo_root"/.claude/plans/*) exit 0 ;;
+      "$herow_home_abs"/projects/*) exit 0 ;;
     esac
   fi
 

@@ -4,10 +4,11 @@
 Usage:
   audit_log.py --snapshot PATH --metrics PATH
 
-Appends one JSONL entry to ~/finance/logs/YYYY-MM.jsonl (current month file).
+Appends one JSONL entry to LOGS/YYYY-MM.jsonl (current month file).
 Skips if the snapshot_hash matches the most recent entry (duplicate run).
 Never fails fatally — errors are warnings.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -18,7 +19,8 @@ import pathlib
 import sys
 from typing import Optional
 
-_DEFAULT_LOGS_DIR = pathlib.Path.home() / "finance" / "logs"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from _paths import LOGS as _DEFAULT_LOGS_DIR  # noqa: E402
 
 
 def _snapshot_hash(snap_path: str) -> str:
@@ -61,7 +63,7 @@ def append_log_entry(
     Args:
         snap_path: Path to the snapshot file (used for hash computation).
         metrics: Pre-computed metrics dict (from compute.py). May be None.
-        logs_dir: Directory for JSONL files (default: ~/finance/logs/).
+        logs_dir: Directory for JSONL files (default: LOGS).
 
     Returns:
         "ok|audit-log|<path>" on success, "info|duplicate-skip|<hash[:8]>" on dup.
@@ -101,13 +103,18 @@ def append_log_entry(
     if metrics is None:
         entry["data_quality_flags"] = ["METRICS_MISSING"]
     else:
-        entry["monthly_expenses_cents"] = int(metrics.get("monthly_expenses_cents") or 0)
+        entry["monthly_expenses_cents"] = int(
+            metrics.get("monthly_expenses_cents") or 0
+        )
         entry["monthly_income_cents"] = int(metrics.get("monthly_income_cents") or 0)
         entry["runway_days"] = metrics.get("runway_days")
         entry["category_totals"] = metrics.get("category_totals") or {}
         top5 = metrics.get("top_5_recurring") or []
         entry["top_5_recurring"] = [
-            {"description": r.get("description", "?"), "amount_cents": r.get("amount_cents", 0)}
+            {
+                "description": r.get("description", "?"),
+                "amount_cents": r.get("amount_cents", 0),
+            }
             for r in top5
         ]
 

@@ -9,6 +9,7 @@ Usage:
 Reads a SANITIZED snapshot (output of sanitize.py). Computes all metrics
 deterministically — the LLM interprets pre-computed facts, never recalculates.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,13 +22,14 @@ import unicodedata
 from typing import Optional, TypedDict
 
 SCRIPTS_DIR = pathlib.Path(__file__).parent
-_DEFAULT_LOGS_DIR = pathlib.Path.home() / "finance" / "logs"
-_DEFAULT_OUT = pathlib.Path.home() / "finance" / "organizze" / "metrics.json"
+sys.path.insert(0, str(SCRIPTS_DIR))
+from _paths import LOGS as _DEFAULT_LOGS_DIR, METRICS as _DEFAULT_OUT  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
 # TypedDict schema
 # ---------------------------------------------------------------------------
+
 
 class MetricsAlert(TypedDict):
     category: str
@@ -40,16 +42,17 @@ class MetricsOutput(TypedDict):
     monthly_expenses_cents: int
     monthly_income_cents: int
     liquid_balance_cents: int
-    burn_cents: int           # monthly_expenses - monthly_income; positive = overspending
+    burn_cents: int  # monthly_expenses - monthly_income; positive = overspending
     runway_days: Optional[int]  # None when burn <= 0
-    category_totals: dict     # {category_name: total_cents} for current month expenses
-    top_5_recurring: list     # [{description, amount_cents, occurrences}]
-    meta: dict                # {alerts: list[MetricsAlert], computed_at: str, month: str}
+    category_totals: dict  # {category_name: total_cents} for current month expenses
+    top_5_recurring: list  # [{description, amount_cents, occurrences}]
+    meta: dict  # {alerts: list[MetricsAlert], computed_at: str, month: str}
 
 
 # ---------------------------------------------------------------------------
 # YAML parser (stdlib only, same as sanitize.py)
 # ---------------------------------------------------------------------------
+
 
 def _load_yaml_simple(path: pathlib.Path) -> dict:
     """Minimal YAML parser for simple key: value, list, and nested dict structures."""
@@ -118,6 +121,7 @@ def _load_enrichment_rules() -> dict:
 # Normalization
 # ---------------------------------------------------------------------------
 
+
 def _normalize(text: str) -> str:
     """NFKD normalization: strip accents, lowercase."""
     return (
@@ -146,6 +150,7 @@ QUERY_MAP: list[tuple[re.Pattern, str]] = [
 # Helper: account is principal
 # ---------------------------------------------------------------------------
 
+
 def _is_principal(acc: dict) -> bool:
     if acc.get("archived"):
         return False
@@ -156,6 +161,7 @@ def _is_principal(acc: dict) -> bool:
 # Core computation
 # ---------------------------------------------------------------------------
 
+
 def compute_metrics(
     snapshot: dict,
     logs_dir: Optional[pathlib.Path] = None,
@@ -165,7 +171,7 @@ def compute_metrics(
 
     Args:
         snapshot: Sanitized Organizze snapshot dict.
-        logs_dir: Directory for historical JSONL files (default: ~/finance/logs/).
+        logs_dir: Directory for historical JSONL files (default: LOGS).
         alert_threshold_pct: Override CP1 alert threshold (default: from enrichment_rules.yaml).
 
     Returns:
@@ -222,18 +228,22 @@ def compute_metrics(
         desc = (t.get("description") or "?").strip()
         amt = abs(int(t.get("amount_cents") or 0))
         if desc not in rec_by_desc:
-            rec_by_desc[desc] = {"description": desc, "amount_cents": amt, "occurrences": 0}
+            rec_by_desc[desc] = {
+                "description": desc,
+                "amount_cents": amt,
+                "occurrences": 0,
+            }
         rec_by_desc[desc]["occurrences"] += 1
         rec_by_desc[desc]["amount_cents"] = max(rec_by_desc[desc]["amount_cents"], amt)
 
-    top_5_recurring = sorted(
-        rec_by_desc.values(), key=lambda x: -x["amount_cents"]
-    )[:5]
+    top_5_recurring = sorted(rec_by_desc.values(), key=lambda x: -x["amount_cents"])[:5]
 
     # CP1 alerts
     if logs_dir is None:
         logs_dir = _DEFAULT_LOGS_DIR
-    alerts = compute_alerts(category_totals, logs_dir=logs_dir, threshold_pct=alert_threshold_pct)
+    alerts = compute_alerts(
+        category_totals, logs_dir=logs_dir, threshold_pct=alert_threshold_pct
+    )
 
     return MetricsOutput(
         monthly_expenses_cents=monthly_expenses_cents,
@@ -261,16 +271,27 @@ def validate_metrics(metrics: dict) -> list[str]:
         List of validation error strings. Empty list if valid.
     """
     errors: list[str] = []
-    required_int = ["monthly_expenses_cents", "monthly_income_cents", "liquid_balance_cents", "burn_cents"]
+    required_int = [
+        "monthly_expenses_cents",
+        "monthly_income_cents",
+        "liquid_balance_cents",
+        "burn_cents",
+    ]
     for field in required_int:
         if field not in metrics:
             errors.append(f"missing field: {field}")
         elif not isinstance(metrics[field], int):
-            errors.append(f"field {field} must be int, got {type(metrics[field]).__name__}")
+            errors.append(
+                f"field {field} must be int, got {type(metrics[field]).__name__}"
+            )
     if "runway_days" not in metrics:
         errors.append("missing field: runway_days")
-    elif metrics["runway_days"] is not None and not isinstance(metrics["runway_days"], int):
-        errors.append(f"runway_days must be int or None, got {type(metrics['runway_days']).__name__}")
+    elif metrics["runway_days"] is not None and not isinstance(
+        metrics["runway_days"], int
+    ):
+        errors.append(
+            f"runway_days must be int or None, got {type(metrics['runway_days']).__name__}"
+        )
     if "category_totals" not in metrics:
         errors.append("missing field: category_totals")
     elif not isinstance(metrics["category_totals"], dict):
@@ -289,6 +310,7 @@ def validate_metrics(metrics: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 # CP1: Spending velocity alerts
 # ---------------------------------------------------------------------------
+
 
 def compute_alerts(
     category_totals: dict[str, int],
@@ -369,6 +391,7 @@ def compute_alerts(
 # Query mode
 # ---------------------------------------------------------------------------
 
+
 def query_metrics(
     text: str,
     metrics: dict,
@@ -429,6 +452,7 @@ def query_metrics(
 # ---------------------------------------------------------------------------
 # CP4: compare-months mode
 # ---------------------------------------------------------------------------
+
 
 def compare_months(n: int, logs_dir: Optional[pathlib.Path] = None) -> str:
     """Generate a month-over-month comparison table for the last N months.
@@ -537,15 +561,20 @@ def compare_months(n: int, logs_dir: Optional[pathlib.Path] = None) -> str:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Deterministic metrics engine for herow-finance.")
+    ap = argparse.ArgumentParser(
+        description="Deterministic metrics engine for herow-finance."
+    )
     ap.add_argument("--snapshot", default=None, help="Path to sanitized snapshot JSON")
     ap.add_argument(
         "--out",
         default=None,
-        help="Output path for metrics.json (default: ~/finance/organizze/metrics.json)",
+        help="Output path for metrics.json (default: METRICS)",
     )
-    ap.add_argument("--query", default=None, help="Natural-language query against metrics")
+    ap.add_argument(
+        "--query", default=None, help="Natural-language query against metrics"
+    )
     ap.add_argument(
         "--compare-months",
         type=int,

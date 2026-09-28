@@ -20,24 +20,19 @@ case "$FILE" in
   /*) abs="$FILE" ;;
   *)  abs="$PWD/$FILE" ;;
 esac
-# Canonicalize before any prefix match: without this, '../' segments defeat the globs below
-# (e.g. '.claude/plans/../../x.md' would match the plans exemption while resolving elsewhere).
+# Canonicalize before any prefix match: without this, '../' segments could defeat the
+# repo-boundary check below.
 abs="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$abs" 2>/dev/null || printf '%s' "$abs")"
 
 # Only guard files inside the current repo. Plugins (gstack, etc.) writing plans
-# to ~/.gstack, ~/.claude, or anywhere outside the repo are allowed silently.
+# to ~/.gstack, ~/.claude, the herow project store (~/.herow), or anywhere outside the
+# repo are allowed silently — herow-dev's plan/qa artifacts live under $HEROW_HOME now,
+# not in-repo, so there's no in-repo exemption left to carve out here.
 repo_root="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$repo_root" ] || exit 0
 case "$abs" in
   "$repo_root"/*) ;;   # inside the repo — keep checking
   *) exit 0 ;;         # outside the repo — allow
-esac
-
-# Allow plan orchestration artifacts. The herow-dev per-plan layout writes plan.md,
-# source.md, and research/agent notes under .claude/plans/<slug>/ (gitignored, local) —
-# never prompt on those, or every artifact write would interrupt the blueprint flow.
-case "$abs" in
-  "$repo_root"/.claude/plans/*) exit 0 ;;
 esac
 
 # Allow conventional repo docs that are expected to exist.

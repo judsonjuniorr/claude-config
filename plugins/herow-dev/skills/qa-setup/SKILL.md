@@ -2,18 +2,19 @@
 name: qa-setup
 description: >-
   (herow) Set up config-driven live-app QA for this repo — resolves the project root,
-  detects services/repos/gates from the codebase, writes .qa/config.yml, seeds or adopts
-  a knowledge store, ensures .qa/ is covered by the global gitignore, and proves the
-  config with a live Playwright smoke walk. Run once per project (safely re-runnable).
+  detects services/repos/gates from the codebase, writes config.yml under the herow
+  project store, seeds or adopts a knowledge store, and proves the config with a live
+  Playwright smoke walk. Run once per project (safely re-runnable).
   Use on "set up QA for this repo", "/herow-dev:qa-setup", or as the fix pointed to by a
   qa-run "[no-config]" stop.
 ---
 
 # qa-setup
 
-Writes `<root>/.qa/config.yml`, seeds or adopts `<root>/.qa/knowledge/`, makes sure that
-directory is covered by git's **global** excludesfile, and proves the whole config with a
-live smoke walk (login + first navigation). This is the one-time (re-runnable) setup that
+Writes `<QA>/config.yml`, seeds or adopts `<QA>/knowledge/`, and proves the whole config
+with a live smoke walk (login + first navigation). `<QA>` is an absolute path under
+`$HEROW_HOME/projects/<id>/qa/` (`HEROW_HOME` defaults to `~/.herow`), resolved once via
+`herow-project.sh` — see step 1. This is the one-time (re-runnable) setup that
 `/herow-dev:qa-run` then reads every project constant from — see
 `plugins/herow-dev/skills/qa-run/SKILL.md`.
 
@@ -24,10 +25,7 @@ back into it.
 
 ## Constraints (always true)
 
-- Memory lives at `<root>/.qa/{config.yml,knowledge/,reports/}` — **never** under
-  `.claude/` (write-prevention hooks trigger there, and in at least one real project
-  content under `.claude/` leaks to an external log aggregator). These paths are fixed,
-  not configurable, so a single ignore rule (`.qa/`) covers all of it.
+- Memory lives under the herow project store, resolved once via `${CLAUDE_PLUGIN_ROOT}/scripts/herow-project.sh qa --ensure` (prints `<QA>`) — **never** under `.claude/` (write-prevention hooks trigger there, and in at least one real project content under `.claude/` leaks to an external log aggregator) and never loose in the repo. Shell vars don't persist between Bash calls: use the **printed literal absolute path** in every later command/Write, never a bare `<QA>` carried over from an earlier call. The one exception is a frozen spec (Phase 5c of `qa-run`) — Node's own module resolution requires it to live in-repo, at `<freeze.repo>/.qa/frozen/`, gitignored there; qa-setup never writes anything there itself.
 - Credentials are **never** written into `config.yml` — only the names of the env vars
   that hold them. Reports and knowledge always print `[REDACTED]` in their place.
 - Prefer the headless Playwright MCP server (`mcp__playwright-headless__*`); use the
@@ -38,25 +36,50 @@ back into it.
 - **`qa-setup` is the only writer of `config.yml`.** `qa-run` never edits it.
 - All generated content (config comments, reports, knowledge seeds) is in English.
 
-## 1. Resolve the root and existing state
+## 1. Resolve the store and existing state
 
-Walk up from the cwd looking for `.qa/config.yml`. If one is found, that config's
-directory **is** the root — reuse it (never propose a different root once a config
-exists, so a child repo's `.qa/frozen/` can never become a root by accident).
+**Convention used throughout this skill:** shell variables never survive between separate
+Bash tool calls, and this skill spans many (every `AskUserQuestion` is a turn boundary).
+Whenever a later step's command needs the store or checkout root, **re-run the exact
+resolution command below in that same call** rather than trust an earlier call's `<QA>` or
+`<CHECKOUT_ROOT>` to still be set — both commands are cheap and idempotent. `<QA>` and
+`<CHECKOUT_ROOT>` in prose (angle brackets) mean "the absolute value you resolved," never a
+literal shell variable name.
 
-If none is found, propose a root and confirm it:
-- the git toplevel of the cwd, when the cwd is inside a git repo;
-- otherwise, if the cwd holds one or more child git repos (a multi-repo workspace, no
-  git repo at the workspace root itself), propose the cwd itself as the root.
+Resolve `<QA>` once — this also runs the one-shot legacy migration (moves an existing
+`<checkout-root>/.qa/{config.yml,knowledge,reports}` and `.claude/plans/*` in this repo
+into the store; a git-tracked `.qa` or `.claude/plans` is left in place with a warning
+printed to stderr — surface that warning to the user if it appears):
 
-`repos[].path` in the config is always relative to this root.
+```bash
+QA="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/herow-project.sh" qa --ensure)"
+echo "QA=$QA"
+```
 
-**If `.qa/config.yml` already exists:**
+Separately, resolve `<CHECKOUT_ROOT>` for this run — used only to make `repos[].path`
+relative, **never** to decide where `<QA>` lives (that's `herow-project.sh`'s job, and it
+deliberately maps every worktree of a repo to the same store):
+
+```bash
+CHECKOUT_ROOT="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/herow-project.sh" checkout-root)"
+echo "CHECKOUT_ROOT=$CHECKOUT_ROOT"
+```
+
+`repos[].path` in the config is always relative to `<CHECKOUT_ROOT>`.
+
+If `<CHECKOUT_ROOT>` doesn't hold a git repo and holds one or more child git repos (a
+multi-repo workspace, no git repo at the workspace root itself), confirm with the user
+that `<CHECKOUT_ROOT>` (the cwd) is the intended root before continuing — `herow-project.sh`
+already handles the store side of this (an already-set-up ancestor workspace's `qa` store
+is reused automatically), but the config's own `repos[].path` values still need the human
+to confirm what "root" means here.
+
+**If `<QA>/config.yml` already exists:**
 - `schema_version` newer than this skill understands → stop `[schema-newer]` (see the
   stop-code table in `reference.md`).
 - Never overwrite silently. Offer, via `AskUserQuestion`:
   - `setup.smoke: pending` → recommend **"resume the smoke walk"** (skip straight to
-    step 7);
+    step 6);
   - otherwise offer **re-detect** (a merge — see below) or **edit specific keys**.
 - **Re-detect is a merge, not a rewrite.** Detected keys (services, repos, gates,
   detected ticket sources) are shown as a diff against the current config and applied
@@ -67,28 +90,12 @@ If none is found, propose a root and confirm it:
   changes — an unrelated key changing (e.g. a repo's gates) does not invalidate a proven
   login/navigation recipe.
 
-## 1b. Ignore first — before any file under `.qa/` is written
-
-Run this **before** step 2, on every run (including re-detect and resume), even in a
-workspace root that isn't itself a git repo yet (a later `git init` there, or a child
-repo, would otherwise start tracking `.qa/`):
-
-```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/qa-setup/scripts/ensure-ignored.sh" --apply "<root>"
-```
-
-- Exit `0` → continue.
-- Exit `1` or `3` → stop `[ignore-not-covered]` / `[env-error]`: print the manual fix line
-  the script gave and the resolved excludesfile path. Nothing under `.qa/` gets written or
-  moved.
-- Exit `2` → stop `[memory-tracked]`: print the exact `git rm -r --cached .qa` command the
-  script printed, per affected repo.
-
 ## 2. Detect
 
-No deterministic `detect.sh` in this version — read the project's own files (all curl
-probes below are the *only* live signals; never trust a listening socket that no file
-names, so an unrelated project's dev server is never proposed):
+No deterministic `detect.sh` in this version — read the project's own files, from
+`<CHECKOUT_ROOT>` and every child repo in a workspace (all curl probes below are the
+*only* live signals; never trust a listening socket that no file names, so an unrelated
+project's dev server is never proposed):
 
 - **Services.** `package.json` scripts (`dev`/`start`, `--port`/`PORT=` hints),
   `docker-compose*.yml` published ports, `Makefile` targets that start something,
@@ -105,7 +112,7 @@ names, so an unrelated project's dev server is never proposed):
 - **Git remotes.** `git -C <repo> remote get-url origin` per repo, for the GitHub ticket
   source and the setup report.
 - **Knowledge stores.** `.claude/knowledge/*/navigation.md` and
-  `.claude/skills/*/knowledge/navigation.md` (resolve symlinks), excluding `.qa/knowledge`
+  `.claude/skills/*/knowledge/navigation.md` (resolve symlinks), excluding `<QA>/knowledge`
   itself.
 - **Session tools.** Check this session's tool list for `mcp__playwright*__*` and any
   ticket-related MCP server names (see step 3b) — this only reads what's already loaded,
@@ -141,10 +148,11 @@ QA_PASSWORD }`:
 ```
 
 If either is missing: write the config anyway with `setup.smoke: pending`, print the
-exact copy-paste export lines (shell profile, or `<root>/.envrc` for direnv — already
-globally ignored), and stop `[env-var-missing]`: "restart Claude Code, then re-run
-`/herow-dev:qa-setup` — it resumes at the smoke walk." A var set inside this session's
-Bash tool never reaches Claude Code itself or the MCP server, so this is not optional.
+exact copy-paste export lines (shell profile, or `<checkout-root>/.envrc` for direnv —
+already globally ignored), and stop `[env-var-missing]`: "restart Claude Code, then
+re-run `/herow-dev:qa-setup` — it resumes at the smoke walk." A var set inside this
+session's Bash tool never reaches Claude Code itself or the MCP server, so this is not
+optional.
 
 ## 3b. Ticket sources
 
@@ -153,8 +161,8 @@ detected state. Built-in presets: **Jira** (via an Atlassian-style MCP server), 
 (via the `brain` MCP), **GitHub** (via the `gh` CLI), and **free text** (always
 available). Any other connected MCP server is offered too, via the generic adapter below.
 
-Run detection from `<root>` (project-scoped MCP config is cwd-sensitive) in this order,
-per candidate:
+Run detection from `<CHECKOUT_ROOT>` (project-scoped MCP config is cwd-sensitive) in this
+order, per candidate:
 1. **Connected now** — this session's tool list already exposes `mcp__<server>__*`
    (including deferred tool names).
 2. **Configured, not connected** — `claude mcp list` shows it disabled or failing → fix:
@@ -188,12 +196,12 @@ no-argument `qa-run` runs and for a bare number under the Jira preset.
 
 ## 4. Write the config
 
-Write `<root>/.qa/config.yml` from the template in `reference.md`, `schema_version: 1`,
-`setup.smoke: pending`. `mkdir -p <root>/.qa/reports`.
+Write `<QA>/config.yml` from the template in `reference.md`, `schema_version: 1`,
+`setup.smoke: pending`. `mkdir -p "<QA>/reports"`.
 
 ## 5. Knowledge — seed or adopt
 
-Decide from the current state of `<root>/.qa/knowledge`:
+Decide from the current state of `<QA>/knowledge`:
 
 | State | Action |
 |---|---|
@@ -201,8 +209,8 @@ Decide from the current state of `<root>/.qa/knowledge`:
 | Empty directory | Seed all four files. |
 | Dangling symlink | Report the missing target; ask: re-point to a detected store, or seed fresh. |
 | Symlink to a store **other than** this run's pick | Ask before re-pointing. |
-| Absent, and no candidate stores were detected | Create `.qa/knowledge/` and seed `navigation.md`, `quirks.md`, `actions.md`, `probes.md` — see *Knowledge seeds* in `reference.md`. |
-| Absent, and ≥1 candidate store was detected (`.qa/knowledge` itself is never a candidate) | Two questions, in order: **(1)** which store to adopt, or seed fresh; **(2)** confirm moving the picked store into `.qa/knowledge` with a relative symlink left at the old path (exact paths shown) — this is the only adoption path (see below). |
+| Absent, and no candidate stores were detected | Create `<QA>/knowledge/` and seed `navigation.md`, `quirks.md`, `actions.md`, `probes.md` — see *Knowledge seeds* in `reference.md`. |
+| Absent, and ≥1 candidate store was detected (`<QA>/knowledge` itself is never a candidate) | Two questions, in order: **(1)** which store to adopt, or seed fresh; **(2)** confirm moving the picked store into `<QA>/knowledge` with an absolute symlink left at the old path (exact paths shown) — this is the only adoption path (see below). |
 
 **A store whose files are git-tracked is never moved.** Check with `git -C <store-repo>
 ls-files` inside the store's own repo; if non-empty, explain that moving it would delete
@@ -210,38 +218,27 @@ shared, committed files from the working tree and leave teammates with a danglin
 offer **seed fresh** instead, never the move.
 
 **Safe move**, for an untracked store only:
-1. Same-filesystem check: `stat -f %d "$a" 2>/dev/null || stat -c %d "$a"` must equal for
-   the store and `.qa/knowledge`'s parent. Different filesystems → refuse, offer seed
-   fresh (a cross-filesystem `mv` is a non-atomic copy+delete that can leave a half-moved
-   store on failure).
-2. Record the pre-move file count and total byte size.
-3. `mv <store> <root>/.qa/knowledge` (same filesystem, atomic rename).
-4. Recount files and bytes at the new location; **on any mismatch, rename back
+1. Record the pre-move file count and total byte size.
+2. `mv <store> "<QA>/knowledge"` — `<QA>` is under `$HEROW_HOME`, very likely a different
+   filesystem from the project repo, so this may be a non-atomic copy+delete rather than a
+   rename; that's fine, because the next step verifies it regardless.
+3. Recount files and bytes at the new location; **on any mismatch, rename back
    immediately and stop** `[store-move-refused]`.
-5. Create the reverse symlink at the old path pointing at the new location, so anything
-   still reading the old path (another skill, another tool) keeps working.
-6. Print the exact undo command in the setup report: `rm <old-path symlink>; mv
-   <root>/.qa/knowledge <old-path>`.
+4. Create the reverse symlink at the old path pointing at the new location with an
+   **absolute** target (`<QA>/knowledge` is outside the repo, so a relative target would be
+   wrong the instant the link is read from anywhere else), so anything still reading the
+   old path (another skill, another tool) keeps working.
+5. Print the exact undo command in the setup report: `rm <old-path symlink>; mv "<QA>/knowledge" <old-path>`.
 
 After a successful adoption, seed **only** the files the adopted store is missing (e.g.
 it has `navigation.md`/`quirks.md`/`actions.md` but no `probes.md`) — never touch files
 the store already has.
 
-**Smoke-walk recipe merge (adopted stores).** When the smoke walk in step 7 would write a
+**Smoke-walk recipe merge (adopted stores).** When the smoke walk in step 6 would write a
 navigation entry, and the adopted store already holds one for the same target and `Env:`,
 update that entry's `Last verified` in place instead of appending a near-duplicate.
 
-## 6. Ignore re-check
-
-After writing the config (and moving any store), re-run:
-
-```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/qa-setup/scripts/ensure-ignored.sh" --check "<root>"
-```
-
-Non-zero → stop and report exactly which code came back (same codes as step 1b).
-
-## 7. Smoke walk
+## 6. Smoke walk
 
 1. **Preflight.** Curl every `services[]` entry. Any down → keep the config as written,
    leave `setup.smoke: pending`, print each service's `start_hint`, and stop: "start them,
@@ -275,21 +272,20 @@ Non-zero → stop and report exactly which code came back (same codes as step 1b
    script or its `playwright` entry is missing), and stop: "restart Claude Code, then
    re-run `/herow-dev:qa-setup` — it resumes here, now headed."
 
-## 8. Report
+## 7. Report
 
-Write `<root>/.qa/reports/setup-<YYYY-MM-DD-HHMM>.md` (so two setup runs can be diffed
+Write `<QA>/reports/setup-<YYYY-MM-DD-HHMM>.md` (so two setup runs can be diffed
 for detection drift later) and print a summary with:
-- root, the config path;
+- `<QA>` (the store's absolute path) and `<CHECKOUT_ROOT>`;
 - detected values next to what was actually confirmed (services, repos + gates, freeze,
   ticket sources — including anything saved `pending` and its fix);
 - knowledge state (seeded / moved+linked with the undo command / linked as-is);
-- the exact ignore line and file from step 1b;
 - the smoke-walk result;
 - `started_at`, `verified_at`, `elapsed`, `questions_asked`, and `resumes` (each
   smoke-pending re-run and why) — local-only measurements, not sent anywhere;
-- the **next command**: if the current branch of the root, or of any `repos[]` entry,
-  matches a **verified** source's `id_pattern`, print `next: /herow-dev:qa-run <matched
-  id>` filled in (e.g. `next: /herow-dev:qa-run PROJ-123`); otherwise
+- the **next command**: if the current branch of `<CHECKOUT_ROOT>`, or of any `repos[]`
+  entry, matches a **verified** source's `id_pattern`, print `next: /herow-dev:qa-run
+  <matched id>` filled in (e.g. `next: /herow-dev:qa-run PROJ-123`); otherwise
   `next: /herow-dev:qa-run <ticket>`.
 
 ## Stop messages

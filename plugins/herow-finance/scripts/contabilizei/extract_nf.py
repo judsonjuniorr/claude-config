@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
-"""Extract NF (nota fiscal) data from PDF or XML and save JSON + TXT to ~/finance/contabilizei/extracted/."""
+"""Extract NF (nota fiscal) data from PDF or XML and save JSON + TXT under CONTABILIZEI_HOME/extracted/."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import sys
 import xml.etree.ElementTree as ET
 
-EXTRACTED_DIR = pathlib.Path.home() / "finance" / "contabilizei" / "extracted"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "finance"))
+from _storage import CONTABILIZEI as _DEFAULT_CONTABILIZEI_HOME  # noqa: E402
+
+CONTABILIZEI_HOME = pathlib.Path(
+    os.environ.get("CONTABILIZEI_HOME") or _DEFAULT_CONTABILIZEI_HOME
+)
+EXTRACTED_DIR = CONTABILIZEI_HOME / "extracted"
 
 
 # --- helpers ------------------------------------------------------------------
@@ -86,9 +93,8 @@ def dedup_key(
 
 
 def _ensure_dirs() -> None:
-    base = pathlib.Path.home() / "finance" / "contabilizei"
-    base.mkdir(parents=True, exist_ok=True)
-    base.chmod(0o700)
+    CONTABILIZEI_HOME.mkdir(parents=True, exist_ok=True)
+    CONTABILIZEI_HOME.chmod(0o700)
     EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
 
 

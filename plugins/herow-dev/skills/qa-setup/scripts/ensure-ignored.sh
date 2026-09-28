@@ -2,9 +2,10 @@
 # ensure-ignored.sh --check|--apply <root> [--pattern P]
 #
 # Verifies (and optionally establishes) that git's GLOBAL excludesfile covers a
-# pattern for a project root. Used by qa-setup (pattern ".qa/") and qa-run
-# (--check only, same plugin); blueprint.md reuses it with --pattern
-# ".claude/plans/". See plugins/herow-dev/skills/qa-setup/reference.md.
+# pattern for a project root. Called only by qa-run's freeze procedure now (pattern
+# ".qa/", target <freeze.repo> abs path, --apply) — the sole remaining in-repo writer,
+# since config.yml/knowledge/reports moved to the herow project store. See
+# plugins/herow-dev/skills/qa-run/reference.md's Freeze procedure.
 #
 # Exit codes:
 #   0  covered and untracked

@@ -21,9 +21,10 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _paths import migrate_legacy  # noqa: E402
+from _paths import METRICS, RESEARCH, auto_migrate  # noqa: E402
+from _storage import MEM, PLANS  # noqa: E402
 
-migrate_legacy()
+auto_migrate()
 
 
 def _plugin_root() -> pathlib.Path:
@@ -563,9 +564,8 @@ _SHARED_SCRIPTS = PLUGIN_ROOT / "scripts" / "finance"
 
 
 def load_memory_block() -> str:
-    """Read ~/finance/memory.md and return a rendered block for injection."""
-    mem_path = pathlib.Path.home() / "finance" / "memory.md"
-    if not mem_path.exists():
+    """Read the shared memory.md and return a rendered block for injection."""
+    if not MEM.exists():
         return ""
     import subprocess
 
@@ -590,7 +590,7 @@ def load_memory_block() -> str:
 
 
 def load_profile_block() -> str:
-    """Read ~/finance/profile.md and return a rendered block for injection.
+    """Read ~/.herow/finance/profile.md and return a rendered block for injection.
 
     Always renders something: if the profile does not exist, shows the block with
     all fields marked (no data) — this signals the subagent to emit [QUESTION]
@@ -618,9 +618,8 @@ def load_profile_block() -> str:
 
 
 def load_plans_block() -> str:
-    """Read ~/finance/plans.md and return a rendered block for injection."""
-    plans_path = pathlib.Path.home() / "finance" / "plans.md"
-    if not plans_path.exists():
+    """Read the shared plans.md and return a rendered block for injection."""
+    if not PLANS.exists():
         return ""
     import subprocess
 
@@ -746,14 +745,14 @@ def load_research_block(research_dir: pathlib.Path | None) -> str:
 
 def find_cached_research(category: str, max_age_days: int = 14) -> pathlib.Path | None:
     """Search for the most recent `<category>.md` file across all historical
-    research dirs (`~/finance/organizze/research/*/`). Returns path if mtime <=
+    research dirs (`RESEARCH/*/`). Returns path if mtime <=
     max_age_days, otherwise None.
 
     Comparison is by literal name — organizze.md writes each report with the
     exact category name (`Alimentação.md`, `Transporte.md`), so a hit here
     means fresh research for that specific category.
     """
-    base = pathlib.Path.home() / "finance" / "organizze" / "research"
+    base = RESEARCH
     if not base.exists():
         return None
     cutoff = dt.datetime.now().timestamp() - max_age_days * 86400
@@ -855,7 +854,7 @@ def render_prompt(
     system = extract_system_prompt(framework_md)
 
     # Load metrics.json for pre-computed injection
-    metrics_path = pathlib.Path.home() / "finance" / "organizze" / "metrics.json"
+    metrics_path = METRICS
     metrics_loaded = False
     metrics_block = ""
     if metrics_path.exists():

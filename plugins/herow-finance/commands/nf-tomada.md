@@ -22,7 +22,7 @@ bash "$SCRIPT_DIR/setup.sh" >&2
 python3 "$SCRIPT_DIR/extract_nf.py" "<path>"
 ```
 
-Read the returned JSON. If any required field is `null` (`cnpj`, `razao_social`, `data_emissao`, `numero`, `valor`), read the corresponding `.txt` at `~/finance/contabilizei/extracted/<base>.txt` and fill in the fields using the raw text.
+Read the returned JSON. If any required field is `null` (`cnpj`, `razao_social`, `data_emissao`, `numero`, `valor`), read the corresponding `.txt` at `~/.herow/finance/contabilizei/extracted/<base>.txt` and fill in the fields using the raw text.
 
 **Hard-stop:** if, after reading the `.txt`, any required field is still `null`, stop with a clear error:
 
@@ -37,7 +37,7 @@ When showing the extracted data in the confirmation (step 6), **highlight** fiel
 ## Step 1 — Credentials (first time)
 
 ```bash
-CONTABILIZEI_HOME="$HOME/finance/contabilizei"
+CONTABILIZEI_HOME="${CONTABILIZEI_HOME:-$HOME/.herow/finance/contabilizei}"
 CONFIG="$CONTABILIZEI_HOME/.config"
 ```
 

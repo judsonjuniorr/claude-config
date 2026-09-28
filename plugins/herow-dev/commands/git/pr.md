@@ -76,7 +76,7 @@ Categorize changed files: source, tests, docs, config, migrations.
 ### Planning Artifacts
 
 Check for related artifacts:
-- `.claude/prds/`, `.claude/plans/`, `.claude/reviews/`
+- `.claude/prds/`, `.claude/reviews/`
 - `.claude/PRPs/reports/`, `.claude/PRPs/plans/`, `.claude/PRPs/prds/`
 
 Reference these in the PR body if they exist.

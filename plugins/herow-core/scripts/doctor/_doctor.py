@@ -131,7 +131,8 @@ def backup(path: pathlib.Path) -> pathlib.Path | None:
 
 def write_json(path: pathlib.Path, obj) -> None:
     """Atomically write `obj` as 2-space-indented JSON (tmp file + os.replace)."""
-    path = pathlib.Path(path)
+    # Write through symlinks (dotfiles-managed settings.json) instead of replacing the link.
+    path = pathlib.Path(os.path.realpath(path))
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(obj, indent=2) + "\n")
     os.replace(tmp, path)

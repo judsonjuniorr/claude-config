@@ -1,10 +1,10 @@
 """Path constants for Organizze provider, with legacy migration.
 
-All Organizze data now lives under ~/finance/organizze/. The shared
-~/finance/{memory,plans}.md are provider-agnostic and live one level up.
+All Organizze data now lives under HEROW_HOME/finance/organizze/. The shared
+BASE/{memory,plans}.md are provider-agnostic and live one level up.
 
 This module is the single source of truth for organizze-scripts/*.py paths.
-It also re-exports migrate_legacy() from the shared scripts/_storage module,
+It also re-exports auto_migrate() from the shared scripts/_storage module,
 so any organizze script's first run auto-migrates the pre-refactor layout.
 """
 
@@ -19,9 +19,14 @@ _SHARED = pathlib.Path(__file__).resolve().parent.parent / "finance"
 if str(_SHARED) not in sys.path:
     sys.path.insert(0, str(_SHARED))
 
-from _storage import BASE as FINANCE_BASE, migrate_legacy  # noqa: E402
+from _storage import (  # noqa: E402
+    BASE as FINANCE_BASE,
+    LOGS as FINANCE_LOGS,
+    auto_migrate,
+    migrate_legacy,
+)
 
-# Allow override via env for tests, default to ~/finance/organizze/
+# Allow override via env for tests, default to HEROW_HOME/finance/organizze/
 HOME = pathlib.Path(os.environ.get("ORGANIZZE_HOME", str(FINANCE_BASE / "organizze")))
 AUTH = HOME / ".auth"
 CONFIG = HOME / ".config"
@@ -30,6 +35,10 @@ SNAPSHOTS = HOME / "snapshots"
 REPORTS = HOME / "reports"
 BUDGET_SUGGESTIONS = HOME / "budget-suggestions"
 CACHE = HOME / "cache"
+RESEARCH = HOME / "research"
+METRICS = HOME / "metrics.json"
+ID_MAP = HOME / ".id-map.json"
+LOGS = FINANCE_LOGS
 
 
 def chromium_executable_path() -> str | None:
@@ -69,6 +78,11 @@ __all__ = [
     "REPORTS",
     "BUDGET_SUGGESTIONS",
     "CACHE",
+    "RESEARCH",
+    "METRICS",
+    "ID_MAP",
+    "LOGS",
     "chromium_executable_path",
+    "auto_migrate",
     "migrate_legacy",
 ]

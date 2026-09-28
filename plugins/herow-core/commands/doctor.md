@@ -54,7 +54,7 @@ Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/doctor/audit.py"`. It prints `{"summ
 The checks:
 - **security** — `permissions_deny` (settings.json must deny reads of `.env`/credentials/secrets/`mcp-stash.json`), `plaintext_secrets` (mcp-stash.json must use `${VAR}` refs, not literal tokens).
 - **tokens** — `playwright_headed_active` + `grafana_active` (heavy MCP servers that should be stashed on-demand).
-- **hygiene** — `gstack_bak`, `claude_md_backups`, `language_rules_paths`.
+- **hygiene** — `gstack_bak`, `claude_md_backups`, `language_rules_paths`, `legacy_herow_dirs` (leftover `~/finance`/`~/.claude/seo`/`~/.claude/herow-data`), `herow_permissions` (settings.json missing prompt-free `~/.herow` access).
 
 ## Step 4 — Present findings (grouped)
 

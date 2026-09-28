@@ -66,7 +66,9 @@ ticket:                       # per-project ticket sources — only what this pr
     #   id_pattern: "[A-Z]+-\\d+"
 repos:                          # change surface, finding tags, per-repo gates
   - name: app
-    path: .                     # relative to <root>
+    path: .                     # relative to `herow-project.sh checkout-root`: the workspace
+                                 # root for a multi-repo workspace, else the checkout you're
+                                 # in (so a worktree run diffs the worktree)
     bug_tag: app-bug
     remote: owner/name          # recorded from `git remote get-url origin`
     base: null                  # optional: overrides change-surface.sh's own base resolution
@@ -81,8 +83,8 @@ gotchas: []                      # e.g. "e2e/ runs on mocks — never reuse its 
 
 ## Detection catalogue (prose, model-driven)
 
-No `detect.sh` in this version — read these files directly, from `<root>` and every child
-repo in a workspace:
+No `detect.sh` in this version — read these files directly, from `<CHECKOUT_ROOT>` and
+every child repo in a workspace:
 
 - `package.json` — `scripts.dev`/`scripts.start` (look for `--port`/`PORT=`), and
   `type-check`/`typecheck`/`lint`/`test` scripts.
@@ -94,7 +96,7 @@ repo in a workspace:
   eligibility, one repo at most is proposed as `freeze.repo`.
 - `git remote get-url origin` per repo.
 - Candidate knowledge stores: `.claude/knowledge/*/navigation.md`,
-  `.claude/skills/*/knowledge/navigation.md` (resolve symlinks; `.qa/knowledge` itself is
+  `.claude/skills/*/knowledge/navigation.md` (resolve symlinks; `<QA>/knowledge` itself is
   never a candidate).
 - This session's own tool list, for `mcp__atlassian__*`, `mcp__brain__*`, any other
   `mcp__<server>__*`, and `mcp__playwright*__*` — read-only, no probing.
@@ -197,16 +199,19 @@ command or config key>.` plus a resume hint when one applies.
 | Code | Problem | Fix |
 |---|---|---|
 | `schema-newer` | `config.yml`'s `schema_version` is newer than this skill | Update the plugin, or edit the config by hand |
-| `ignore-not-covered` | `ensure-ignored.sh --apply` still isn't covered after running | Follow the printed message: add the pattern to the printed excludesfile by hand, or remove the repo-level negation it names |
-| `memory-tracked` | `.qa/` (or the adopted store) has git-tracked files | Run the printed `git rm -r --cached .qa` (or the store's path) |
-| `env-error` | git missing, `HOME` unset, or the excludesfile is unwritable | Fix the environment cause named in the script's output |
+| `store-error` | `herow-project.sh` itself failed (git missing, `HOME` unset, the store path unwritable) | Print its stderr diagnostic verbatim; fix the named cause |
 | `env-var-missing` | a `credentials_env` var isn't set | Export it (shell profile or `.envrc`), restart Claude Code, re-run — resumes at the smoke walk |
 | `browser-tools-missing` | the chosen Playwright MCP server's tools aren't in this session | Restore/add that server (see "Headed fallback prerequisites"), restart |
 | `headless-blocked` | 2FA/CAPTCHA/SSO consent blocked headless mid-walk | Restart headed (see above), re-run — resumes at the smoke walk |
 | `services-down` | a `services[]` preflight curl failed | Start the service with its printed `start_hint`, re-run |
 | `smoke-failed` | credentials rejected, or the entry-target landmark was never found | Edit the offending config key and retry, or stop and resume later |
-| `store-move-refused` | cross-filesystem move, or a post-move count/byte mismatch | Nothing lost — the store was renamed back; pick seed fresh instead |
+| `store-move-refused` | a post-move file count/byte mismatch (cross-filesystem moves are allowed and expected — `<QA>` is usually a different filesystem from the repo — this is only the verification failing) | Nothing lost — the store was renamed back; pick seed fresh instead |
 | `source-unavailable` | a selected ticket source's MCP server isn't connected this session | Enable via `/mcp`, `mcp-restore.sh <name>` + restart, or re-run qa-setup |
 | `gh-auth` | `gh auth status` fails for the GitHub ticket source | `gh auth login`, then re-run |
+
+`ignore-not-covered`, `memory-tracked`, and `env-error` (the `ensure-ignored.sh` codes) no
+longer belong to this skill — qa-setup never writes anything in-repo any more. They now
+surface only from `qa-run`'s freeze procedure (Phase 5c), the one remaining in-repo
+writer (`<freeze.repo>/.qa/frozen/`) — see `qa-run/reference.md`'s stop-code table.
 
 Dogfooding should trigger each reachable code at least once.

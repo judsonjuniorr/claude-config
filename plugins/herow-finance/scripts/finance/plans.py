@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Financial goals (savings/economy plans) — provider-agnostic.
 
-Same pattern as memory.py: readable markdown in ~/finance/plans.md,
+Same pattern as memory.py: readable markdown in ~/.herow/finance/plans.md,
 manually editable. Each entry has inline metadata in the header.
 
 Header format:
@@ -24,7 +24,7 @@ import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _storage import PLANS, migrate_legacy  # noqa: E402
+from _storage import PLANS, auto_migrate  # noqa: E402
 
 HEADER_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})(.*)$")
 META_RE = re.compile(r"(\w+)=([^·\]]+?)(?=\s*[·\]]|$)")
@@ -250,7 +250,7 @@ def cmd_prune(args) -> int:
 
 
 def main() -> int:
-    migrate_legacy()
+    auto_migrate()
 
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)

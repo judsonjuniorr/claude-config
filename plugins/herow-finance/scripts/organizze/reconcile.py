@@ -4,7 +4,7 @@
 The /accounts API does not return the current balance. pull.py sums paid
 transactions (long window) to estimate — but the initial balance configured by
 the user when creating the account does not appear in /transactions. This script
-captures the difference as an offset in ~/finance/organizze/balances.json, which
+captures the difference as an offset in ~/.herow/finance/organizze/balances.json, which
 pull.py adds on the next run.
 
 Mode 1 — account_id=value_in_cents pairs via CLI:
@@ -25,9 +25,9 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _paths import HOME, BALANCES, migrate_legacy  # noqa: E402
+from _paths import HOME, BALANCES, auto_migrate  # noqa: E402
 
-migrate_legacy()
+auto_migrate()
 
 
 def cents_to_brl(c: int) -> str:
