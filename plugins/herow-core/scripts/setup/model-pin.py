@@ -29,15 +29,15 @@ SETTINGS = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
 MODELS_API_LIMIT = 100
 MODELS_API_TIMEOUT_S = 5
 
-# Static fallback — 3 most recent per family as of 2026-09-23.
+# Static fallback — 3 most recent per family as of 2026-09-28.
 # Updated here whenever new models ship; the live --list path stays current.
 STATIC_FALLBACK = [
     ("opus", "claude-opus-5-5", "Opus 5.5"),
     ("opus", "claude-opus-5", "Opus 5"),
     ("opus", "claude-opus-4-8", "Opus 4.8"),
+    ("sonnet", "claude-sonnet-5-5", "Sonnet 5.5"),
     ("sonnet", "claude-sonnet-5", "Sonnet 5"),
     ("sonnet", "claude-sonnet-4-6", "Sonnet 4.6"),
-    ("sonnet", "claude-sonnet-4-5", "Sonnet 4.5"),
 ]
 
 # Minimum Claude Code version required to select each model, per the
@@ -46,6 +46,7 @@ STATIC_FALLBACK = [
 MODEL_MIN_VERSION = {
     "claude-opus-5-5": (2, 1, 280),
     "claude-opus-5": (2, 1, 219),
+    "claude-sonnet-5-5": (2, 1, 284),
     "claude-sonnet-5": (2, 1, 197),
     "claude-opus-4-8": (2, 1, 154),
 }
@@ -58,6 +59,7 @@ MODEL_VERSION_FALLBACK = {
     "claude-opus-5-5": "claude-opus-5",
     "claude-opus-5": "claude-opus-4-8",
     "claude-opus-4-8": "claude-opus-4-7",
+    "claude-sonnet-5-5": "claude-sonnet-5",
     "claude-sonnet-5": "claude-sonnet-4-6",
 }
 

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1.0] - 2026-09-28
+
+### Changed
+- **`/herow-core:doctor` pins Sonnet 5.5.** `token-guard.sh` now pins `claude-sonnet-5-5`, and
+  `model-pin.py` gates it at Claude Code ≥ v2.1.284, stepping down Sonnet 5.5 → 5 → 4.6 on
+  older installs. The static `--list` fallback now shows Sonnet 5.5 / 5 / 4.6.
+
 ## [0.12.0.0] - 2026-09-27
 
 ### Added
