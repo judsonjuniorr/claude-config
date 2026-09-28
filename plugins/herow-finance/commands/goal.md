@@ -9,7 +9,7 @@ effort: low
 
 > **GLOBAL RULE — questions to the user:** every question requiring a user response must be asked via the `AskUserQuestion` tool, with 2-4 structured options (the free-text "Other" field is automatic). **Never** ask questions inline in text.
 
-Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py`. Data lives in `~/finance/plans.md` and is consumed by `/herow-finance:organizze` (and future providers) automatically.
+Conversational wrapper over `${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py`. Data lives in `~/.herow/finance/plans.md` and is consumed by `/herow-finance:organizze` (and future providers) automatically.
 
 Absolute path of the script:
 `${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py`
@@ -51,7 +51,7 @@ When the user invokes `/herow-finance:goal`, **classify `$ARGUMENTS`** and follo
      [--priority negociavel|inegociavel]
    ```
 
-3. Confirm in 1-2 lines: what was registered and where (`~/finance/plans.md`). Say: "Next `/herow-finance:organizze` will take this into account."
+3. Confirm in 1-2 lines: what was registered and where (`~/.herow/finance/plans.md`). Say: "Next `/herow-finance:organizze` will take this into account."
 
 ## Mode 3 — Direct sub-commands
 
@@ -73,5 +73,5 @@ Show the script output to the user.
 ## Rules
 
 - **Do not call `/herow-finance:organizze`** automatically. This command is CRUD; analysis is separate.
-- The script runs legacy migration automatically (`~/finance-organizze/` → `~/finance/`) on the first run. No manual action needed.
-- Storage is hand-editable (`~/finance/plans.md`).
+- The script runs legacy migration automatically (`~/finance-organizze/` → `~/.herow/finance/`) on the first run. No manual action needed.
+- Storage is hand-editable (`~/.herow/finance/plans.md`).

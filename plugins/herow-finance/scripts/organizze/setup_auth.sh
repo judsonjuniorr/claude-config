@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # First-run onboarding: reads email + API token (+ web password) and persists
-# credentials. API token → ~/finance/organizze/.auth; web password → macOS Keychain.
+# credentials. API token → ~/.herow/finance/organizze/.auth; web password → macOS Keychain.
 # Usage:
 #   echo -e "$EMAIL\n$TOKEN\n$SENHA" | bash setup_auth.sh
 # Or interactively if you have a TTY.

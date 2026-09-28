@@ -29,7 +29,7 @@ A general-purpose agent given raw financial data wanders: invents averages, igno
 
 - Claude Code with subagents support.
 - Caller supplies the full prompt (data + profile + memory + plans + task). The agent doesn't pull data itself.
-- **User profile** in `~/finance/profile.md` (managed via `/herow-finance:profile`) — without it, recommendations stay generic and the agent will emit `[QUESTION]` markers asking for the missing fields.
+- **User profile** in `~/.herow/finance/profile.md` (managed via `/herow-finance:profile`) — without it, recommendations stay generic and the agent will emit `[QUESTION]` markers asking for the missing fields.
 - **Pre-collected market research** — supplied by the caller. Without it the "Market alternatives" section reports `(data unavailable)`; the agent never searches on its own.
 
 ## Contract

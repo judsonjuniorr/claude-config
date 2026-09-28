@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Config helper for ~/finance/organizze/.config (KEY=VALUE).
+"""Config helper for ~/.herow/finance/organizze/.config (KEY=VALUE).
 
 Known keys:
   CASHFLOW_THRESHOLD_CENTS=0
@@ -21,9 +21,9 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _paths import HOME, CONFIG as CONF, migrate_legacy  # noqa: E402
+from _paths import HOME, CONFIG as CONF, auto_migrate  # noqa: E402
 
-migrate_legacy()
+auto_migrate()
 
 
 def load() -> dict[str, str]:

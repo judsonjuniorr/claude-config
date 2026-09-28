@@ -6,7 +6,7 @@ set -u
 
 REPO="judsonjuniorr/claude-config"
 
-DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/herow-data}"
+DATA_DIR="${HEROW_HOME:-$HOME/.herow}/core"
 mkdir -p "$DATA_DIR" 2>/dev/null || exit 0
 STAMP="$DATA_DIR/last-update-check"
 

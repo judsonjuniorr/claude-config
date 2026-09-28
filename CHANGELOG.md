@@ -2,6 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0.0] - 2026-09-27
+
+### Added
+- **`/herow-dev:qa-setup` + `/herow-dev:qa-run`.** Generalizes a proven
+  project-specific `qa-ticket` live-app QA method into two project-agnostic herow-dev skills. `qa-setup`
+  resolves the project root, detects services/repos/gates/knowledge stores from the
+  codebase, writes `config.yml` to the per-project herow store (see Changed), seeds or
+  safely adopts a knowledge store, and proves the whole config with a live Playwright
+  smoke walk. `qa-run` QAs a
+  ticket — from a per-project Jira/Brain/GitHub/generic-MCP source, or free text — against
+  the live app with interaction-proof discipline: capped regression + bug-hypothesis probe
+  passes (`change-surface.sh`), a staleness check on stored navigation recipes, an
+  incremental report with a draft ticket comment, and an opt-in freeze of a passing walk
+  into a proven, mutation-tested Playwright spec — kept in-repo at `.qa/frozen/` and
+  covered by git's global excludesfile (`ensure-ignored.sh`, handling the
+  tilde-literal/include/system-scope/symlink edge cases). Config validation, opt-in credential
+  auto-fill (never snapshotted), and a stop-code table cover the failure paths. Both
+  scripts ship bash 3.2/5-portable test suites (`test-qa-ensure-ignored.sh`,
+  `test-qa-change-surface.sh`), wired into CI alongside a guard against project-specific
+  literals leaking into the skill files.
+- `plugins/herow-dev/commands/blueprint.md`'s session marker reads
+  `CLAUDE_CODE_SESSION_ID` (falling back to the empty `CLAUDE_SESSION_ID`) instead of
+  writing a bare `.active-` file when no session id is available.
+
+### Changed
+- **All herow state now lives under one per-user store, `~/.herow/`** (override
+  `HEROW_HOME`), split by context: `finance/` (memory, plans, profile, `logs/`,
+  `organizze/`, `contabilizei/`), `core/` (update-check stamp, was
+  `~/.claude/herow-data/`), `seo/` (`cost-policy.md`, was `~/.claude/seo/`), and
+  `projects/<owner-repo>-<hash6>/{plans,qa}` for per-repo blueprint plans and QA
+  config/knowledge/reports (were in-repo `.claude/plans/` and `.qa/`).
+- **Automatic one-shot migration.** herow-finance merges all of `~/finance/` (and the
+  older `~/finance-organizze/`) into `~/.herow/finance/` child by child — never
+  overwriting, warning on conflicts — then leaves `~/finance` as a symlink so outside
+  skills keep working. It is skipped whenever `HEROW_HOME`, `ORGANIZZE_HOME` or
+  `CONTABILIZEI_HOME` is set. The duplicate shell migration is gone, and every finance
+  script now resolves paths through `_storage.py`/`_paths.py` (`analyze`, `compute`,
+  `audit_log`, `sanitize` and `apply_scrape` used to hardcode `~/finance`).
+  `nf-tomada` no longer clobbers a `CONTABILIZEI_HOME` override.
+- **New `herow-dev/scripts/herow-project.sh`** resolves the project store. Worktrees and
+  subdirectories map to the main checkout, submodules get their own id, a moved repo's
+  store is renamed, and the in-repo `.claude/plans/` and `.qa/` migrate on first
+  `--ensure` (tracked files are left in place with a warning). `blueprint`, `execute`,
+  `qa-setup` and `qa-run` use absolute store paths, so `execute` re-reads the plan
+  correctly from inside its worktree. The blueprint session marker moved to
+  `projects/.active/<session>`, and `blueprint-track.sh` validates its real path
+  against the store.
+- `destructive-guard.sh`: the Write-overwrite exemption moved from in-repo
+  `.claude/plans/*` to the realpath-normalized `$HEROW_HOME/projects/`.
+  `doc-file-warning.sh` drops its now-dead plans exemption.
+- `/herow-core:doctor` gains two hygiene checks: `legacy_herow_dirs` (leftover
+  `~/finance`, `~/.claude/seo`, `~/.claude/herow-data`) and `herow_permissions`, which
+  offers `permissions.additionalDirectories: ["~/.herow"]` plus `Edit(~/.herow/**)` so
+  the store is reachable without prompts.
+- CI runs the finance and doctor pytest suites and `test-herow-project.sh`.
+
 ## [0.11.4.0] - 2026-09-23
 
 ### Changed

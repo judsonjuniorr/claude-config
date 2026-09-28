@@ -6,6 +6,11 @@ Checks:
   claude_md_backups   — ~/.claude/CLAUDE.md.bak.* and CLAUDE.md.pre-omega leftovers (WARN).
   language_rules_paths— ~/.claude/rules/language-rules-pointer.md lacks YAML frontmatter
                         with a paths: scope (WARN).
+  legacy_herow_dirs   — pre-~/.herow data left behind (~/finance real dir, ~/.claude/seo,
+                        ~/.claude/herow-data) (WARN, informational only — each owning
+                        plugin migrates its own data on next run).
+  herow_permissions   — settings.json lacks prompt-free access to ~/.herow
+                        (permissions.additionalDirectories + permissions.allow) (WARN).
 """
 
 from __future__ import annotations
@@ -21,9 +26,13 @@ from _doctor import (  # noqa: E402
     claude_home,
     emit,
     fix_cmd_for,
+    home,
+    load_json,
     rules_dir,
     run_main,
+    settings_path,
     skills_dir,
+    write_json,
 )
 
 
@@ -174,10 +183,113 @@ def apply_language_rules_paths() -> bool:
     return True
 
 
+# --- legacy_herow_dirs -------------------------------------------------------
+
+
+def _legacy_herow_dirs() -> list[pathlib.Path]:
+    candidates = [
+        home() / "finance",
+        claude_home() / "seo",
+        claude_home() / "herow-data",
+    ]
+    return [p for p in candidates if p.exists() and not p.is_symlink()]
+
+
+def check_legacy_herow_dirs() -> None:
+    found = _legacy_herow_dirs()
+    if not found:
+        emit("legacy_herow_dirs", "pass", "no legacy dirs left outside ~/.herow")
+        return
+    emit(
+        "legacy_herow_dirs",
+        "warn",
+        f"{len(found)} legacy dir(s) left outside ~/.herow: "
+        + ", ".join(str(p) for p in found),
+        diff="\n".join(
+            f"- {p}  # moves automatically next time its owning plugin runs"
+            for p in found
+        ),
+    )
+
+
+def apply_legacy_herow_dirs() -> bool:
+    return False  # informational only — each plugin owns its own one-shot migration
+
+
+# --- herow_permissions --------------------------------------------------------
+
+_HEROW_DIR_ENTRY = "~/.herow"
+_HEROW_ALLOW_ENTRY = "Edit(~/.herow/**)"
+
+
+def _herow_access(s: dict) -> tuple[bool, bool]:
+    perms = s.get("permissions")
+    perms = perms if isinstance(perms, dict) else {}
+    add_dirs = perms.get("additionalDirectories")
+    add_dirs = add_dirs if isinstance(add_dirs, list) else []
+    allow = perms.get("allow")
+    allow = allow if isinstance(allow, list) else []
+    return _HEROW_DIR_ENTRY in add_dirs, _HEROW_ALLOW_ENTRY in allow
+
+
+def check_herow_permissions() -> None:
+    s = load_json(settings_path())
+    if not isinstance(s, dict):
+        emit("herow_permissions", "pass", "settings.json missing/unreadable — skipping")
+        return
+    has_dir, has_allow = _herow_access(s)
+    if has_dir and has_allow:
+        emit(
+            "herow_permissions",
+            "pass",
+            "settings.json grants prompt-free ~/.herow access",
+        )
+        return
+    missing = []
+    if not has_dir:
+        missing.append(f'permissions.additionalDirectories += "{_HEROW_DIR_ENTRY}"')
+    if not has_allow:
+        missing.append(f'permissions.allow += "{_HEROW_ALLOW_ENTRY}"')
+    emit(
+        "herow_permissions",
+        "warn",
+        "settings.json is missing prompt-free access to ~/.herow",
+        diff="\n".join(f"+ {m}" for m in missing),
+        fix_cmd=fix_cmd_for(__file__, "herow_permissions"),
+    )
+
+
+def apply_herow_permissions() -> bool:
+    s = load_json(settings_path())
+    if not isinstance(s, dict):
+        return False  # missing/unparseable — never fabricate or clobber settings.json
+    perms = s.setdefault("permissions", {})
+    if not isinstance(perms, dict):
+        return False
+    has_dir, has_allow = _herow_access(s)
+    if has_dir and has_allow:
+        return False  # idempotent noop
+    add_dirs = perms.get("additionalDirectories")
+    add_dirs = list(add_dirs) if isinstance(add_dirs, list) else []
+    if _HEROW_DIR_ENTRY not in add_dirs:
+        add_dirs.append(_HEROW_DIR_ENTRY)
+    allow = perms.get("allow")
+    allow = list(allow) if isinstance(allow, list) else []
+    if _HEROW_ALLOW_ENTRY not in allow:
+        allow.append(_HEROW_ALLOW_ENTRY)
+    backup(settings_path())
+    perms["additionalDirectories"] = add_dirs
+    perms["allow"] = allow
+    write_json(settings_path(), s)
+    return True
+
+
 CHECKS = {
     "gstack_bak": (check_gstack_bak, apply_gstack_bak),
     "claude_md_backups": (check_claude_md_backups, apply_claude_md_backups),
     "language_rules_paths": (check_language_rules_paths, apply_language_rules_paths),
+    "legacy_herow_dirs": (check_legacy_herow_dirs, apply_legacy_herow_dirs),
+    "herow_permissions": (check_herow_permissions, apply_herow_permissions),
 }
 
 

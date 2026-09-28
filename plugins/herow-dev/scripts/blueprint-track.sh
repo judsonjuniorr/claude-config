@@ -2,14 +2,15 @@
 # Harness-driven persistence for /herow-dev:blueprint.
 # Fires on PreToolUse/PostToolUse for the Skill tool (registered in herow-dev/hooks/hooks.json).
 #
-# Layout: one directory per plan under .claude/plans/<slug>/ holding plan.md, state.json,
-# optional source.md, and an artifacts/ subdir for everything the plan's orchestration produces.
+# Layout: one directory per plan under $HEROW_HOME/projects/<id>/plans/<slug>/ holding
+# plan.md, state.json, optional source.md, and an artifacts/ subdir for everything the
+# plan's orchestration produces.
 #
 # Concurrency model (parallel sessions in the same repo are the norm):
 #   - The active plan is bound to the SESSION, not the repo: the marker file is
-#     .claude/plans/.active-<session_id>, and this hook only acts on the plan owned by
-#     the session_id in its OWN payload. A second session's Skill calls never land in
-#     another session's plan.
+#     $HEROW_HOME/projects/.active/<session_id>, holding the plan dir's absolute path, and
+#     this hook only acts on the plan owned by the session_id in its OWN payload. A second
+#     session's Skill calls never land in another session's plan.
 #   - state.json is written atomically (temp file + os.replace) so a crash or the hook
 #     timeout can never leave torn/half-written JSON that poisons every later run.
 #   - The mtime snapshot is scoped to the plan's own artifacts/ dir and keyed per
@@ -21,7 +22,6 @@ set -eu
 
 EVENT="${1:-post}"
 PAYLOAD="$(cat || true)"
-CWD="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # --- Resolve the session that owns this hook invocation, and the skill name. ---
 read_field() {
@@ -43,20 +43,35 @@ SID="$(read_field "d.get('session_id') or ''")"
 # or malformed payload can never smuggle a path separator into the marker path.
 case "$SID" in *[!A-Za-z0-9._-]*) exit 0 ;; esac
 
-MARKER="$CWD/.claude/plans/.active-$SID"
+HEROW_HOME="${HEROW_HOME:-$HOME/.herow}"
+if [ -d "$HEROW_HOME" ]; then
+  HEROW_HOME_REAL="$(cd "$HEROW_HOME" && pwd -P)" || exit 0
+else
+  HEROW_HOME_REAL="$HEROW_HOME"
+fi
+
+MARKER="$HEROW_HOME/projects/.active/$SID"
 [ -f "$MARKER" ] || exit 0                       # this session is not blueprinting — no-op
 # Tolerate the marker being removed concurrently (consolidation's rm) — a benign teardown
 # race must produce a clean no-op, not a set -e abort on the failed redirection.
-SLUG="$(tr -d '[:space:]' < "$MARKER" 2>/dev/null || true)"
-[ -n "$SLUG" ] || exit 0
-# The slug is model-generated (kebab-cased from the feature description) and crosses a trust
-# boundary here: it is used verbatim in a filesystem path. Reject anything outside a strict
-# charset and any leading dot ('.', '..', hidden dirs), or a traversal slug like '../../..'
-# would make this hook create dirs and write state OUTSIDE the repo.
-case "$SLUG" in *[!A-Za-z0-9._-]*|.*) exit 0 ;; esac
+PLAN_DIR_RAW="$(tr -d '[:space:]' < "$MARKER" 2>/dev/null || true)"
+[ -n "$PLAN_DIR_RAW" ] || exit 0
+[ -d "$PLAN_DIR_RAW" ] || exit 0
+# The marker holds an absolute plan-dir path and crosses a trust boundary here: resolve it
+# physically (cd -P), then require it to be EXACTLY $HEROW_HOME/projects/<id>/plans/<slug>
+# (no extra path segments, no '..') before this hook ever mkdirs or writes under it — a
+# traversal marker like '../../etc' must never make this hook write outside the store.
+PLAN_DIR="$(cd "$PLAN_DIR_RAW" && pwd -P)" || exit 0
 
-PLAN_DIR="$CWD/.claude/plans/$SLUG"
-[ -d "$PLAN_DIR" ] || exit 0
+D_PLANS="$(dirname "$PLAN_DIR")"                 # .../projects/<id>/plans
+[ "$(basename "$D_PLANS")" = "plans" ] || exit 0
+D_ID="$(dirname "$D_PLANS")"                     # .../projects/<id>
+D_PROJECTS="$(dirname "$D_ID")"                  # .../projects
+[ "$D_PROJECTS" = "$HEROW_HOME_REAL/projects" ] || exit 0
+ID="$(basename "$D_ID")"
+[ -n "$ID" ] && [ "$ID" != ".active" ] || exit 0
+SLUG="$(basename "$PLAN_DIR")"
+[ -n "$SLUG" ] || exit 0
 
 SKILL="$(read_field "(lambda ti: ti.get('skill') or ti.get('args') or '')(d.get('tool_input',{}))")"
 [ -n "$SKILL" ] || exit 0

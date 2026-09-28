@@ -5,13 +5,14 @@ Usage:
   sanitize.py --snapshot PATH --out PATH
 
 - Tokenizes account IDs: replaces account_id values with acct_<sha256[:8]> tokens.
-  Stores mapping in ~/finance/organizze/.id-map.json for auditability.
+  Stores mapping in ID_MAP (see _paths.py) for auditability.
 - Strips CPF/CNPJ patterns from description fields (replaces with [PII_REMOVED]).
 - Masks medical descriptions (keywords from enrichment_rules.yaml medical_keywords list)
   with [MEDICAL_EXPENSE].
 - Strips account names and card names (replaces with token).
 - Output: sanitized snapshot JSON (same schema, PII removed).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,9 +25,11 @@ import sys
 from typing import Optional
 
 SCRIPTS_DIR = pathlib.Path(__file__).parent
+sys.path.insert(0, str(SCRIPTS_DIR))
+from _paths import ID_MAP  # noqa: E402
 
-CPF_RE = re.compile(r'\d{3}\.\d{3}\.\d{3}-\d{2}')
-CNPJ_RE = re.compile(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}')
+CPF_RE = re.compile(r"\d{3}\.\d{3}\.\d{3}-\d{2}")
+CNPJ_RE = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
 
 
 def _load_yaml_simple(path: pathlib.Path) -> dict:
@@ -241,7 +244,7 @@ def main() -> int:
         print(f"err|snapshot-parse|{e}", file=sys.stderr)
         return 1
 
-    map_path = pathlib.Path.home() / "finance" / "organizze" / ".id-map.json"
+    map_path = ID_MAP
     id_map = _load_id_map(map_path)
 
     try:

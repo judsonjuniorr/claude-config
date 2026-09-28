@@ -23,7 +23,7 @@ Registers a **received NF** (nota fiscal, an incoming service invoice) from a lo
 - MCP `Gmail` configured and authenticated (`mcp__claude_ai_Gmail__*`).
 - Python 3 with `pdfplumber` (installed automatically by `setup.sh`).
 
-**Local data in `~/finance/contabilizei/`** — this directory is **never committed** to the repository. It contains:
+**Local data in `~/.herow/finance/contabilizei/`** — this directory is **never committed** to the repository. It contains:
 - `.config` — login email (mode `600`).
 - `extracted/` — JSONs and texts extracted from invoices (mode `600`), fiscal/PII data.
 

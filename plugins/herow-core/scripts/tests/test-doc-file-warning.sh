@@ -8,7 +8,7 @@ GUARD="$(cd "$(dirname "$0")/.." && pwd)/doc-file-warning.sh"
 
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/repo/.claude/plans/20260101-000000-demo"
+mkdir -p "$T/repo"
 cd "$T/repo"
 git init -q .
 
@@ -27,19 +27,18 @@ run 'NOTES-SUMMARY.md' | grep -q permissionDecision \
 [ -z "$(run 'README.md')" ] \
   && ok "README.md allowed silently" || fail "README.md prompted"
 
-# 3. Plan orchestration artifact -> silent (per-plan layout exemption)
-[ -z "$(run '.claude/plans/20260101-000000-demo/plan.md')" ] \
-  && ok "plan-dir write allowed silently" || fail "plan-dir write prompted"
+# 3. Plan artifact under the herow project store -> still prompts (no in-repo exemption
+#    left now that herow-dev writes plans under $HEROW_HOME, outside the repo entirely —
+#    an in-repo .claude/plans/*.md write is just an ordinary stray doc).
+mkdir -p .claude/plans/20260101-000000-demo
+run '.claude/plans/20260101-000000-demo/plan.md' | grep -q permissionDecision \
+  && ok "in-repo .claude/plans/*.md prompts (no exemption left)" || fail "in-repo plan write did not prompt"
 
-# 4. Traversal through the exemption -> still prompts (path is canonicalized first)
-run '.claude/plans/../../escape.md' | grep -q permissionDecision \
-  && ok "dot-dot traversal via plans/ still prompts" || fail "traversal bypassed the guard"
-
-# 5. Outside the repo -> silent
+# 4. Outside the repo -> silent (covers both /tmp and the herow store, e.g. ~/.herow)
 [ -z "$(run '/tmp/external-notes.md')" ] \
   && ok "outside-repo write allowed silently" || fail "outside-repo write prompted"
 
-# 6. Non-markdown -> silent
+# 5. Non-markdown -> silent
 [ -z "$(run 'script.sh')" ] \
   && ok "non-markdown ignored" || fail "non-markdown prompted"
 

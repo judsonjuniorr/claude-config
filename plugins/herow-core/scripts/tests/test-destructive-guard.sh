@@ -16,9 +16,15 @@ GUARD="$(cd "$(dirname "$0")/.." && pwd)/destructive-guard.sh"
 # $HOME is not allowlisted on either platform.
 T="$(mktemp -d "${HOME}/.destructive-guard-test.XXXXXXXX")"
 trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/repo/.claude/plans"
+mkdir -p "$T/repo"
 cd "$T/repo"
 git init -q .
+
+# herow project store sandbox — must be under $HOME (not scratchpad/mktemp's default
+# $TMPDIR), since /tmp and /private/tmp are separately allowlisted below and would make
+# the projects/ prefix assertions pass vacuously.
+export HEROW_HOME="$T/herow-home"
+mkdir -p "$HEROW_HOME/projects/demo-repo-abc123/plans/20260101-000000-demo"
 
 # Belt and braces with the sandbox relocation above: an inherited $TMPDIR would
 # exempt targets inside it the same way. Unset it so the guard sees these as
@@ -240,9 +246,14 @@ out="$(run_write "$T/repo/brand-new.txt")"
 out="$(run_write "$T/repo/empty.txt")"
 [ -z "$out" ] && ok "Write over empty file silent" || fail "Write over empty file asked"
 
-echo "plan content" > "$T/repo/.claude/plans/x.md"
-out="$(run_write "$T/repo/.claude/plans/x.md")"
-[ -z "$out" ] && ok "Write over .claude/plans/x.md silent" || fail "Write over plan file asked"
+echo "plan content" > "$HEROW_HOME/projects/demo-repo-abc123/plans/20260101-000000-demo/plan.md"
+out="$(run_write "$HEROW_HOME/projects/demo-repo-abc123/plans/20260101-000000-demo/plan.md")"
+[ -z "$out" ] && ok "Write over a plan.md under HEROW_HOME/projects/ silent" || fail "Write over plan file under the store asked"
+
+mkdir -p "$HEROW_HOME/escape"
+echo "not in projects" > "$HEROW_HOME/escape/secret.txt"
+out="$(run_write "$HEROW_HOME/projects/demo-repo-abc123/plans/../../../escape/secret.txt")"
+asks "$out" && ok "traversal out of HEROW_HOME/projects/ still asks" || fail "traversal out of the store bypassed the guard"
 
 mkdir -p "$T/repo/dist"
 echo "bundled" > "$T/repo/dist/bundle.js"

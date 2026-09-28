@@ -47,7 +47,7 @@ If degrading, **skip all of Step 3.5** and continue at Step 4.
 From the snapshot generated in Step 3, extract the slices (resolve `SNAP` in the same block — see critical note in Step 3):
 
 ```bash
-SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
 SNAP_JSON=$(python3 - "$SNAP" <<'PY'
 import json, sys, calendar, datetime as dt
 
@@ -80,12 +80,12 @@ PY
 
 ## 3.5c — Fan-out of Haiku subagents (parallel, limited by SCRAPE_MAX_AGENTS)
 
-`SCRAPE_MAX_AGENTS` controls how many browsers run simultaneously (default 4). Read from `~/finance/organizze/.config` if it exists; otherwise use 4.
+`SCRAPE_MAX_AGENTS` controls how many browsers run simultaneously (default 4). Read from `~/.herow/finance/organizze/.config` if it exists; otherwise use 4.
 
 ```bash
 SCRAPE_MAX_AGENTS=$(python3 -c "
 import pathlib, re
-cfg = pathlib.Path.home() / 'finance/organizze/.config'
+cfg = pathlib.Path.home() / '.herow/finance/organizze/.config'
 if cfg.exists():
     for line in cfg.read_text().splitlines():
         m = re.match(r'^SCRAPE_MAX_AGENTS=(.+)$', line.strip())
@@ -139,7 +139,7 @@ If at least `dashboard` returned `ok|scraped|...`, consolidate (resolve `SNAP` i
 
 ```bash
 SCRIPTS=${CLAUDE_PLUGIN_ROOT}/scripts/organizze
-SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
 python3 "$SCRIPTS/apply_scrape.py" --snapshot "$SNAP"
 ```
 
@@ -159,12 +159,12 @@ Output:
 `apply_scrape.py` mutates the **raw** snapshot (`$SNAP`) in place — including recomputing `meta.totais` (current balance, +7/30/90d projections) from the reconciled accounts/transactions/invoices, so the headline balance no longer stays frozen at its pull-time value. But `$SNAP_SAN` (from Step 3.1) and `metrics.json` (from Step 3.2) were already generated **before** scraping ran — they still hold pre-scrape API values. `analyze.py`'s main data body reads `$SNAP_SAN`, while `balance_on.py` (Step 5.6) reads `$SNAP` directly — without this refresh, the same report can show two different balances for the same account (e.g. the "Consolidated data" block vs. the "Balance and forecast per account" tables). Re-run both, exactly as in Steps 3.1/3.2, so every downstream step reads consistent, reconciled numbers:
 
 ```bash
-SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
-SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
+SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+SNAP_SAN=~/.herow/finance/organizze/snapshot_sanitized.json
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/sanitize.py \
   --snapshot "$SNAP" --out "$SNAP_SAN"
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/compute.py \
-  --snapshot "$SNAP_SAN" --out ~/finance/organizze/metrics.json
+  --snapshot "$SNAP_SAN" --out ~/.herow/finance/organizze/metrics.json
 ```
 
 Steps 3.1/3.2 have no caching or freshness check of their own — they always run unconditionally. Run this refresh unconditionally too, whenever apply_scrape.py returned `ok|applied|...` or `warn|unreconciled|...`, regardless of whether `--refresh` was passed in `$ARGUMENTS` (that flag controls a separate concern: bypassing the Step 5.5 market-research cache).

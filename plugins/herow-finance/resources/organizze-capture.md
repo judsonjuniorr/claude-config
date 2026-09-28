@@ -9,7 +9,7 @@ The profile field list below is the shared copy — `/herow-finance:profile` Mod
 
 ## Step 2.8 — Fill in missing personal profile fields
 
-Recommendation personalization depends on the profile in `~/finance/profile.md` (age, profession, income, family, housing, city, risk tolerance). If a critical field is empty, the subagent will emit `[QUESTION]` at the end — better to fill it before analysis.
+Recommendation personalization depends on the profile in `~/.herow/finance/profile.md` (age, profession, income, family, housing, city, risk tolerance). If a critical field is empty, the subagent will emit `[QUESTION]` at the end — better to fill it before analysis.
 
 1. Check whether to ask now:
    ```bash
@@ -87,7 +87,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/finance/plans.py add "<text>" \
 
 (Or tell the user they can run `/herow-finance:goal` later.)
 
-Memory and goals live in `~/finance/{memory,plans}.md` — provider-agnostic. `analyze.py` injects them automatically into future analyses. To manage outside the analysis flow: `/herow-finance:context` and `/herow-finance:goal`.
+Memory and goals live in `~/.herow/finance/{memory,plans}.md` — provider-agnostic. `analyze.py` injects them automatically into future analyses. To manage outside the analysis flow: `/herow-finance:context` and `/herow-finance:goal`.
 
 ## Step 6.6 — Answer open questions from the subagent
 

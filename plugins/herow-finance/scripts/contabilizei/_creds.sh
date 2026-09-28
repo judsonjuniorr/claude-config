@@ -4,9 +4,16 @@
 
 set -u
 
-CONTABILIZEI_HOME="${CONTABILIZEI_HOME:-$HOME/finance/contabilizei}"
+HEROW_HOME="${HEROW_HOME:-$HOME/.herow}"
+CONTABILIZEI_HOME="${CONTABILIZEI_HOME:-$HEROW_HOME/finance/contabilizei}"
 CONTABILIZEI_CONFIG="$CONTABILIZEI_HOME/.config"
 CONTABILIZEI_EXTRACTED="$CONTABILIZEI_HOME/extracted"
+
+# Legacy migration: same one-shot move _common.sh runs for Organizze. Must run
+# before ensure_home so it never races a fresh mkdir -p.
+if { [ -d "$HOME/finance" ] && [ ! -L "$HOME/finance" ]; } || [ -d "$HOME/finance-organizze" ]; then
+  python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")/../finance" && pwd)/_storage.py"
+fi
 
 die() {
   echo "err|$1|$2" >&2

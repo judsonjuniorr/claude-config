@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent setup: create ~/finance/contabilizei/ dirs and install pdfplumber.
+# Idempotent setup: create ~/.herow/finance/contabilizei/ dirs and install pdfplumber.
 # Safe to run repeatedly; second run is a no-op.
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

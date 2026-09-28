@@ -9,7 +9,7 @@ GLOBAL RULE (ask via `AskUserQuestion`) and the main command's `**Absolute paths
 
 Instead of `financial-analyst` running 3 `WebSearch` calls sequentially within its own context (slow and consumes its tokens), **fire `search-specialist` in parallel now** and save the reports to `$RESEARCH_DIR/<category>.md` — `analyze.py` injects them as a "Market research (PRE-COLLECTED)" block.
 
-Before firing a new agent, **check the cache** (default TTL 14 days): if a recent report for that category already exists in any `~/finance/organizze/research/<TS>/<category>.md`, reuse it by copying to the current `$RESEARCH_DIR`.
+Before firing a new agent, **check the cache** (default TTL 14 days): if a recent report for that category already exists in any `~/.herow/finance/organizze/research/<TS>/<category>.md`, reuse it by copying to the current `$RESEARCH_DIR`.
 
 1. List the target categories + city from the profile (pipe-delimited output):
    ```bash
@@ -82,8 +82,8 @@ Before firing a new agent, **check the cache** (default TTL 14 days): if a recen
 
 7. Now render the prompt **with** the `--research-dir` and `--snapshot-sanitized`:
    ```bash
-   SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
-   SNAP_SAN=~/finance/organizze/snapshot_sanitized.json
+   SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+   SNAP_SAN=~/.herow/finance/organizze/snapshot_sanitized.json
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/analyze.py \
      --snapshot "$SNAP" --snapshot-sanitized "$SNAP_SAN" \
      --research-dir "$RESEARCH_DIR" --out "$PROMPT_FILE"

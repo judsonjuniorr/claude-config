@@ -8,7 +8,7 @@ from the main command apply here.
 > **Resolve `$SNAP` at the start of every bash block in Steps 2.5 and 2.7** (each block is a new shell, so `$SNAP` does not persist; never re-derive via `$(date ...)`):
 >
 > ```bash
-> SNAP=$(ls -t ~/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
+> SNAP=$(ls -t ~/.herow/finance/organizze/snapshots/*.json 2>/dev/null | grep -v '\.bak$' | head -1)
 > ```
 
 ## Step 2 — Onboarding (first run)
@@ -53,7 +53,7 @@ After the first `pull.py`:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/reconcile.py --snapshot "$SNAP" <id>=<cents> [<id>=<cents> ...]
    ```
-   This writes `~/finance/organizze/balances.json`, added on top of the real balance on every future pull. Skip this step entirely in the common case.
+   This writes `~/.herow/finance/organizze/balances.json`, added on top of the real balance on every future pull. Skip this step entirely in the common case.
 
 ## Step 2.7 — Map the paying account for each card (run when missing)
 
@@ -87,4 +87,4 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/organizze/config.py set CASHFLOW_THRESHOLD
 ```
 (`20000` = R$ 200 margin; projected balance below this becomes a "critical day".)
 
-Mappings live in `~/finance/organizze/.config` (format `KEY=VALUE`, 0600). Manual editing is allowed.
+Mappings live in `~/.herow/finance/organizze/.config` (format `KEY=VALUE`, 0600). Manual editing is allowed.

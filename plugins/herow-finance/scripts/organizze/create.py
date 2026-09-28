@@ -44,9 +44,9 @@ from _cli import (  # noqa: E402
     invoices_list,
     transactions_list,
 )
-from _paths import CACHE, migrate_legacy  # noqa: E402
+from _paths import CACHE, auto_migrate  # noqa: E402
 
-migrate_legacy()
+auto_migrate()
 
 # Per api-doc §"Cria uma movimentação recorrente (parcelada)".
 VALID_PERIODICITIES = {

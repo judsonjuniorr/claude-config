@@ -5,7 +5,7 @@ For each main account (checking/savings, not archived, not savings pot):
 - initial balance = _balance_cents (already reconciled by pull.py)
 - applies transactions_future with corresponding account_id, in chronological order
 - applies credit card invoice debits on the due date, on the paying account
-  declared in ~/finance/organizze/.config (CARD_PAYMENT_ACCOUNT_<card_id>)
+  declared in ~/.herow/finance/organizze/.config (CARD_PAYMENT_ACCOUNT_<card_id>)
 - emits critical days: projected balance < threshold (default 0, configurable)
 - for each critical day, lists accounts with slack (projected balance on the same day
   > shortfall) as transfer candidates
@@ -414,7 +414,7 @@ def main() -> int:
         "--threshold-cents",
         type=int,
         default=None,
-        help="default: reads from ~/finance/organizze/.config CASHFLOW_THRESHOLD_CENTS",
+        help="default: reads from ~/.herow/finance/organizze/.config CASHFLOW_THRESHOLD_CENTS",
     )
     ap.add_argument(
         "--json", action="store_true", help="emite JSON cru em vez de markdown"

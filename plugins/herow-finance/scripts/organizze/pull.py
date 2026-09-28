@@ -6,7 +6,7 @@ Usage:
   pull.py --out PATH [--history-days N] [--future-days N]
   pull.py --re-enrich-only PATH
 
-Reads credentials from ~/finance/organizze/.auth (ORGANIZZE_EMAIL,
+Reads credentials from ~/.herow/finance/organizze/.auth (ORGANIZZE_EMAIL,
 ORGANIZZE_TOKEN, ORGANIZZE_USER_AGENT) and forwards them to the `organizze` CLI
 (see _cli.py) — same REST v2 data, official/maintained transport, real account
 balances instead of the old 5-year-summation reconstruction.
@@ -25,7 +25,7 @@ import unicodedata
 from typing import Optional
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _paths import HOME, CACHE, migrate_legacy  # noqa: E402
+from _paths import HOME, CACHE, auto_migrate  # noqa: E402
 from _cli import (  # noqa: E402
     load_auth,
     accounts_list,
@@ -37,7 +37,7 @@ from _cli import (  # noqa: E402
     budgets as cli_budgets,
 )
 
-migrate_legacy()
+auto_migrate()
 
 _SCRIPTS_DIR = pathlib.Path(__file__).parent
 _ENRICHMENT_RULES_PATH = _SCRIPTS_DIR / "enrichment_rules.yaml"
@@ -91,7 +91,7 @@ def fetch_account_balances(
 
     Replaces the old 5-year transaction-summation reconstruction (the /accounts
     list endpoint doesn't include balance, but `accounts get` does).
-    Supports manual offset in ~/finance/organizze/balances.json:
+    Supports manual offset in ~/.herow/finance/organizze/balances.json:
         {"<account_id>": <offset_cents>}  # added on top of the real balance
     """
     balances: dict[int, int] = {}

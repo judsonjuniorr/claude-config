@@ -1,10 +1,11 @@
 """Tests for pull.py enrichment changes."""
+
 import os
 import sys
 import pathlib
 import tempfile
 
-# Set hermetic ORGANIZZE_HOME before importing pull (prevents touching real ~/.finance)
+# Set hermetic ORGANIZZE_HOME before importing pull (prevents touching real ~/.herow/finance)
 os.environ.setdefault("ORGANIZZE_HOME", tempfile.mkdtemp(prefix="pull-enrich-test-"))
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
@@ -61,7 +62,7 @@ def test_is_recurring_cold_start_less_than_3_months():
     """With less than 3 months of history, is_recurring must be False for all."""
     # Only 2 months of Netflix data
     txs_5y = [
-        make_tx(i, "Netflix", -5000, f"2026-0{m+4}-15")
+        make_tx(i, "Netflix", -5000, f"2026-0{m + 4}-15")
         for m, i in enumerate(range(2))
     ]
     target = [make_tx(10, "Netflix", -5000, "2026-06-15")]

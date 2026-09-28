@@ -6,7 +6,7 @@ personalized: age, occupation, income, family, housing, city,
 risk tolerance, habits. Each time `/herow-finance:organizze` runs, still-empty
 required fields are asked via AskUserQuestion in the main chat.
 
-File: ~/finance/profile.md (readable markdown, `key: value` format per line).
+File: ~/.herow/finance/profile.md (readable markdown, `key: value` format per line).
 
 Usage:
   profile.py get [<key>]              # read all or a single field
@@ -25,7 +25,7 @@ import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _storage import PROFILE, migrate_legacy  # noqa: E402
+from _storage import PROFILE, auto_migrate  # noqa: E402
 
 REQUIRED_KEYS = [
     "idade",
@@ -220,7 +220,7 @@ def cmd_render(args) -> int:
 
 
 def main() -> int:
-    migrate_legacy()
+    auto_migrate()
 
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
