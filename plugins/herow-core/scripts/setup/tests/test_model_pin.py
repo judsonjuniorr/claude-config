@@ -50,6 +50,11 @@ class VersionGateTest(unittest.TestCase):
             self._gate((2, 1, 250), "claude-opus-5-5-20260901"), "claude-opus-5"
         )
 
+    def test_sonnet_5_5_steps_down_to_sonnet_5(self) -> None:
+        self.assertEqual(
+            self._gate((2, 1, 250), "claude-sonnet-5-5"), "claude-sonnet-5"
+        )
+
     def test_sonnet_falls_back_to_previous_generation(self) -> None:
         self.assertEqual(
             self._gate((2, 1, 150), "claude-sonnet-5"), "claude-sonnet-4-6"
