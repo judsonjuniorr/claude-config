@@ -17,14 +17,26 @@ browser:
   headed_required: false     # written only by qa-setup: true when the smoke walk proved
                               # headless is blocked, or login is sso/magic-link
   viewport: [1440, 900]
+  # executable_path: "/abs/path/to/chromium"   # optional; unset, qa-login.mjs tries playwright-headless's
+                                                # --executable-path, then the chrome channel, then the bundled build
 session:
   env: local                 # one of envs[]; the Env: tag the smoke walk and Phase 6 write
   start_url: http://localhost:3000/
   login: form                 # form | sso | magic-link | none — see "Login types" below
   login_detect: "a form with a password field"   # model-evaluated against the snapshot
-  credentials_env: { user: QA_USER, password: QA_PASSWORD }   # names only; login: form only
-  auto_fill: true             # form only. true = automated fill (value reaches the transcript,
-                               # see "Login types"); false = manual headed login
+  auto_fill: true             # form only. true = scripted login by qa-login.mjs, outside the
+                               # MCP browser (value never in the transcript); false = manual headed
+  password_file: login.json   # form only; a bare *.json name directly in <QA>. JSON {user,password},
+                               # mode 600, written by `qa-login.mjs save` — never the value
+  # login_origins: ["https://idp.example.com"]   # extra origins the credential may be typed into
+                               # (an IdP); default is start_url's origin only. http only for local hosts
+  credentials_env: { user: QA_USER, password: QA_PASSWORD }   # fallback env-var names, used when
+                               # the password file doesn't exist; must be exported before launch
+  # login_fields:             # optional Playwright selectors when the heuristic can't find the form;
+                               # always quote them (an unquoted [..] would parse as a list)
+  #   user: "input[name=email]"
+  #   password: "input[name=password]"
+  #   submit: "role=button[name=\"Sign in\"]"
   entry_target: "Dashboard (heading 'Dashboard')"        # module + visible landmark
   entry_recipe: "Log in and reach Dashboard"             # navigation.md entry heading; set by the smoke walk
 setup:
@@ -107,21 +119,36 @@ unrelated project running on the same machine.
 
 ## Login types and credentials
 
-The Playwright MCP run-code sandbox has no `process` (confirmed by probe), a generated
-login file run by filename echoes its own code back into the result, and a snapshot taken
-after filling a password field prints the value in plain text. So every automated fill
-puts the credential in the transcript — there is no path that avoids this entirely. Per
-project, `session.auto_fill` makes that trade-off explicit and opt-in:
+**Never fill a credential through an MCP browser tool.** A run-code tool echoes its
+input, `browser_type` and `browser_fill_form` put the value in the tool input, and a
+snapshot of a filled password field prints it in plain text. Instead, the login happens in
+a separate headless browser driven by `qa-run/scripts/qa-login.mjs`. Only the resulting
+session cookies cross over, as a storageState **file path**.
 
-- **`login: form`, `auto_fill: true`.** Env vars must already be exported **before**
-  Claude Code starts (shell profile, direnv, or `settings.json`'s `env` block — exporting
-  from inside a Bash tool call reaches neither Claude Code nor the MCP server). Read them
-  with Bash, then fill **and submit in one call** to whichever run-code tool this
-  session's Playwright MCP exposes (`browser_run_code` or `browser_run_code_unsafe` — read
-  the schema, the name has changed across versions). **Take no snapshot until the page has
-  navigated away from the login form.** State once, in the setup report, that the value
-  reached the tool-call transcript. Every report and knowledge entry writes `[REDACTED]`
-  in place of the value.
+- **`login: form`, `auto_fill: true`** (scripted login):
+  1. **Bash:** `node "${CLAUDE_PLUGIN_ROOT}/skills/qa-run/scripts/qa-login.mjs" login "<QA>"`,
+     with `<QA>` as a literal absolute path.
+     - The script reads `config.yml` itself. The credential comes from
+       `session.password_file`, or else the `credentials_env` vars.
+     - It fills the form (`login_fields`, or a heuristic: the visible password field plus
+       the email/text input in the same form; two-step forms work too) and submits.
+     - It types the credential only into `start_url`'s origin or a `session.login_origins`
+       entry, and uses plain `http` only for local hosts (`localhost`, loopback,
+       `*.localhost`/`.test`/`.local`).
+     - It verifies that the password field is gone, then writes
+       `<HEROW_HOME>/browser/state/<project-id>.json` (mode 600).
+     - stdout is exactly `ok <state path>` or `error <code>[ <key>]`. Nothing else is
+       printed, ever.
+  2. **`browser_set_storage_state({filename: "<state path>"})`**, passing exactly the path
+     the script printed.
+  3. **Bash:** `node "${CLAUDE_PLUGIN_ROOT}/skills/qa-run/scripts/qa-login.mjs" clear "<QA>"`.
+     This deletes the state file, which is a bearer credential. **Always run it once step 1
+     printed `ok`**, even if step 2 failed or the walk is about to stop. `login` also deletes
+     any stale state file before it starts.
+  4. **`browser_navigate(session.start_url)`**, then take a snapshot. If it still matches
+     `login_detect`, stop `[session-not-transferred]`. This means the app keeps its session
+     in sessionStorage, or binds it to the browser fingerprint. Fix: set `auto_fill: false`
+     (manual headed login).
 - **`login: form`, `auto_fill: false`.** No automated fill at all: `headed_required` is
   set `true`; the user logs in once by hand in the headed browser; the persistent
   `--user-data-dir` profile keeps the session across runs. On expiry, stop with "log in
@@ -132,6 +159,66 @@ project, `session.auto_fill` makes that trade-off explicit and opt-in:
 
 Headless and headed profiles never share a session — a manual login always happens in the
 headed profile, once, and then persists.
+
+**Password file.**
+- **Location and format:** `<QA>/login.json`, or `session.password_file` (a bare `*.json`
+  file name directly in `<QA>`), holding JSON `{"user": "...", "password": "..."}`.
+  - `check`, `login` and `save` refuse any other location, and a symlink
+    (`unsafe-path`).
+  - That keeps it out of `knowledge/`, `reports/` and `config.yml`, which are read into
+    the model's context.
+- **Permissions:** mode 600, in a 700 directory. `login`/`check` refuse a file with any
+  group or other bit set (`file-mode`).
+- **Placement:** it lives under the herow store, outside every git repo, and its name
+  matches none of the `settings.json` Read deny globs (`*secret*`, `*credentials*`, `.env`,
+  `.env.*`). `save` refuses either case (`unsafe-path`). It is also outside the MCP
+  `--output-dir`. No `browser_*` tool can load or upload it unless `<HEROW_HOME>` is
+  also an MCP workspace root. Don't add `~/.herow` as a Claude Code working directory in a
+  QA session.
+- **Why JSON:** a misdirected `setStorageState` parses it without quoting the content
+  back in an error.
+- **Who writes it:** only the user, via
+  `! node "<plugin>/skills/qa-run/scripts/qa-login.mjs" save "<QA>"`.
+  - It prompts with muted input on a TTY.
+  - With no TTY (the `!` prefix) on macOS it opens a native hidden-answer dialog.
+  - Elsewhere it prints `error no-tty` — run it from a terminal instead.
+
+**MCP server prerequisites (scripted login).** `playwright-headless` must run with
+`--caps=storage` (adds `browser_set_storage_state`) and `--output-dir <HEROW_HOME>/browser`
+(the server only reads files inside its output dir or workspace, so the state file must
+live there). `--isolated --storage-state` is not used: it is fixed at server start, one
+path for every project. Reconfigure once, with every path resolved, then restart Claude
+Code:
+
+```
+cfg=$(jq -ce --arg h "<HEROW_HOME>" '.mcpServers["playwright-headless"] | select(. != null) | .args as $a | ([$a[] | select(startswith("--caps=")) | ltrimstr("--caps=") | split(",")[]] + ["storage"] | unique | join(",")) as $caps | .args = [range($a|length) as $i | select(($a[$i] | startswith("--caps=") | not) and $a[$i] != "--output-dir" and ($i == 0 or $a[$i-1] != "--output-dir")) | $a[$i]] + ["--caps=" + $caps, "--output-dir", ($h + "/browser")]' ~/.claude.json) && claude mcp remove playwright-headless -s user && claude mcp add-json playwright-headless "$cfg" -s user
+```
+
+It's idempotent: it merges any existing `--caps=` and replaces any `--output-dir`. If `jq`
+finds no user-scope server, the chain stops before removing anything. If there
+is no `playwright-headless` server at all, add one with `@playwright/mcp@latest --headless
+--caps=storage --output-dir <HEROW_HOME>/browser`. Once the server is reconfigured, the
+following apply.
+
+- **Side effect: every restore clears the profile.** `browser_set_storage_state` clears
+  **every** cookie and the cache of the headless profile before it restores. That logs
+  out any other site that profile was signed into, for other skills as well. They log in
+  again on their next use.
+- **Forbidden tools.** `--caps=storage` also exposes tools that print cookie and storage
+  values. **Never** call `browser_storage_state`, `browser_cookie_*`,
+  `browser_localstorage_*`, or `browser_sessionstorage_*`.
+- **The only allowed state path.** Call `browser_set_storage_state` only with the path
+  `qa-login.mjs` printed. Never pass the password file to any browser tool. That includes
+  `browser_run_code_unsafe`, which skips the server's file-root check.
+
+**Residual risks**
+- The password file and the state file can be read by the model's own Read tool. Only the
+  rules above guard them. Optional hardening is out of scope here: user-level
+  `Read`/`Bash(cat …)` deny rules for `~/.herow/projects/*/qa/login.json` and
+  `~/.herow/browser/state/**`.
+- The env-var fallback reaches the script only if it was exported before Claude Code
+  started. Every Bash call then inherits it too, so **never** `echo`/`printenv`/`env` the
+  `credentials_env` names. Prefer the password file.
 
 **Headed fallback prerequisites** (document these; they're specific to this machine's
 setup, not shipped by the plugin): `~/.claude/mcp-restore.sh` and a `playwright` entry in
@@ -176,6 +263,9 @@ app-specific facts, they're reminders about the tool):
   captured — some dev servers wrap `console` and swallow it.
 - Never snapshot a filled login form — a password textbox's value is printed in plain
   text in the snapshot result.
+- Never call the cookie/localStorage/sessionStorage tools or `browser_storage_state` —
+  they print session values. `browser_set_storage_state` takes only the path
+  `qa-login.mjs login` printed.
 ```
 
 ## Probe catalogue (for `services[]` detection)
@@ -200,7 +290,13 @@ command or config key>.` plus a resume hint when one applies.
 |---|---|---|
 | `schema-newer` | `config.yml`'s `schema_version` is newer than this skill | Update the plugin, or edit the config by hand |
 | `store-error` | `herow-project.sh` itself failed (git missing, `HOME` unset, the store path unwritable) | Print its stderr diagnostic verbatim; fix the named cause |
-| `env-var-missing` | a `credentials_env` var isn't set | Export it (shell profile or `.envrc`), restart Claude Code, re-run — resumes at the smoke walk |
+| `login-file-missing` | `qa-login.mjs check` → `login-missing`: no password file and no `credentials_env` value | Run the printed `! node … qa-login.mjs save "<QA>"`, re-run — resumes at the smoke walk (or export the env vars before launching Claude Code) |
+| `login-file-mode` | `check`/`login` → `file-mode` | `chmod 600 "<QA>/login.json"` |
+| `login-file-invalid` | `check`/`login` → `file-invalid` (not JSON, or `user`/`password` empty) | Re-run the `save` command |
+| `browser-caps-missing` | scripted login, but `browser_set_storage_state` isn't in this session | Run the reconfig command under "MCP server prerequisites", restart |
+| `login-engine-missing` | `login` → `engine-missing` (no `playwright-core` resolvable) | Run any Playwright MCP tool once (populates the npx cache), or `npm install --prefix "<HEROW_HOME>/tools/playwright" playwright-core` |
+| `login-failed` | `login` → `browser-missing`, `unreachable`, `no-form`, `field-missing <key>`, `rejected`, `origin-mismatch`, `insecure-origin`, `unsafe-path`, `state-write`, `config-unreadable <key>`, or `internal` | `browser-missing`: set `browser.executable_path` (the script already tried the MCP's `--executable-path` and the `chrome` channel). `no-form`/`field-missing`: set `session.login_fields`. `rejected`: re-run `save` with the right credentials. `origin-mismatch`: the form lives on another origin; add it to `session.login_origins` only if it's the app's own IdP. `insecure-origin`: use https. `unsafe-path`: `password_file` must be a bare `*.json` name in `<QA>`, not a symlink. Otherwise fix the named key or service |
+| `session-not-transferred` | the login succeeded, but `login_detect` still matches after the restore | Set `auto_fill: false` and log in by hand, headed |
 | `browser-tools-missing` | the chosen Playwright MCP server's tools aren't in this session | Restore/add that server (see "Headed fallback prerequisites"), restart |
 | `headless-blocked` | 2FA/CAPTCHA/SSO consent blocked headless mid-walk | Restart headed (see above), re-run — resumes at the smoke walk |
 | `services-down` | a `services[]` preflight curl failed | Start the service with its printed `start_hint`, re-run |

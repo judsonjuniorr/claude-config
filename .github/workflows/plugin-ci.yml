@@ -95,11 +95,15 @@ jobs:
           fi
           echo "qa skills are project-agnostic OK"
 
+      - name: Playwright engine for qa-login browser cases (drives the runner's Google Chrome)
+        run: npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" playwright-core@1
+
       - name: QA skill test suites
         run: |
           set -e
           bash plugins/herow-dev/scripts/tests/test-qa-ensure-ignored.sh
           bash plugins/herow-dev/scripts/tests/test-qa-change-surface.sh
+          QA_LOGIN_TEST_ENGINE="$RUNNER_TEMP/pw" QA_LOGIN_REQUIRE_BROWSER=1 bash plugins/herow-dev/scripts/tests/test-qa-login.sh
           bash plugins/herow-dev/scripts/tests/test-herow-project.sh
 
       - name: Hook guard test suites
