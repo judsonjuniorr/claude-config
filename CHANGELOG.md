@@ -2,6 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0.0] - 2026-10-01
+
+### Added
+- **`herow-core:jev` — typed decisions and skill/agent routing ship with the plugin.**
+  - `skills/jev/scripts/jev.py` asks Jev (`typesafe/jev-1.13` via OpenRouter Decisions)
+    choice/score/yes-no questions; `route.py` suggests a subagent and a skill per task from
+    the installed catalog; `jev_env.py` holds the shared registry resolver, key probe and
+    routing policy.
+  - Constant shims `~/.herow/bin/jev` and `~/.herow/bin/jev-route` (under `$HEROW_HOME` when
+    set) resolve the active herow-core install at exec time, so upgrades never leave them
+    stale. Every failure prints one `jev unavailable: <problem>. <fix>` line and exits 1.
+  - New SessionStart hook `jev-session.sh` installs the shims atomically (tmp + `mv -f`)
+    and, only when a key exists, injects a "Jev routing assist" block with the literal
+    `jev-route` path and the routing policy. Without a key it prints a one-time hint.
+    `routing_assist: false` in `~/.herow/jev/config.json` turns the block off.
+  - Key read order: macOS Keychain (`openrouter-api-key`, 5 s timeout), then
+    `OPENROUTER_API_KEY`. The key is never printed or written by herow.
+  - Optional local files under `~/.herow/jev/`: `config.json` (`extra_command_dirs`,
+    `rewrites`, `routing_assist`), `consents.md` (`routing: project-names`) and
+    `cases.local.json` (a personal eval set). Cache and log live in `~/.herow/jev/`.
+  - `route.py --eval` runs a bundled portable set (23 scored + 1 skip, herow components and
+    built-ins only), then the local set when present; `--gate 0.9` exits 1 unless each
+    metric has confident accuracy ≥ 0.90 **and** confident answers on ≥ 75% of scored cases.
+- **`/herow-core:doctor` sets Jev up.** detect emits `tool|jev-shim|…` and the new
+  `manual|jev-key|present|<source>` / `manual|jev-key|missing|-` record type; verify emits
+  `pass|jev-key`, a shim dry-run check, or `info|jev-key|absent` on a keyless machine (never a
+  fail). New Step 2.5 "Manual steps" (both branches) shows the key page, the command to run
+  in a separate terminal, re-probes, and offers an opt-in routing smoke call.
+- Tests: pytest suite `plugins/herow-core/skills/jev/tests/` and bash suites
+  `test-jev-shim.sh`, `test-jev-session.sh`, `test-setup-records.sh` (pins every existing
+  detect/verify record line), all wired into CI, plus a literal guard that reads the
+  `JEV_LITERAL_GUARD_PATTERN` repo secret (warns and skips until the secret exists).
+
+### Migration (existing personal Jev installs)
+If you ran Jev from a personal skill copy (for example a `~/.claude/skills/jev` symlink):
+1. Upgrade herow-core and start a new session (or run `/herow-core:doctor`) so the shims exist.
+2. Repoint any skill or script that calls `…/skills/jev/scripts/jev.py` or `route.py` to
+   `~/.herow/bin/jev` / `~/.herow/bin/jev-route`.
+3. Remove any "Jev routing assist" block from your CLAUDE.md; the injected block supersedes it.
+4. Move personal settings into `~/.herow/jev/`: `consents.md` with `routing: project-names` if
+   you want names in routing summaries, `config.json` with `extra_command_dirs` and
+   `rewrites` for personal commands and rules, and `cases.local.json` for your own eval cases.
+5. Remove the old copy (`rm` the symlink only) once nothing references it; the old cache
+   directory `~/.cache/jev-route` can be deleted.
+
 ## [0.12.2.0] - 2026-09-30
 
 ### Fixed

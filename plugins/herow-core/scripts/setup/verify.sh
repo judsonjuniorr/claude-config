@@ -50,5 +50,19 @@ ck default-sonnet-model \
   'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); v=(s.get(\"env\",{}) or {}).get(\"ANTHROPIC_DEFAULT_SONNET_MODEL\",\"\"); sys.exit(0 if v.startswith(\"claude-sonnet-\") else 1)" 2>/dev/null' \
   "ANTHROPIC_DEFAULT_SONNET_MODEL pinned" "ANTHROPIC_DEFAULT_SONNET_MODEL not set to a claude-sonnet-* id in settings.json env"
 
+# Jev is optional: a keyless machine is info, not a failure.
+jev_dry_run() {
+  printf '%s' '{"items":[{"id":"t","state":"ok"}],"questions":{"q":{"type":"noul","instructions":"x","criteria":{"true":"a","false":"b"}}}}' \
+    | "${JEV_BIN}/jev" --dry-run | grep -q '"dry_run"'
+}
+JEV_SRC="$(jev_key_source)"
+if [ "$JEV_SRC" = none ]; then
+  echo "info|jev-key|absent"
+else
+  echo "pass|jev-key|key found (${JEV_SRC})"; PASS=$((PASS+1))
+  ck jev-shim 'jev_dry_run' "jev shim resolves herow-core (dry-run ok)" \
+    "jev shim missing or not resolving: run the doctor install step, then /herow-core:upgrade"
+fi
+
 emit summary "${PASS} passed / ${FAIL} failed" "$([ "$FAIL" -eq 0 ] && echo all-green || echo review-fails)"
 exit 0

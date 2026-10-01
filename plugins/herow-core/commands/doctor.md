@@ -9,7 +9,7 @@ Diagnose (and, with explicit approval, repair) this machine's herow stack and Cl
 Doctor also keeps **first-install compatibility**: if the stack isn't installed yet, it offers to run the installer (the existing `scripts/setup/` scripts) before auditing.
 
 Scripts live at `${CLAUDE_PLUGIN_ROOT}/scripts/`:
-- `scripts/setup/*` — detect + install (pipe-delimited records: `ok|… err|… info|…`, plus `dep|… tool|… remove|… pass|… fail|…`).
+- `scripts/setup/*` — detect + install (pipe-delimited records: `ok|… err|… info|…`, plus `dep|… tool|… remove|… manual|… pass|… fail|…`). `manual|<name>|present|<detail>` / `manual|<name>|missing|-` is a user action doctor can't perform; it is never an install target.
 - `scripts/doctor/{security,tokens,hygiene,audit}.py` — the auditor (one JSON line per check; `audit.py` prints a consolidated report). Default is dry-run; `--apply <check_id>` applies one fix idempotently.
 
 **Never apply anything without an explicit Yes from the user.**
@@ -18,22 +18,25 @@ Scripts live at `${CLAUDE_PLUGIN_ROOT}/scripts/`:
 
 ## Step 1 — Detect (read-only)
 
-Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/detect.sh"`. Parse the records and show a compact inventory in four groups:
+Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/detect.sh"`. Parse the records and show a compact inventory in five groups:
 - **Deps**: git/brew/python3/uv/node/npm/bun — `installed` vs `missing`.
-- **Stack**: rtk / graphify / gstack / organizze — `installed` or `missing`.
+- **Stack**: rtk / graphify / gstack / organizze / jev-shim — `installed` or `missing`.
+- **Manual steps** (`manual|…`): e.g. `manual|jev-key|missing|-` — handled in Step 2.5, never installed by doctor.
 - **Removal candidates** (`remove|…`) and **Token optimizations** (`opt|…`) — relevant only to the install branch below.
 
 ## Step 2 — Install / repair branch (AskUserQuestion gate)
 
-If any **stack tool is `missing`** (rtk/graphify/gstack/organizze), or detect surfaced removal/opt candidates, ask with `AskUserQuestion`:
+If any **stack tool is `missing`** (rtk/graphify/gstack/organizze/jev-shim), or detect surfaced removal/opt candidates, ask with `AskUserQuestion`:
 - **Run install/repair now** — bootstrap the stack, then continue to the audit.
 - **Audit only** — skip install; audit whatever exists.
+
+If nothing triggers this branch, go straight to Step 2.5.
 
 Doctor never installs silently. If **Run install/repair** is chosen, execute the installer sequence (idempotent — re-running no-ops what's already done):
 
 1. **Confirm removals** (`AskUserQuestion`, one Yes per group) for each `remove|…` group detect found — OMEGA surfaces, loose duplicate `blueprint|quick|execute` commands/hooks, stray memory/token MCP servers. Nothing is removed without approval. Collect approved tokens (`omega`, `loose`, `stray:<key>`).
 2. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/ensure-deps.sh"` — installs missing deps; if it reports python3 < 3.10, stop and tell the user to upgrade before continuing.
-3. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` — gstack clone+setup, rtk/graphify verify, `organizze` CLI install (brew cask, curl fallback — used by `herow-finance`'s Organizze read path).
+3. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/install-stack.sh"` — gstack clone+setup, rtk/graphify verify, `organizze` CLI install (brew cask, curl fallback — used by `herow-finance`'s Organizze read path), and the Jev shims `~/.herow/bin/jev` + `~/.herow/bin/jev-route` (under `$HEROW_HOME` when set).
 4. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/token-guard.sh"` — safe defaults, no approval needed (`model: opusplan`, `advisorModel: opus`, `effortLevel: high`, `autoCompact: true`, removes any `CLAUDE_CODE_SUBAGENT_MODEL` pin, pins `ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-5-5` and `ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5-5`).
 5. **Model pin picker** — lets the user choose which Opus and Sonnet to pin for `opusplan` (overrides the safe defaults written by token-guard above):
    1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup/model-pin.py" --list`. Parse the output lines (`family|id|label`); split into `opus` and `sonnet` candidate **model IDs** (3 each, most recent first). Only these exact IDs are valid choices — never substitute free text.
@@ -43,9 +46,24 @@ Doctor never installs silently. If **Run install/repair** is chosen, execute the
    5. On Yes: run the same quoted command without `--dry-run`. Report the `.bak` path printed. `model-pin.py` itself checks the installed Claude Code version against each model's minimum (e.g. Sonnet 5.5 needs ≥ v2.1.284) and falls back or skips the pin with a `warn|…` line if the version is too old — surface that warning to the user if it appears, and suggest `claude update`.
 6. If Step 2.1 approved anything: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/remove.sh" <tokens…>` (writes `.bak`s).
 7. Confirm `herow-core` + `herow-dev` are enabled in `~/.claude/settings.json`; the 3 flow commands ship from herow-dev (`/herow-dev:blueprint|quick|execute`).
-8. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/verify.sh"` — show the `pass|…`/`fail|…` records and the `summary|…` line.
+8. `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup/verify.sh"` — show the `pass|…`/`fail|…` records and the `summary|…` line. `info|jev-key|absent` means Jev is simply not set up (optional), not a failure.
 
-Then continue to Step 3. (If the user chose **Audit only**, skip straight to Step 3.)
+Then continue to Step 2.5. (If the user chose **Audit only**, go straight to Step 2.5.)
+
+## Step 2.5 — Manual steps (both branches, including Audit only)
+
+List every `manual|…|missing|-` record from Step 1 under **Manual steps**. Doctor never performs these and never takes a secret through the chat or `AskUserQuestion`.
+
+**Jev key** (`manual|jev-key|missing|-`) — optional; it enables `herow-core:jev` and the routing assist:
+1. Create an OpenRouter key at https://openrouter.ai/keys. The account needs credits (a routing call costs about $0.00007).
+2. Store it **in a separate terminal** (the hidden prompt needs a real TTY; don't use `!` mode):
+   - macOS: `security add-generic-password -a "$USER" -s openrouter-api-key -w`
+   - systems without Keychain: add `export OPENROUTER_API_KEY=...` to your own shell profile, then restart Claude Code. Don't put it in `settings.json` `env` or any repo file.
+3. When the user says it's done, re-probe: `python3 "${CLAUDE_PLUGIN_ROOT}/skills/jev/scripts/jev_env.py" probe` prints only the source (`keychain`, `env` or `none`). Report it.
+4. If the probe finds a key and `~/.herow/bin/jev-route` exists, ask with `AskUserQuestion` (default and first option: **Skip**) whether to run a routing smoke call (~$0.00007): `"${HEROW_HOME:-$HOME/.herow}/bin/jev-route" "commit these changes and open a pull request"`. Expect `skill=herow-core:github-ops` (it may come back marked `uncertain=skill`; the call still proves the key and shims work). Show the line and the cost; on `jev unavailable: …`, show the message verbatim (it carries the fix).
+5. Tell the user: "Start a new session or `/clear` to enable routing."
+
+If the key is already `present`, just report its source. Then continue to Step 3.
 
 ## Step 3 — Audit (read-only, no writes)
 
@@ -88,4 +106,4 @@ For each approved id, run its `fix_cmd` **verbatim** (each is `python3 "…/scri
 Re-run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/doctor/audit.py"` and confirm the fixed checks now report `pass`. Summarize in a short block:
 - **Applied**: check ids + the `.bak` paths written.
 - **Skipped**: check ids the user declined.
-- **Manual follow-up**: `.zshrc` exports + a full Claude Code restart if secrets or MCP servers changed.
+- **Manual follow-up**: `.zshrc` exports + a full Claude Code restart if secrets or MCP servers changed; any open Step 2.5 manual steps (e.g. the Jev key).

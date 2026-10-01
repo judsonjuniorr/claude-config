@@ -47,4 +47,8 @@ else
     && emit ok organizze "installed (curl)" \
     || emit err organizze "missing and no brew"
 fi
+
+## --- Jev shims (constant entry points: ${HEROW_HOME}/bin/jev, jev-route + helper) ---
+if bash "${HERE}/../jev-session.sh" --install-only; then emit ok jev-shim "installed ${JEV_BIN}/jev and ${JEV_BIN}/jev-route"
+else emit err jev-shim "could not write ${JEV_BIN}: check permissions"; fi
 exit 0
