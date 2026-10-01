@@ -36,11 +36,35 @@ and `/herow-core:upgrade` force-updates on demand.
 
 | Plugin | What you get |
 |---|---|
-| **herow-core** | Guardrail hooks (doc-file warning, config protection, destructive-op confirmation, stop-guard, batched format+typecheck at Stop, console.log checks, git-guard), graphify auto-engage + auto-freshen hooks (`graphify-inject.sh` announces the graph at session start and steers toward `graphify query`/`path`/`explain` when one exists, `graphify-freshen.sh` keeps `graphify-out/` synced to HEAD in the background), always-on coding rules injected at session start (terse "caveman" output **by default** — `/herow-core:uncompress` restores full prose), the `github-ops` skill (token-efficient git/gh/glab via scripts), `code-reviewer` + `debugger` agents, `/herow-core:upgrade`, `/herow-core:doctor` (config doctor: audits security, token-cost, and hygiene and applies fixes with explicit approval; also bootstraps a fresh machine via its install branch — gstack + the herow-dev flow commands, removes OMEGA & conflicts, prompted), and `/herow-core:setup-claude` (interview-driven author of personal `CLAUDE.local.md` / shared `CLAUDE.md` project instructions — a high-signal friction log, not a codebase overview; picks the target, guards `CLAUDE.local.md` privacy via the global excludes, and optionally scaffolds skills + hooks) |
+| **herow-core** | Guardrail hooks (doc-file warning, config protection, destructive-op confirmation, stop-guard, batched format+typecheck at Stop, console.log checks, git-guard), graphify auto-engage + auto-freshen hooks (`graphify-inject.sh` announces the graph at session start and steers toward `graphify query`/`path`/`explain` when one exists, `graphify-freshen.sh` keeps `graphify-out/` synced to HEAD in the background), always-on coding rules injected at session start (terse "caveman" output **by default** — `/herow-core:uncompress` restores full prose), the `github-ops` skill (token-efficient git/gh/glab via scripts), `code-reviewer` + `debugger` agents, the `jev` skill (typed decisions + on-demand skill/agent routing via OpenRouter, see below), `/herow-core:upgrade`, `/herow-core:doctor` (config doctor: audits security, token-cost, and hygiene and applies fixes with explicit approval; also bootstraps a fresh machine via its install branch — gstack + the herow-dev flow commands, removes OMEGA & conflicts, prompted), and `/herow-core:setup-claude` (interview-driven author of personal `CLAUDE.local.md` / shared `CLAUDE.md` project instructions — a high-signal friction log, not a codebase overview; picks the target, guards `CLAUDE.local.md` privacy via the global excludes, and optionally scaffolds skills + hooks) |
 | **herow-dev** | Commands: `/herow-dev:blueprint·quick·execute` (gstack plan→worktree→ship flow, graphify-integrated), `/herow-dev:code:review·refactor·generate-tests` (**`code:review` is the single review door** — auto-detects the changed-file language and dispatches specialist reviewers: `.tsx`/`.jsx` → react + typescript, `.ts`/`.js` → typescript, `.py` (FastAPI-aware) → fastapi + python — running them in parallel, each carrying a dedicated memory-management lane (leaks, retention, unbounded caches/state) for Python and React, then a second-opinion pass — the session's `advisor` tool first, falling back to Codex/Agy/a Claude subagent — that CONFIRM/DISPUTE/ESCALATEs findings; `--fix` runs can end by committing + pushing the applied fixes via `github-ops`), `/herow-dev:git:pr·fix-conflicts·release-notes`, `/herow-dev:react:test·validate-ui`, `/herow-dev:fix-cves` (finds dependency CVEs across Node/TS and Python, upgrades to the minimum patched version — including transitive-only fixes via overrides/resolutions/constraints — and proves no regression with the full lint/type-check/test/build gate before committing). Skills: `/herow-dev:qa-setup` + `/herow-dev:qa-run` (config-driven live-app QA — setup writes a per-project `config.yml` to the `~/.herow` project store, seeds or adopts a knowledge store, and proves it with a live Playwright smoke walk; run QAs a ticket from Jira/Brain/GitHub/free text against the live app with interaction-proof discipline, capped regression + probe passes, staleness checks, a draft ticket comment, and optional Playwright-spec freezing of a passing walk), error-handling, prompt-optimizer, research, exa-search, jira-integration. 17 specialist agents (fullstack, python-pro, reviewers, tdd-guide, ui-ux, …) |
 | **herow-seo** | 11 commands (`/herow-seo:weekly-audit`, `ctr-tune`, `indexation-check`, `content-sprint`, `geo-optimize`, `report`, …) + `seo-strategist`, `technical-seo-auditor`, `content-engineer` agents + the GSC data-contract reference |
 | **herow-finance** | `/herow-finance:organizze` (Organizze API analysis with the `financial-analyst` agent), `/herow-finance:organizze-create` (create transactions — dry-run + confirm + read-back verify), `context`/`goal`/`profile` helpers, `/herow-finance:nf-tomada` (Contabilizei NF registration). Data lives in `~/.herow/finance/` and survives updates |
 | **herow-extras** | `/herow-extras:brainstorm` (any idea → concrete result: PRD, plan, research, an inline brief, or a Claude artifact), `/herow-extras:create-prd`, `/herow-extras:file-organizer`, `/herow-extras:graphify-install` |
+
+### Jev: typed decisions and routing (herow-core)
+
+`herow-core:jev` asks Jev (`typesafe/jev-1.13` on OpenRouter) narrow typed questions
+(choice, score, yes/no) and, through `jev-route`, suggests a subagent and a skill per
+task from what you have installed. It costs about $0.00007 per routed task.
+
+Setup, once per machine:
+
+1. Run `/herow-core:doctor`. It installs `~/.herow/bin/jev` and `~/.herow/bin/jev-route`
+   and lists the key under **Manual steps**.
+2. Create a key at https://openrouter.ai/keys (needs credits) and store it in a separate
+   terminal:
+   ```bash
+   security add-generic-password -a "$USER" -s openrouter-api-key -w
+   ```
+   Without macOS Keychain, add `export OPENROUTER_API_KEY=...` to your shell profile instead.
+3. Start a new session or `/clear`. A routing block appears in the session context.
+
+Try it: `~/.herow/bin/jev-route "commit these changes and open a pull request"`
+(expect `skill=herow-core:github-ops`). Optional files in `~/.herow/jev/`
+(`$HEROW_HOME/jev/` when overridden): `config.json` (`extra_command_dirs`, `rewrites`,
+`routing_assist`), `consents.md` (`routing: project-names` allows names in routing
+summaries) and `cases.local.json` (your own eval cases for `jev-route --eval --gate 0.9`).
 
 Old install.sh profiles map to: `minimal` → core · `dev` → core+dev · `seo` → core+seo · `finance` → core+finance.
 
@@ -83,7 +107,7 @@ claude-config/
 │   │   ├── hooks/hooks.json          # auto-registered when the plugin is enabled
 │   │   ├── scripts/                  # hook scripts + rules-inject.sh + update-check.sh
 │   │   ├── rules/                    # common/ (injected at SessionStart) + per-language
-│   │   ├── skills/github-ops/
+│   │   ├── skills/{github-ops,jev}/
 │   │   ├── commands/upgrade.md
 │   │   └── agents/
 │   ├── herow-dev/        # commands/{code,git,react,python}/ + skills/ + agents/

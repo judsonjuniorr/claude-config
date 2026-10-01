@@ -1,0 +1,236 @@
+[
+ {
+  "task": "Review the diff of PR #42 in the checkout service repo for security issues and code quality.",
+  "agent": [
+   "herow-core:code-reviewer",
+   "herow-dev:security-reviewer",
+   "herow-dev:typescript-reviewer"
+  ],
+  "skill": [
+   "herow-dev:code:review",
+   "code-review",
+   "security-review",
+   "none"
+  ]
+ },
+ {
+  "task": "The checkout API returns a 500 with a NullPointerException stack trace since yesterday's deploy; find the root cause.",
+  "agent": [
+   "herow-core:debugger"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "Design the OpenAPI spec and Postgres schema for a new invoicing service.",
+  "agent": [
+   "herow-dev:backend-architect"
+  ],
+  "skill": [
+   "none",
+   "herow-dev:blueprint"
+  ]
+ },
+ {
+  "task": "Implement a settings page with a tRPC mutation and Drizzle migration in the Next.js app.",
+  "agent": [
+   "herow-dev:fullstack-developer"
+  ],
+  "skill": [
+   "none",
+   "herow-dev:quick",
+   "herow-dev:execute"
+  ]
+ },
+ {
+  "task": "Add offline sync to the React Native app so edits made without network are pushed later.",
+  "agent": [
+   "herow-dev:mobile-developer"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "Write a Python 3.12 script that scrapes a product page every hour and stores prices in SQLite.",
+  "agent": [
+   "herow-dev:python-pro"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "Add a new REST endpoint to the Spring Boot 3 order microservice.",
+  "agent": [
+   "herow-dev:java-pro"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "Compare Hetzner, DigitalOcean and Vultr VPS pricing and reliability with sources.",
+  "agent": [
+   "herow-dev:search-specialist"
+  ],
+  "skill": [
+   "herow-dev:research",
+   "anthropic-skills:deep-research",
+   "none"
+  ]
+ },
+ {
+  "task": "Audit the onboarding screen for accessibility and layout problems.",
+  "agent": [
+   "herow-dev:ui-ux-designer"
+  ],
+  "skill": [
+   "herow-dev:react:validate-ui",
+   "herow-dev:ux-audit",
+   "none"
+  ]
+ },
+ {
+  "task": "Analyze my monthly cash flow and debt payoff options from Organizze data.",
+  "agent": [
+   "herow-finance:financial-analyst"
+  ],
+  "skill": [
+   "herow-finance:organizze"
+  ]
+ },
+ {
+  "task": "Find where the auth middleware is defined across this monorepo.",
+  "agent": [
+   "Explore",
+   "general-purpose"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "Register the service invoice my company received from a supplier in Contabilizei.",
+  "agent": [
+   "none"
+  ],
+  "skill": [
+   "herow-finance:nf-tomada"
+  ]
+ },
+ {
+  "task": "Commit these changes and open a pull request.",
+  "agent": [
+   "none"
+  ],
+  "skill": [
+   "herow-core:github-ops",
+   "herow-dev:git:pr"
+  ]
+ },
+ {
+  "task": "Resolve the merge conflicts on my feature branch.",
+  "agent": [
+   "none"
+  ],
+  "skill": [
+   "herow-dev:git:fix-conflicts"
+  ]
+ },
+ {
+  "task": "Fix the dependency CVEs reported by Dependabot in this repo.",
+  "agent": [
+   "none"
+  ],
+  "skill": [
+   "herow-dev:fix-cves"
+  ]
+ },
+ {
+  "task": "Write unit tests for the date formatting module.",
+  "agent": [
+   "none",
+   "herow-dev:tdd-guide"
+  ],
+  "skill": [
+   "herow-dev:code:generate-tests"
+  ]
+ },
+ {
+  "task": "How do I configure a PreToolUse hook in Claude Code settings?",
+  "agent": [
+   "claude-code-guide"
+  ],
+  "skill": [
+   "update-config",
+   "none"
+  ]
+ },
+ {
+  "task": "Create a bar chart of monthly revenue for the dashboard.",
+  "agent": [
+   "none"
+  ],
+  "skill": [
+   "dataviz"
+  ]
+ },
+ {
+  "task": "Do market research on the Brazilian SaaS market for auto repair shops.",
+  "agent": [
+   "herow-dev:search-specialist"
+  ],
+  "skill": [
+   "herow-dev:research",
+   "anthropic-skills:deep-research",
+   "none"
+  ]
+ },
+ {
+  "task": "Rename the variable userId to accountId in utils.ts.",
+  "agent": [
+   "none"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "Explain what a closure is in JavaScript.",
+  "agent": [
+   "none"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "Check whether this Python diff swallows exceptions silently in the retry logic.",
+  "agent": [
+   "herow-dev:silent-failure-hunter",
+   "herow-dev:python-reviewer"
+  ],
+  "skill": [
+   "none",
+   "herow-dev:code:review",
+   "code-review"
+  ]
+ },
+ {
+  "task": "Corrigir o bug do relatório de despesas que mostra valores duplicados.",
+  "agent": [
+   "herow-core:debugger"
+  ],
+  "skill": [
+   "none"
+  ]
+ },
+ {
+  "task": "/herow-core:doctor check my setup",
+  "skip": true,
+  "agent": [],
+  "skill": []
+ }
+]

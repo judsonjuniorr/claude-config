@@ -8,6 +8,8 @@
 #   remove|omega|<surface>|<detail>        OMEGA surface found (removal candidate)
 #   remove|loose|<surface>|<detail>        loose duplicate command/hook found
 #   remove|stray|<name>|<detail>           other memory/token tool found
+#   manual|<name>|present|<detail>         user-action item already done (doctor can't install it)
+#   manual|<name>|missing|-                user action required; doctor lists it under Manual steps
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "${HERE}/_common.sh"
@@ -23,6 +25,9 @@ if have rtk;      then emit tool rtk      installed "$(rtk --version 2>/dev/null
 if have graphify; then emit tool graphify installed "$(graphify --version 2>/dev/null | head -1)"; else emit tool graphify missing -; fi
 if [ -d "${GSTACK_DIR}/.git" ]; then emit tool gstack installed "${GSTACK_DIR}"; else emit tool gstack missing -; fi
 if have organizze; then emit tool organizze installed "$(organizze --version 2>/dev/null | head -1)"; else emit tool organizze missing -; fi
+if [ -x "${JEV_BIN}/jev" ] && [ -x "${JEV_BIN}/jev-route" ] && [ -f "${JEV_BIN}/jev_env.py" ]; then
+  emit tool jev-shim installed "${JEV_BIN}/jev"
+else emit tool jev-shim missing -; fi
 
 ## --- OMEGA surfaces (all removal candidates) ---
 have uv && uv tool list 2>/dev/null | grep -qi '^omega-memory' && emit remove omega uv-tool "uv tool: omega-memory"
@@ -77,4 +82,8 @@ for k in d.get("mcpServers",{}):
     if "memory" in kl: print("remove|stray|%s|MCP server '%s' (~/.claude.json)"%(k,k))
 PY
 fi
+
+## --- manual steps (doctor can't do these for the user) ---
+JEV_SRC="$(jev_key_source)"
+if [ "$JEV_SRC" = none ]; then emit manual jev-key missing -; else emit manual jev-key present "$JEV_SRC"; fi
 exit 0

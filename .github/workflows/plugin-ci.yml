@@ -90,10 +90,19 @@ jobs:
             echo "::error::secret QA_LITERAL_GUARD_PATTERN is not set"; exit 1
           fi
           # -l prints file paths only, so a hit never echoes the literal into the log.
-          if hits="$(grep -rliE -e "$PATTERN" plugins/herow-dev/skills/qa-*/)"; then
-            echo "::error::project-specific literal found in: $hits"; exit 1
-          fi
-          echo "qa skills are project-agnostic OK"
+          rc=0
+          hits="$(grep -rliE --exclude-dir=__pycache__ -e "$PATTERN" \
+              plugins/herow-core/skills/jev/ \
+              plugins/herow-core/scripts/jev-shim.sh \
+              plugins/herow-core/scripts/jev-session.sh \
+              plugins/herow-core/scripts/setup/ \
+              plugins/herow-core/scripts/tests/test-jev-shim.sh \
+              plugins/herow-core/scripts/tests/test-jev-session.sh \
+              plugins/herow-core/scripts/tests/test-setup-records.sh)" || rc=$?
+          # grep exits 2 on a bad pattern or missing path, which must not read as clean.
+          if [ "$rc" -eq 0 ]; then echo "::error::personal literal found in: $hits"; exit 1; fi
+          if [ "$rc" -ne 1 ]; then echo "::error::literal guard grep failed (exit $rc)"; exit 1; fi
+          echo "jev files are free of personal literals OK"
 
       - name: Playwright engine for qa-login browser cases (drives the runner's Google Chrome)
         run: npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" playwright-core@1
@@ -113,6 +122,9 @@ jobs:
           bash plugins/herow-core/scripts/tests/test-doc-file-warning.sh
           python3 plugins/herow-core/skills/github-ops/hooks/tests/test_git_guard.py
           python3 plugins/herow-core/scripts/setup/tests/test_model_pin.py
+          bash plugins/herow-core/scripts/tests/test-jev-shim.sh
+          bash plugins/herow-core/scripts/tests/test-jev-session.sh
+          bash plugins/herow-core/scripts/tests/test-setup-records.sh
           # plugins/herow-dev/scripts/tests/test-blueprint-track.sh is NOT run
           # here yet: its lock-expiry and concurrent-writer cases fail on the
           # ubuntu runner ("stale lock: took 11s or record missing",
@@ -136,6 +148,7 @@ jobs:
           # Separate runs: both trees ship a top-level `tests` package that collides in one session.
           python3 -m pytest plugins/herow-finance -q
           python3 -m pytest plugins/herow-core/scripts/doctor -q
+          python3 -m pytest plugins/herow-core/skills/jev -q
 
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
