@@ -26,8 +26,13 @@ back into it.
 ## Constraints (always true)
 
 - Memory lives under the herow project store, resolved once via `${CLAUDE_PLUGIN_ROOT}/scripts/herow-project.sh qa --ensure` (prints `<QA>`) — **never** under `.claude/` (write-prevention hooks trigger there, and in at least one real project content under `.claude/` leaks to an external log aggregator) and never loose in the repo. Shell vars don't persist between Bash calls: use the **printed literal absolute path** in every later command/Write, never a bare `<QA>` carried over from an earlier call. The one exception is a frozen spec (Phase 5c of `qa-run`) — Node's own module resolution requires it to live in-repo, at `<freeze.repo>/.qa/frozen/`, gitignored there; qa-setup never writes anything there itself.
-- Credentials are **never** written into `config.yml` — only the names of the env vars
-  that hold them. Reports and knowledge always print `[REDACTED]` in their place.
+- Credentials are **never** written into `config.yml`, and **never** pass through this
+  session. They live in `<QA>/login.json` (mode 600). The user writes that file with a
+  command they run themselves (step 3), and only `qa-login.mjs` reads it. **Never** Read,
+  cat, grep or `browser_*` that file, or the state file under `<HEROW_HOME>/browser/state/`,
+  and never ask for the value in chat. Env-var names under `credentials_env` remain a
+  fallback, and their values are never `echo`ed or `printenv`ed. Reports and knowledge always print
+  `[REDACTED]` in place of a credential.
 - Prefer the headless Playwright MCP server (`mcp__playwright-headless__*`); use the
   headed one (`mcp__playwright__*`) only when headless is blocked — that is a per-project
   fact (`browser.headed_required`) proved by the smoke walk, not a preference you guess.
@@ -84,11 +89,22 @@ to confirm what "root" means here.
 - **Re-detect is a merge, not a rewrite.** Detected keys (services, repos, gates,
   detected ticket sources) are shown as a diff against the current config and applied
   only on confirmation. Hand-set and smoke-derived keys are **always kept** regardless of
-  re-detect: `gotchas`, `browser.headed_required`, `session.entry_recipe`, `setup.*`, and
+  re-detect: `gotchas`, `browser.headed_required`, `browser.executable_path`,
+  `session.entry_recipe`, `session.password_file`, `session.login_fields`, `setup.*`, and
   any `ticket.sources[]` entry already `verified` with its resolved params. Reset
   `setup.smoke` to `pending` only when a `session.*` or `services[]` key actually
   changes — an unrelated key changing (e.g. a repo's gates) does not invalidate a proven
   login/navigation recipe.
+- **Credential migration** (`login: form`, `auto_fill: true`, and no `session.password_file`
+  — a config written before scripted login). Run the step-3 `check`:
+  - `ok env` → the env vars still work as-is. Offer to move to a password file; don't
+    force it.
+  - `error login-missing` → go to the step-3 capture flow.
+  - **Any** `warn literal-in <files>` (env or file) → tell the user that those files hold
+    the credential in plain text. Ask them to replace it with `[REDACTED]` by hand, and
+    recommend rotating it, because past transcripts may hold it too. If a config comment
+    points at those files for credentials, rewrite that comment. This skill never edits
+    the credential text itself.
 
 ## 2. Detect
 
@@ -131,28 +147,50 @@ Then, separately — because detection cannot know these — ask:
 - **Login type**: `form | sso | magic-link | none`, plus `login_detect` (a plain
   description the model can match against a snapshot, e.g. `"a form with a password
   field"`).
-- For `login: form` only: the **credential env-var names** (`credentials_env.user`,
-  `credentials_env.password`) and **`auto_fill`** — recommend `true` only when
-  `session.env` is `local`, and state plainly in the option text that a `true` answer
-  means the credential value reaches the tool-call transcript (see *Login types and
-  credentials* in `reference.md`).
+- For `login: form` only, **`auto_fill`**:
+  - `true` (recommended) = scripted login by `qa-login.mjs`, outside the MCP browser. The
+    value never reaches the transcript.
+  - `false` = log in by hand in the headed browser.
+
+  See *Login types and credentials* in `reference.md`.
 - Any group detection had no confident value for.
 
-Right after the answers, if `login: form`, check that the **confirmed**
-`credentials_env.user` / `credentials_env.password` names actually have a value set,
-without ever printing it — e.g. for `credentials_env: { user: QA_USER, password:
-QA_PASSWORD }`:
+For `login: form`, also read `--executable-path` from `claude mcp get playwright-headless`.
+If it's present, propose it as `browser.executable_path` in the summary; the login script
+then drives the same browser build as the MCP server.
+
+Right after the answers, for `login: form` with `auto_fill: true`, write the config first
+(`setup.smoke: pending`, `session.password_file: login.json`). Then check that a
+credential resolves. The command takes the **literal** `<QA>` path and never prints the
+value:
 
 ```bash
-[ -n "${QA_USER+x}" ] && [ -n "${QA_PASSWORD+x}" ]
+node "${CLAUDE_PLUGIN_ROOT}/skills/qa-run/scripts/qa-login.mjs" check "<QA>"
 ```
 
-If either is missing: write the config anyway with `setup.smoke: pending`, print the
-exact copy-paste export lines (shell profile, or `<checkout-root>/.envrc` for direnv —
-already globally ignored), and stop `[env-var-missing]`: "restart Claude Code, then
-re-run `/herow-dev:qa-setup` — it resumes at the smoke walk." A var set inside this
-session's Bash tool never reaches Claude Code itself or the MCP server, so this is not
-optional.
+- `ok file` / `ok env` → continue. Handle a `warn literal-in` line per the credential
+  migration in step 1.
+- `error login-missing` → print the capture command with every path resolved. The user
+  runs it with the `!` prefix: with no TTY it opens a native hidden-input dialog on macOS.
+  They can also run it from a separate terminal.
+
+  ```
+  ! node "<CLAUDE_PLUGIN_ROOT>/skills/qa-run/scripts/qa-login.mjs" save "<QA>"
+  ```
+
+  Then use `AskUserQuestion`: **I ran it** / **stop and resume later**. After "I ran it",
+  re-run `check`. If it's still not `ok` → stop `[login-file-missing]`. As an alternative,
+  `credentials_env` vars exported **before** Claude Code starts also satisfy `check`.
+- `error file-mode` / `error file-invalid` / `error unsafe-path` → print the fix from the
+  stop table, then re-run `check`. If `save` printed `error cancelled` (dialog dismissed,
+  or an empty value), re-run the `save` command.
+- Only if the user says neither the `!` command nor a terminal can work for them, offer
+  `AskUserQuestion`'s free-text "Other" as a last resort. The option text must say that the
+  value will then sit in this session's transcript and should be rotated afterwards.
+  - Write the file in one Bash call that sets `umask 077` first, so it's never created
+    group-readable. Don't use the Write tool.
+  - Write it as JSON to `<QA>/login.json`.
+  - Never echo the value back.
 
 ## 3b. Ticket sources
 
@@ -251,8 +289,15 @@ update that entry's `Last verified` in place instead of appending a near-duplica
    its `playwright` stash entry doesn't exist on this machine, the generic "add a headed
    Playwright MCP server named `playwright` and restart" instruction), leave
    `setup.smoke: pending`, and stop.
+   A scripted-login project (`login: form`, `auto_fill: true`) also needs
+   `mcp__playwright-headless__browser_set_storage_state` in the tool list (deferred names
+   count). If it's absent → print the reconfig command from *Login types and credentials*
+   in `reference.md`, leave `setup.smoke: pending`, and stop `[browser-caps-missing]`.
 3. Navigate to `session.start_url`, snapshot. If the snapshot matches
-   `session.login_detect`, log in per *Login types and credentials* in `reference.md`.
+   `session.login_detect`, log in per *Login types and credentials* in `reference.md`. For
+   a scripted login, that means the script, then `browser_set_storage_state`, then
+   `qa-login.mjs clear` (always, once the script printed `ok`, even if the restore failed),
+   then a re-navigate.
 4. Navigate toward `session.entry_target`.
 5. **Pass condition:** the `entry_target` landmark is visible in a snapshot — regardless
    of whether a login form was shown (the persistent browser profile usually keeps you
@@ -261,7 +306,10 @@ update that entry's `Last verified` in place instead of appending a near-duplica
    `session.entry_recipe` to that entry's exact heading; set `setup.smoke: verified` and
    `smoke_date`.
 6. **Failure paths** (both leave `setup.smoke: pending`, write no recipe):
-   - **Credentials rejected** — the login form is still shown after a fill attempt.
+   - **Login failed** — `qa-login.mjs login` printed `error <code>` (see the stop table:
+     `rejected` = wrong credentials; `no-form`/`field-missing` = set `session.login_fields`).
+     A related case: the script printed `ok`, but after the restore the snapshot still
+     matches `login_detect` → stop `[session-not-transferred]`.
    - **Landmark not found, no login form ever seen** — most likely the wrong app/URL; do
      not fall back to guessing, report which check failed with the snapshot evidence.
    In either case, offer via `AskUserQuestion`: edit the offending config key and retry

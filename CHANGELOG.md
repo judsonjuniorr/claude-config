@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.2.0] - 2026-09-30
+
+### Fixed
+- **QA login no longer exposes the password.**
+  - `/herow-dev:qa-setup` and `/herow-dev:qa-run` now log in to `login: form` apps with
+    a new `qa-run/scripts/qa-login.mjs`. It runs in a separate headless browser, outside the
+    Playwright MCP session. The MCP side receives only a storageState **path**, through
+    `browser_set_storage_state`. The credential never appears in a tool input or output.
+  - The script's stdout is `ok …`, `warn …` or `error <code>`, and its stderr is silenced.
+  - The user writes the credential with `! node …/qa-login.mjs save "<QA>"`: a muted TTY
+    prompt, or a native hidden-input dialog when there is no TTY. It lands in
+    `<QA>/login.json` (mode 600, outside every repo, name matching none of the settings
+    deny globs).
+  - `credentials_env` still works as a fallback, so existing configs keep logging in.
+  - `check` warns, by file name only, when a stored credential appears in plain text in
+    knowledge or reports.
+  - New optional keys: `session.password_file`, `session.login_fields`,
+    `session.login_origins`, `browser.executable_path`.
+  - Hardening:
+    - The credential is typed only into `start_url`'s origin or a `login_origins` entry,
+      and plain http only on local hosts.
+    - `password_file` must be a bare `*.json` name in `<QA>` and is never a symlink.
+    - Config keys are type-checked.
+    - The storageState file is deleted (`clear`) right after the MCP restores it.
+    - When no `executable_path` is set, the login browser mirrors the MCP's
+      `--executable-path`, then falls back to the `chrome` channel.
+  - New stop codes: `login-file-missing`, `browser-caps-missing`, `login-failed`,
+    `session-not-transferred`.
+  - Frozen specs log in through a `globalSetup` that reads `QA_LOGIN_FILE` or the env vars
+    at run time.
+  - **Requires** `playwright-headless` to run with `--caps=storage --output-dir
+    <HEROW_HOME>/browser`. The reconfig command is printed by qa-setup. Screenshots can now
+    be saved straight under `<HEROW_HOME>/browser/shots/`.
+  - New test suite `test-qa-login.sh` (44 cases). CI installs `playwright-core` and requires its browser cases.
+
 ## [0.12.1.0] - 2026-09-28
 
 ### Changed

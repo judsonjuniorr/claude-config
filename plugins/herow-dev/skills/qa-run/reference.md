@@ -22,8 +22,12 @@ key.
 | `session.start_url` | string | non-empty |
 | `session.login` | string | one of `form \| sso \| magic-link \| none` |
 | `session.login_detect` | string | required unless `login: none` |
-| `session.credentials_env.user` / `.password` | string | required when `login: form` |
-| `session.auto_fill` | bool | required when `login: form` |
+| `session.auto_fill` | bool | required when `login: form`; `true` = scripted login (`qa-login.mjs`), `false` = manual headed |
+| `session.password_file` | string | optional; a bare `*.json` file name directly in `<QA>` (default `login.json`) for the 600 JSON login file — never a value |
+| `session.credentials_env.user` / `.password` | string | optional fallback, used when the password file doesn't exist |
+| `session.login_fields.user` / `.password` / `.submit` | string | optional Playwright selectors |
+| `session.login_origins` | list[string] | optional extra origins (e.g. an IdP) the credential may be typed into |
+| `browser.executable_path` | string | optional absolute path; when unset, `qa-login.mjs` tries `playwright-headless`'s `--executable-path`, then the `chrome` channel, then the engine's bundled Chromium |
 | `session.entry_target` | string | non-empty |
 | `setup.smoke` | string | one of `pending \| verified` |
 | `ticket.default` | string | must name a `ticket.sources[]` entry |
@@ -93,6 +97,10 @@ the run's report dir. Every new or refreshed entry carries an `Env:` tag: this r
 behavior, not a routing/URL fact). An untagged entry is a bug in this skill's output —
 other tools reading the same store rely on the tag.
 
+A recipe's login step names the mechanism, for example "scripted login
+(`qa-login.mjs` → `browser_set_storage_state`)". It **never** names a user or password; a
+credential is always written as `[REDACTED]`.
+
 `navigation.md` entry:
 
 ```md
@@ -124,8 +132,9 @@ start ahead of run N's.
 
 ## Freeze procedure (Phase 5c)
 
-Eligible only when: final verdict `Pass`, `freeze` configured, `session.login` is `form`
-or `none`, `browser.headed_required` is false. A Pass that depends on an uncommitted fix
+Eligible only when: final verdict `Pass`, `freeze` configured, `browser.headed_required`
+is false, and `session.login` is either `none` or `form` with `auto_fill: true` and a
+`qa-login.mjs check` result of `ok`. A Pass that depends on an uncommitted fix
 made *this run* is flagged plainly in the offer.
 
 **Row eligibility.** A checklist row is freezable when either:
@@ -170,8 +179,8 @@ specifier) relative to the spec file's own ancestor `node_modules/`, so a spec p
 no default Playwright/Vitest/Jest pattern, so an explicit `testMatch` is required (below)
 and it's also invisible to the project's own test runs.
 
-**Own config**, `<freeze.repo>/.qa/frozen/playwright.config.mjs` — a plain object export,
-no imports:
+**Own config**, `<freeze.repo>/.qa/frozen/playwright.config.mjs` — a plain object export
+(for `login: form`, see *Login* below for its only additions):
 
 ```js
 export default {
@@ -181,13 +190,58 @@ export default {
 };
 ```
 
-No `webServer`, no `projects`/project dependencies, no `storageState` — a mocked-auth
-setup from the project's own e2e suite must never be pulled in here.
+No `webServer` and no `projects`/project dependencies. The project's own e2e
+`storageState` or mocked-auth setup must never be pulled in here.
+
+**Login (`login: form` only).** Copy `qa-login.mjs` verbatim into `.qa/frozen/` and write
+`.qa/frozen/qa-login.setup.mjs` next to it. Both are covered by the `.qa/` ignore rule.
+Then make these changes to the config above:
+- Add `import os from "node:os"; import path from "node:path"; import { randomUUID } from "node:crypto";`.
+- Add `process.env.QA_FROZEN_STATE ??= path.join(os.tmpdir(), "qa-frozen-" + randomUUID() + ".json");`
+  above the export. It runs at load time, and the env var carries the path to the workers,
+  so every run gets a fresh path and all of its workers share it.
+- Add `globalSetup: "./qa-login.setup.mjs"` and `use.storageState: process.env.QA_FROZEN_STATE`.
+
+`qa-login.setup.mjs` logs in once per run, against the live app, with real credentials
+read **at run time**. Only names and paths are emitted into it, never a value:
+
+```js
+import fs from "node:fs";
+import { chromium } from "@playwright/test";
+import { readLoginFile, loginFromEnv, performLogin, allowedOrigins } from "./qa-login.mjs";
+
+export default async function globalSetup(config) {
+  const { baseURL, storageState } = config.projects[0].use;
+  const creds = (process.env.QA_LOGIN_FILE && readLoginFile(process.env.QA_LOGIN_FILE))
+    || loginFromEnv(<JSON.stringify(session.credentials_env ?? null)>);
+  if (!creds) throw new Error("qa-frozen login failed: set QA_LOGIN_FILE or the credential env vars");
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(baseURL);
+    await performLogin(page, creds, <JSON.stringify(session.login_fields ?? {})>,
+      allowedOrigins(baseURL, <JSON.stringify(session.login_origins ?? [])>));
+    // rm clears a stale file; wx still refuses anything planted in between, and the new file is mode 600.
+    fs.rmSync(storageState, { force: true });
+    fs.writeFileSync(storageState, JSON.stringify(await context.storageState()), { mode: 0o600, flag: "wx" });
+  } catch (e) {
+    // Never rethrow e: a Playwright error can quote the filled value.
+    throw new Error(`qa-frozen login failed: ${e?.code ?? "error"}`);
+  } finally {
+    await browser.close();
+  }
+  // Returned teardown: the state file holds live session cookies.
+  return () => fs.rmSync(storageState, { force: true });
+}
+```
+
+The login runs outside `test()`, so filled values never appear as step titles in the JSON
+reporter output this skill reads.
 
 **Spec shape.** One `test()` per row, provenance in the title. A `beforeEach` replays
-`session.entry_recipe`: login reads `process.env[credentials_env.user/password]` in the
-spec's own code (never a literal value), new-tab hops use
-`context.waitForEvent('page')`. Every anchor is the exact role/text from the walk's
+the post-login part of `session.entry_recipe` (globalSetup already logged in). New-tab
+hops use `context.waitForEvent('page')`. Every anchor is the exact role/text from the walk's
 snapshots, emitted through `JSON.stringify` with **no template interpolation of page or
 ticket text** — a quote or backtick inside a heading must not break the generated spec or
 let page content become code. Assertions check the same post-action state the walk
@@ -197,7 +251,9 @@ says so explicitly.
 
 **Proof, in order:**
 1. `<freeze.runner> test -c .qa/frozen/playwright.config.mjs <spec> --reporter=json`
-   passes.
+   passes. For `login: form`, prefix it with `QA_LOGIN_FILE="<QA>/<session.password_file or login.json>"`;
+   that puts a path on the command line, never a value. Under the env fallback, run it
+   unprefixed.
 2. **Mutation, per `test()`:** copy the spec to
    `<name>.mutant.qa-frozen.mjs` inside `.qa/frozen/`, change one expected value in that
    one test, run it with the JSON reporter, require that **exactly** that test failed on
@@ -214,7 +270,8 @@ the spec as **"unproven (env)"** with the install command — it is not deleted.
 fails step 1 or 2 for a spec reason (not an env error) is deleted, with the reason
 recorded in the Freeze report section.
 
-**Hand-off.** No commit is made. The report states the spec's path and says promoting it
+**Hand-off.** No commit is made. For `login: form`, the report states that running the
+suite needs `QA_LOGIN_FILE` (a path) or the `credentials_env` vars. The report states the spec's path and says promoting it
 into the project's own test suite (with its own config and auth setup) is the user's
 decision, not this skill's.
 
@@ -237,3 +294,6 @@ command or config key>.` plus a resume hint when one applies.
 | `gh-auth` | `gh auth status` fails for the GitHub source | `gh auth login`, re-run |
 | `browser-tools-missing` | the server picked by `headed_required` isn't loaded this session | Restore/add that Playwright MCP server, restart |
 | `headless-blocked` | headless got blocked mid-run | Re-run `/herow-dev:qa-setup` to switch to headed |
+| `browser-caps-missing` | scripted login, but `browser_set_storage_state` isn't in this session | Reconfigure `playwright-headless` per "MCP server prerequisites" in `qa-setup/reference.md`, restart |
+| `login-failed` | `qa-login.mjs login` printed `error <code>`, or a second mid-run expiry | Apply that code's fix from qa-setup's stop table (`login-file-missing`, `login-file-mode` and `login-file-invalid` included), or re-run `/herow-dev:qa-setup` |
+| `session-not-transferred` | the restored session still shows the login form | Re-run `/herow-dev:qa-setup` and choose `auto_fill: false` (manual headed login) |
