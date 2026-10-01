@@ -171,10 +171,12 @@ export function validateConfig(cfg) {
   return cfg;
 }
 
+const configPath = (qa) => path.join(qa, "config.yml");
+
 function loadConfig(qa) {
   let text;
   try {
-    text = fs.readFileSync(path.join(qa, "config.yml"), "utf8");
+    text = fs.readFileSync(configPath(qa), "utf8");
   } catch {
     fail("config-unreadable", "config.yml");
   }
@@ -450,7 +452,7 @@ function askDialog(prompt, hidden) {
 
 async function save(qa) {
   process.umask(0o077);
-  const session = fs.existsSync(path.join(qa, "config.yml")) ? loadConfig(qa).session : {};
+  const session = fs.existsSync(configPath(qa)) ? loadConfig(qa).session : {};
   const file = loginFilePath(qa, session);
   const dir = path.dirname(file);
   if (DENY_NAME.test(path.basename(file))) fail("unsafe-path");
@@ -504,7 +506,7 @@ function literalHits(qa, needle) {
       else if (/\.(md|txt|json|ya?ml)$/i.test(name) && st.size < 5_000_000) scan(p);
     }
   };
-  scan(path.join(qa, "config.yml"));
+  scan(configPath(qa));
   walk(path.join(qa, "knowledge"), 0);
   walk(path.join(qa, "reports"), 0);
   return hits;
