@@ -51,7 +51,7 @@ BUILTIN_SKILLS = {
 
 FINANCE = re.compile(
     r"(?i)\b(financ|organizze|ynab|budget|or[cç]amento|fatura|invoice|cash ?flow|"
-    r"fluxo de caixa|debt|d[ií]vida|invest|patrim|saldo|extrato|market|mercado|pricing|pre[cç]o)"
+    r"fluxo de caixa|debt|d[ií]vida|invest(?!igat)|patrim|saldo|extrato|market(?!place)|mercado|pricing|pre[cç]o)"
 )
 PERSONAL_FINANCE = re.compile(
     r"(?i)\b(organizze|ynab|budget|cash ?flow|debt|saldo|extrato|patrim|invest|fire)\b"
@@ -387,6 +387,22 @@ def top(answer, keymap):
     )
 
 
+LOG_MAX_BYTES = 1_000_000
+
+
+def write_log(log, rows):
+    import jev
+
+    log.parent.mkdir(parents=True, exist_ok=True)
+    if log.exists() and log.stat().st_size > LOG_MAX_BYTES:
+        os.replace(log, log.with_suffix(".log.1"))
+    fd = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
+        for row in rows:
+            entry = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), **row, "task": jev.redact_br(row["task"])}
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
 def postfilter(task, agent, skill, notes, cat):
     """Rules a description match can miss; each rewrite applies only when its target is installed."""
     if agent == "general-purpose" and FINANCE.search(task):
@@ -492,13 +508,10 @@ def route(tasks, conf, dry_run=False, cat=None):
             tokens=(res.get("usage") or {}).get("input_tokens"),
         )
     log = paths()["log"]
-    log.parent.mkdir(parents=True, exist_ok=True)
-    with log.open("a") as f:
-        for row in out:
-            f.write(
-                json.dumps({"ts": time.strftime("%FT%T"), **row}, ensure_ascii=False)
-                + "\n"
-            )
+    try:
+        write_log(log, out)
+    except OSError as e:
+        print(f"jev: could not write log {log}: {e}", file=sys.stderr)
     return out, resp.get("totals")
 
 

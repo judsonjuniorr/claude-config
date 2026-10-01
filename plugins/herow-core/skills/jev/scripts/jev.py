@@ -3,7 +3,6 @@
 Input: {"items": [{"id", "state", "questions"?}], "questions": {...}, "model"?}; output: {"results", "errors", "totals"}."""
 
 import argparse
-import getpass
 import json
 import os
 import re
@@ -14,10 +13,12 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+import jev_env
+
 URL = "https://openrouter.ai/api/alpha/decisions"
 GENERATION_URL = "https://openrouter.ai/api/v1/generation?id="
 DEFAULT_MODEL = "typesafe/jev-1.13"
-KEY_SERVICE = "openrouter-api-key"
+KEY_SERVICE = jev_env.KEY_SERVICE
 
 # Order matters: labelled agência/conta first, then document numbers, then any leftover long digit run.
 BR_PATTERNS = [
@@ -67,15 +68,7 @@ def read_key():
         timeout = 5.0
     try:
         r = subprocess.run(
-            [
-                os.environ.get("JEV_SECURITY_BIN") or "security",
-                "find-generic-password",
-                "-a",
-                getpass.getuser(),
-                "-s",
-                KEY_SERVICE,
-                "-w",
-            ],
+            jev_env.keychain_argv(),
             capture_output=True,
             text=True,
             stdin=subprocess.DEVNULL,
@@ -151,16 +144,20 @@ def redact_questions(questions):
     return out
 
 
+def failure(item, status, text, key, body):
+    return {
+        "item_id": item.get("id"),
+        "status": status,
+        "body": scrub(text, key),
+        "request": {"method": "POST", "url": URL, "body": body},
+    }
+
+
 def ask(item, body, key, args):
     try:
         return _ask(item, body, key, args)
     except Exception as e:
-        return None, {
-            "item_id": item.get("id"),
-            "status": "exception",
-            "body": scrub(f"{type(e).__name__}: {e}", key),
-            "request": {"method": "POST", "url": URL, "body": body},
-        }
+        return None, failure(item, "exception", f"{type(e).__name__}: {e}", key, body)
 
 
 def _ask(item, body, key, args):
@@ -168,19 +165,13 @@ def _ask(item, body, key, args):
     status, text = http("POST", URL, key, body, args.timeout)
     ms = round((time.perf_counter() - t0) * 1000)
     if status != 200:
-        return None, {
-            "item_id": item.get("id"),
-            "status": status,
-            "body": scrub(text, key),
-            "request": {"method": "POST", "url": URL, "body": body},
-        }
+        return None, failure(item, status, text, key, body)
     resp = json.loads(text)
     cost = (resp.get("usage") or {}).get("cost")
-    cost_source = "usage.cost"
+    cost_source = "usage.cost" if cost is not None else None
     if cost is None and resp.get("id"):
-        cost, cost_source = lookup_cost(key, resp["id"]), "generation"
-    if cost is None:
-        cost_source = None
+        cost = lookup_cost(key, resp["id"])
+        cost_source = "generation" if cost is not None else None
     answers = resp.get("answers", {})
     return {
         "id": item.get("id"),

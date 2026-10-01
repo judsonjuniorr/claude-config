@@ -99,6 +99,18 @@ chmod 755 "$HEROW_HOME"
   case "$out" in *"$HOME/.herow/bin/jev-route"*) exit 0;; *) exit 1;; esac
 ) && ok "HEROW_HOME unset -> block points at ~/.herow/bin/jev-route" || fail "default HEROW_HOME"
 
+# The hook must be registered on startup|clear|compact, or the feature never runs.
+if python3 - "$PLUGIN_ROOT/hooks/hooks.json" <<'PY'
+import json, sys
+groups = json.load(open(sys.argv[1]))["hooks"]["SessionStart"]
+ok = any(
+    g["matcher"] == "startup|clear|compact" and any(h["command"].endswith('scripts/jev-session.sh"') for h in g["hooks"])
+    for g in groups
+)
+sys.exit(0 if ok else 1)
+PY
+then ok "hooks.json registers jev-session.sh on SessionStart"; else fail "hooks.json missing jev-session.sh SessionStart entry"; fi
+
 echo "----"
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

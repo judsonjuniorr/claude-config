@@ -55,6 +55,10 @@ def security_bin() -> str:
     return os.environ.get("JEV_SECURITY_BIN") or "security"
 
 
+def keychain_argv() -> List[str]:
+    return [security_bin(), "find-generic-password", "-a", keychain_user(), "-s", KEY_SERVICE, "-w"]
+
+
 def _load_json(path: Path, what: str) -> object:
     try:
         return json.loads(path.read_text())
@@ -186,15 +190,7 @@ def probe() -> str:
     try:
         # Own process group: on timeout the whole tree dies, so no grandchild keeps the pipe open.
         proc = subprocess.Popen(
-            [
-                security_bin(),
-                "find-generic-password",
-                "-a",
-                keychain_user(),
-                "-s",
-                KEY_SERVICE,
-                "-w",
-            ],
+            keychain_argv(),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,

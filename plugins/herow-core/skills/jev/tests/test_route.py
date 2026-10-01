@@ -661,3 +661,13 @@ def test_empty_or_bad_stdin_exits_with_unavailable(env, monkeypatch, stdin):
     monkeypatch.setattr("sys.stdin", io.StringIO(stdin))
     code = run_main(monkeypatch, [])
     assert code == "jev unavailable: no tasks given. Pass one summary per argument"
+
+
+@pytest.mark.parametrize("task", ["investigate the login bug", "update the plugin marketplace"])
+def test_finance_regex_ignores_investigate_and_marketplace(task):
+    assert not route.FINANCE.search(task)
+
+
+@pytest.mark.parametrize("task", ["analise meus investimentos", "financeiro do mês", "market sizing"])
+def test_finance_regex_keeps_finance_stems(task):
+    assert route.FINANCE.search(task)

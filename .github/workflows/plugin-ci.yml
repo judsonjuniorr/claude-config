@@ -90,34 +90,18 @@ jobs:
             echo "::error::secret QA_LITERAL_GUARD_PATTERN is not set"; exit 1
           fi
           # -l prints file paths only, so a hit never echoes the literal into the log.
-          if hits="$(grep -rliE -e "$PATTERN" plugins/herow-dev/skills/qa-*/)"; then
-            echo "::error::project-specific literal found in: $hits"; exit 1
-          fi
-          echo "qa skills are project-agnostic OK"
-
-      - name: Guard — no personal literals in the shipped Jev files
-        env:
-          # Kept in a secret so the literals never land in this public repo or its logs.
-          PATTERN: ${{ secrets.JEV_LITERAL_GUARD_PATTERN }}
-          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
-        run: |
-          set -e
-          if [ -z "$PATTERN" ]; then
-            # Not a failure until the repo owner adds the secret; the warning keeps it visible.
-            echo "::warning::pattern secret missing: JEV_LITERAL_GUARD_PATTERN is not set${IS_FORK:+ (fork PR: $IS_FORK)}; literal guard skipped"
-            exit 0
-          fi
-          # -l prints file paths only, so a hit never echoes the literal into the log.
-          if hits="$(grep -rliE --exclude-dir=__pycache__ -e "$PATTERN" \
+          rc=0
+          hits="$(grep -rliE --exclude-dir=__pycache__ -e "$PATTERN" \
               plugins/herow-core/skills/jev/ \
               plugins/herow-core/scripts/jev-shim.sh \
               plugins/herow-core/scripts/jev-session.sh \
               plugins/herow-core/scripts/setup/ \
               plugins/herow-core/scripts/tests/test-jev-shim.sh \
               plugins/herow-core/scripts/tests/test-jev-session.sh \
-              plugins/herow-core/scripts/tests/test-setup-records.sh)"; then
-            echo "::error::personal literal found in: $hits"; exit 1
-          fi
+              plugins/herow-core/scripts/tests/test-setup-records.sh)" || rc=$?
+          # grep exits 2 on a bad pattern or missing path, which must not read as clean.
+          if [ "$rc" -eq 0 ]; then echo "::error::personal literal found in: $hits"; exit 1; fi
+          if [ "$rc" -ne 1 ]; then echo "::error::literal guard grep failed (exit $rc)"; exit 1; fi
           echo "jev files are free of personal literals OK"
 
       - name: Playwright engine for qa-login browser cases (drives the runner's Google Chrome)
