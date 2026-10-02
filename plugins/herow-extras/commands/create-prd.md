@@ -24,7 +24,7 @@ Turn a rough idea into a Product Requirements Document by **brainstorming the in
 
 Ask with `AskUserQuestion`:
 
-- **Lean one-pager** — fast, single-page brief. Fewer questions, lighter output.
+- **Lean one-pager** — fast, single-page brief with feature-level acceptance criteria and regression checks. Fewer questions, lighter output.
 - **Comprehensive** — full PRD with personas, jobs-to-be-done, user stories, and acceptance criteria.
 
 The choice selects which discovery rounds run (Step 3) and which output template you synthesize (Step 4).
@@ -50,9 +50,15 @@ Rounds (run all for *comprehensive*; run the ★ subset for *lean*):
    - **Primary** — one metric with target + timeframe.
    - **Secondary** — supporting metrics.
    - **Guardrail** — a metric that must **not** regress.
-7. ★ **Risks** — Top risks, each with likelihood (low/med/high) and a mitigation.
-8. **UX requirements** *(comprehensive)* — Key states, empty/error/loading behavior, accessibility or responsive expectations, and the acceptance-criteria style the user wants.
-9. **Technical considerations** *(comprehensive)* — Offer to delegate to `herow-dev:backend-architect` for high-level architecture notes, dependencies, and trade-offs. If declined or unavailable, capture them inline and keep them high-level (no implementation detail).
+7. ★ **Acceptance criteria** — Draft 3–7 feature-level `GIVEN … WHEN … THEN …` criteria from the key flows and scope, and offer them for the user to confirm, edit, or extend. At least one must cover a negative or error path. Each must be checkable by observing the product, not by reading code. In *comprehensive*, attach each confirmed criterion to the user story it exercises (Step 4, item 8).
+8. ★ **Regression risks** — Which existing behaviors could this break?
+   - Inside a git repo, first `Grep`/`Glob` for the areas the feature touches (screens, routes, shared modules named in scope) and offer the existing **user-visible behaviors** found there as `multiSelect` options. Outside a repo, ask only.
+   - Name behaviors, never files or code — the PRD stays *what*, not *how*.
+   - For each kept item capture *why it's at risk* in one line and a `GIVEN … WHEN … THEN <behavior> still …` check.
+   - Nothing found and nothing named by the user → record it as an open question; never invent one.
+9. ★ **Risks** — Top risks, each with likelihood (low/med/high) and a mitigation.
+10. **UX requirements** *(comprehensive)* — Key states, empty/error/loading behavior, accessibility or responsive expectations.
+11. **Technical considerations** *(comprehensive)* — Offer to delegate to `herow-dev:backend-architect` for high-level architecture notes, dependencies, and trade-offs. If declined or unavailable, capture them inline and keep them high-level (no implementation detail).
 
 Stop the discovery loop once every required field for the chosen depth is filled or explicitly deferred to open questions.
 
@@ -67,8 +73,10 @@ Render the document directly in chat (Markdown). Use the section set for the cho
 3. **Solution** — summary (1–2 sentences) · key user flow(s)
 4. **Out of scope** — explicit exclusions
 5. **Success metrics** — primary · secondary · guardrail
-6. **Risks & mitigations** — risk · likelihood · mitigation
-7. **Open questions / Assumptions**
+6. **Acceptance criteria** — `- [ ] GIVEN … WHEN … THEN …`
+7. **Regression checks** — `- [ ] (regression: <area>) GIVEN … WHEN … THEN <behavior> still … — why at risk: <one line>` (inline, same row, so qa-run reads one row per check)
+8. **Risks & mitigations** — risk · likelihood · mitigation
+9. **Open questions / Assumptions**
 
 **Comprehensive:**
 
@@ -80,20 +88,22 @@ Render the document directly in chat (Markdown). Use the section set for the cho
 6. **Requirements** — functional requirements, prioritized (e.g. Must / Should / Could); each traceable to a stated user need
 7. **In scope / Out of scope**
 8. **User stories** — each as `As a [persona], when [trigger], I want [capability], so that [outcome]`, followed by:
-   - **Acceptance criteria** in `GIVEN … WHEN … THEN …` form, plus edge cases.
-   - **Definition of Done** checklist (AC pass, analytics fire, error states handled, responsive verified, accessibility standard met, performance threshold).
+   - **Acceptance criteria** as `- [ ] GIVEN … WHEN … THEN …` rows, at least one covering an edge or negative case.
+   - **Definition of Done** checklist (AC pass, regression checks pass, analytics fire, error states handled, responsive verified, accessibility standard met, performance threshold).
 9. **Success metrics** — primary · secondary · guardrail
 10. **UX requirements** — key states, accessibility, responsive notes
 11. **Technical considerations** — high-level only (from `herow-dev:backend-architect` if used)
 12. **Risks & mitigations**
-13. **Dependencies** — teams, services, prerequisites
-14. **Open questions / Assumptions**
+13. **Regression checks** — `- [ ] (regression: <area>) GIVEN … WHEN … THEN <behavior> still … — why at risk: <one line>` (inline, same row, so qa-run reads one row per check)
+14. **Dependencies** — teams, services, prerequisites
+15. **Open questions / Assumptions**
 
 **Constraints for both templates:**
 
 - No time estimates, no timelines, no milestone dates.
 - Product sections describe *what & why* — never *how*.
 - Every requirement traces back to a user need surfaced in discovery.
+- Every acceptance criterion and regression check is a `- [ ]` row testable by observation, so the list pastes straight into `/herow-dev:qa-run` as free-text ACs.
 
 ## Step 5 — Offer to save
 
