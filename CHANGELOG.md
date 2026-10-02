@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
   - The lean one-pager gains **Acceptance criteria** and **Regression checks** sections.
     The comprehensive PRD keeps per-story ACs and adds a **Regression checks** section, and
     its Definition of Done now requires regression checks to pass.
-  - Both are `- [ ]` rows, regression ones tagged `(regression: <area>)` with a one-line
+  - Both are `- [ ]` rows, regression ones tagged `(regression: <area>)` with an inline one-line
     *why at risk*, so the list pastes straight into `/herow-dev:qa-run` as free-text ACs.
 
 ## [0.13.0.0] - 2026-10-01

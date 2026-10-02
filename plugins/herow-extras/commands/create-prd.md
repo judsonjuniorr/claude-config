@@ -74,7 +74,7 @@ Render the document directly in chat (Markdown). Use the section set for the cho
 4. **Out of scope** — explicit exclusions
 5. **Success metrics** — primary · secondary · guardrail
 6. **Acceptance criteria** — `- [ ] GIVEN … WHEN … THEN …`
-7. **Regression checks** — `- [ ] (regression: <area>) GIVEN … WHEN … THEN <behavior> still …`, each followed by a one-line *why at risk*
+7. **Regression checks** — `- [ ] (regression: <area>) GIVEN … WHEN … THEN <behavior> still … — why at risk: <one line>` (inline, same row, so qa-run reads one row per check)
 8. **Risks & mitigations** — risk · likelihood · mitigation
 9. **Open questions / Assumptions**
 
@@ -94,7 +94,7 @@ Render the document directly in chat (Markdown). Use the section set for the cho
 10. **UX requirements** — key states, accessibility, responsive notes
 11. **Technical considerations** — high-level only (from `herow-dev:backend-architect` if used)
 12. **Risks & mitigations**
-13. **Regression checks** — `- [ ] (regression: <area>) GIVEN … WHEN … THEN <behavior> still …`, each followed by a one-line *why at risk*
+13. **Regression checks** — `- [ ] (regression: <area>) GIVEN … WHEN … THEN <behavior> still … — why at risk: <one line>` (inline, same row, so qa-run reads one row per check)
 14. **Dependencies** — teams, services, prerequisites
 15. **Open questions / Assumptions**
 
