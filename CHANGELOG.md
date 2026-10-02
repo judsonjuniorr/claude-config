@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.1.0] - 2026-10-02
+
+### Changed
+- **`/herow-extras:create-prd` ships acceptance criteria and regression checks at both depths.**
+  - Two new ★ discovery rounds. **Acceptance criteria** drafts 3–7 feature-level
+    `GIVEN/WHEN/THEN` rows for the user to confirm, at least one on a negative path.
+    **Regression risks** asks which existing behaviors could break. Inside a repo it first
+    scans the touched areas and offers the user-visible behaviors it finds; it names
+    behaviors, never files.
+  - The lean one-pager gains **Acceptance criteria** and **Regression checks** sections.
+    The comprehensive PRD keeps per-story ACs and adds a **Regression checks** section, and
+    its Definition of Done now requires regression checks to pass.
+  - Both are `- [ ]` rows, regression ones tagged `(regression: <area>)` with a one-line
+    *why at risk*, so the list pastes straight into `/herow-dev:qa-run` as free-text ACs.
+
 ## [0.13.0.0] - 2026-10-01
 
 ### Added
