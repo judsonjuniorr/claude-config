@@ -50,7 +50,7 @@ Rounds (run all for *comprehensive*; run the ★ subset for *lean*):
    - **Primary** — one metric with target + timeframe.
    - **Secondary** — supporting metrics.
    - **Guardrail** — a metric that must **not** regress.
-7. ★ **Acceptance criteria** — Draft 3–7 feature-level `GIVEN … WHEN … THEN …` criteria from the key flows and scope, and offer them for the user to confirm, edit, or extend. At least one must cover a negative or error path. Each must be checkable by observing the product, not by reading code.
+7. ★ **Acceptance criteria** — Draft 3–7 feature-level `GIVEN … WHEN … THEN …` criteria from the key flows and scope, and offer them for the user to confirm, edit, or extend. At least one must cover a negative or error path. Each must be checkable by observing the product, not by reading code. In *comprehensive*, attach each confirmed criterion to the user story it exercises (Step 4, item 8).
 8. ★ **Regression risks** — Which existing behaviors could this break?
    - Inside a git repo, first `Grep`/`Glob` for the areas the feature touches (screens, routes, shared modules named in scope) and offer the existing **user-visible behaviors** found there as `multiSelect` options. Outside a repo, ask only.
    - Name behaviors, never files or code — the PRD stays *what*, not *how*.
