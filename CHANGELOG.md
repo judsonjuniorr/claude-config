@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0.0] - 2026-10-04
+
+### Added
+- **`herow-extras:design` — any prompt becomes a finished graphic image.**
+  - Auto-triggers on posts, covers, banners, thumbnails, OG images, posters and flyers.
+    Claude builds them as typographic HTML/CSS/SVG, never raster AI (photoreal → `/imagine`).
+  - Default engine is a Claude Design canvas (via `Artifact` quickstart). A shareable
+    Artifact page is offered for review links, and an exact-size PNG via headless Playwright
+    on request, for batches, or automatically when the canvas fails to publish.
+  - Brand profiles (OKLCH tokens, fonts, locked logo SVG) live in
+    `~/.herow/design/brands/` and can be extracted from a live site; profiles past 90 days
+    offer a re-check.
+  - Two contrasting directions per request, a self-check (exact pixels, fonts loaded, safe
+    margin, unaltered logo, no invented copy), then pick-and-iterate.
+
 ## [0.13.1.0] - 2026-10-02
 
 ### Changed
