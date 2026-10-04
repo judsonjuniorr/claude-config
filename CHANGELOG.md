@@ -14,8 +14,11 @@ All notable changes to this project will be documented in this file.
   - Brand profiles (OKLCH tokens, fonts, locked logo SVG) live in
     `~/.herow/design/brands/` and can be extracted from a live site; profiles past 90 days
     offer a re-check.
-  - Two contrasting directions per request, a self-check (exact pixels, fonts loaded, safe
-    margin, unaltered logo, no invented copy), then pick-and-iterate.
+  - Logos extracted from a site are sanitized (no scripts, handlers, foreign or external
+    content) before they are saved or rendered, and page values are treated as data.
+  - Two contrasting directions per request. The PNG path gates on loaded brand fonts, text
+    inside the safe margin and exact pixels, and serves only a temp copy of the HTML. Then
+    pick-and-iterate.
 
 ## [0.13.1.0] - 2026-10-02
 
