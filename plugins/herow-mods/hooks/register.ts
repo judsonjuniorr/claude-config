@@ -5,8 +5,8 @@ import {
   buildLangSet,
   claimSets,
   fingerprint,
-  installPathFrom,
-  isCoreDisabled,
+  coreEnabledSetting,
+  installPathsFrom,
   isRulesInjectText,
   langSetsFor,
   languageNote,
@@ -31,32 +31,39 @@ async function readDir($, dir: string): Promise<RuleFile[]> {
   for (const entry of await $.fs.list(dir)) {
     if (!entry.name.endsWith('.md')) continue
     const path = `${dir}/${entry.name}`
-    // A symlink lists as `other`; rules-inject.sh's `[ -f ]` follows it, so follow it too.
-    const kind = entry.kind === 'other' ? (await $.fs.stat(path)).kind : entry.kind
+    // A symlink lists as `other`; rules-inject.sh's `[ -f ]` follows it and skips a dangling one.
+    const kind = entry.kind === 'other' ? (await $.fs.stat(path).catch(() => undefined))?.kind : entry.kind
     if (kind === 'file') files.push({ name: entry.name, text: String(await $.fs.read(path)) })
   }
   return files
 }
 
-async function findRoot($, tried: string[]): Promise<string | null> {
+// A marketplace install only counts while herow-core is enabled; a checkout beside the plugin counts unless disabled.
+async function findRoot($, tried: string[], enabled: boolean | undefined): Promise<string | null> {
   const sibling = siblingRoot($.plugin.root)
   tried.push(sibling)
   if (await $.fs.exists(`${sibling}/rules/common`)) return sibling
   const registry = registryPath($.plugin.root)
-  if (!(await $.fs.exists(registry))) return null
-  const installed = installPathFrom(JSON.parse(String(await $.fs.read(registry))))
-  if (!installed) return null
-  tried.push(installed)
-  return (await $.fs.exists(`${installed}/rules/common`)) ? installed : null
+  if (enabled !== true || !(await $.fs.exists(registry))) return null
+  const cwd = await $.session.cwd()
+  for (const installed of installPathsFrom(JSON.parse(String(await $.fs.read(registry))), cwd)) {
+    tried.push(installed)
+    if (await $.fs.exists(`${installed}/rules/common`)) return installed
+  }
+  return null
 }
 
 async function load($): Promise<Rules | null> {
-  if (isCoreDisabled(await $.settings.read())) {
+  // Read each source on its own: a merged read can let a project's enabledPlugins hide the user's.
+  const sources = []
+  for (const source of ['user', 'project', 'local', 'flag', 'policy']) sources.push(await $.settings.read({ source }))
+  const enabled = coreEnabledSetting(sources)
+  if (enabled === false) {
     $.ui.log('herow-mods: idle, herow-core@herow is disabled. Enable it in /plugin to get herow rules.')
     return null
   }
   const tried: string[] = []
-  const root = await findRoot($, tried)
+  const root = await findRoot($, tried, enabled)
   if (!root) {
     $.ui.log(
       `herow-mods: idle, herow-core rules not found (looked in: ${tried.join(', ') || 'installed_plugins.json'}). ` +
@@ -126,7 +133,13 @@ export function register(on) {
     const wanted = loaded ? langSetsFor(String(e.file_path ?? '')).filter((s) => loaded.lang.has(s)) : []
     const agent = agentKey(e.agentId)
     const fresh = claimSets(delivered, agent, wanted)
-    const result = await next(e)
+    let result
+    try {
+      result = await next(e)
+    } catch (err) {
+      releaseSets(delivered, agent, fresh)
+      throw err
+    }
     if (fresh.length === 0) return result
     if (result.deny !== undefined || result.isError) {
       releaseSets(delivered, agent, fresh)

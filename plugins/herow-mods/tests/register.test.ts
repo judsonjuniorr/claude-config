@@ -18,7 +18,9 @@ const CACHE_CORE = 'fake/cache/herow/herow-core/64e5'
 type World = {
   files?: Record<string, string> | null
   layout?: 'sibling' | 'registry'
+  // Settings per source (user, project, local, flag, policy); herow-core is enabled at user scope by default.
   settings?: Record<string, unknown>
+  registry?: Array<Record<string, unknown>>
   logs?: string[]
   invalidated?: string[]
   sections?: Array<{ id: string; text: string; scope: string }>
@@ -51,7 +53,9 @@ function world(on, w: World = {}) {
   }
   const isRegistry = (path: string) => layout === 'registry' && normalize(path).endsWith('installed_plugins.json')
   const keys = () => Object.keys(files ?? {})
-  on('settings.read', async () => ({ value: w.settings ?? {} }))
+  const settings = w.settings ?? { user: { enabledPlugins: { 'herow-core@herow': true } } }
+  on('settings.read', async ($, e) => ({ value: settings[e.source] ?? {} }))
+  on('session.cwd', async () => ({ value: '/repo' }))
   on('fs.exists', async ($, e) => {
     if (isRegistry(e.path)) return { value: true }
     const r = rel(e.path)
@@ -71,11 +75,15 @@ function world(on, w: World = {}) {
       })),
     }
   })
-  on('fs.stat', async () => ({ value: { kind: 'file', size: 1, mtimeMs: 0, isLink: false } }))
+  on('fs.stat', async ($, e) => {
+    if (e.path.endsWith('link-broken.md')) throw new Error('ENOENT')
+    return { value: { kind: 'file', size: 1, mtimeMs: 0, isLink: false } }
+  })
   on('fs.read', async ($, e) => {
     if (w.readFails) throw new Error('disk gone')
     if (isRegistry(e.path)) {
-      return { value: JSON.stringify({ plugins: { 'herow-core@herow': [{ scope: 'user', installPath: `/${CACHE_CORE}` }] } }) }
+      const entries = w.registry ?? [{ scope: 'user', installPath: `/${CACHE_CORE}` }]
+      return { value: JSON.stringify({ plugins: { 'herow-core@herow': entries } }) }
     }
     return { value: files?.[rel(e.path) ?? ''] ?? '' }
   })
@@ -162,7 +170,7 @@ test('with herow-core missing, everything passes through unchanged and the mod s
 
 test('stays idle when herow-core is disabled, even with its files on disk', async ($, on) => {
   const logs: string[] = []
-  world(on, { settings: { enabledPlugins: { 'herow-core@herow': false } }, logs })
+  world(on, { settings: { user: { enabledPlugins: { 'herow-core@herow': false } } }, logs })
   expect((await $.prompt.compose(composeInput)).sections.map((s) => s.id)).toEqual(['intro'])
   expect(logs).toContain('herow-mods: idle, herow-core@herow is disabled. Enable it in /plugin to get herow rules.')
 })
@@ -274,4 +282,75 @@ test('/clear and resume re-arm every agent; other session ends keep delivery sta
   expect((await $.tool.call(read('/repo/App.tsx', 'a1'))).context?.length).toBe(2)
   await $.session.end({ reason: 'resume', sessionId: 's2', resume: 's2' } as never)
   expect((await $.tool.call(read('/repo/App.tsx'))).context?.length).toBe(2)
+})
+
+test('a project install from another checkout is ignored; a stale entry falls through to the next', async ($, on) => {
+  const logs: string[] = []
+  world(on, {
+    layout: 'registry',
+    logs,
+    registry: [
+      { scope: 'project', projectPath: '/other-repo', installPath: '/elsewhere/herow-core' },
+      { scope: 'user', installPath: '/stale/herow-core' },
+      { scope: 'local', projectPath: '/repo', installPath: `/${CACHE_CORE}` },
+    ],
+  })
+  expect(rulesSection(await $.prompt.compose(composeInput)).length).toBe(1)
+  expect(logs.some((l) => l.includes(`chars from /${CACHE_CORE})`))).toBe(true)
+})
+
+test('a marketplace install is not used unless herow-core is explicitly enabled', async ($, on) => {
+  const logs: string[] = []
+  world(on, { layout: 'registry', settings: {}, logs })
+  expect((await $.prompt.compose(composeInput)).sections.map((s) => s.id)).toEqual(['intro'])
+  expect(logs.some((l) => l.startsWith('herow-mods: idle, herow-core rules not found'))).toBe(true)
+})
+
+test('the highest-precedence settings source decides whether herow-core is enabled', async ($, on) => {
+  const logs: string[] = []
+  world(on, {
+    layout: 'registry',
+    settings: {
+      user: { enabledPlugins: { 'herow-core@herow': true } },
+      project: { enabledPlugins: { 'other@x': true } },
+      local: { enabledPlugins: { 'herow-core@herow': false } },
+    },
+    logs,
+  })
+  expect((await $.prompt.compose(composeInput)).sections.map((s) => s.id)).toEqual(['intro'])
+  expect(logs).toContain('herow-mods: idle, herow-core@herow is disabled. Enable it in /plugin to get herow rules.')
+})
+
+test('a dangling symlink is skipped instead of idling the mod', async ($, on) => {
+  world(on, { files: { ...COMMON, 'rules/common/link-broken.md': 'x' } })
+  expect(rulesSection(await $.prompt.compose(composeInput)).length).toBe(1)
+})
+
+test('/clear retries a failed load and never reloads a good one', async ($, on) => {
+  const logs: string[] = []
+  const w: World = { logs, readFails: true }
+  world(on, w)
+  expect((await $.prompt.compose(composeInput)).sections.map((s) => s.id)).toEqual(['intro'])
+  w.readFails = false
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: 's1' } as never)
+  expect(rulesSection(await $.prompt.compose(composeInput)).length).toBe(1)
+  await $.session.end({ reason: 'clear', sessionId: 's2', resume: 's2' } as never)
+  await $.prompt.compose(composeInput)
+  expect(logs.filter((l) => l.startsWith('herow-mods: rules ready (')).length).toBe(1)
+})
+
+test('a tool call that throws releases the claim for the next call', async ($, on) => {
+  on('tool.call', { file_path: /throws/ }, async () => {
+    throw new Error('interrupted')
+  })
+  world(on)
+  await $.tool.call(read('/repo/throws.tsx')).catch(() => undefined)
+  expect((await $.tool.call(read('/repo/App.tsx'))).context?.length).toBe(2)
+})
+
+test('a precompute compaction keeps delivery state', async ($, on) => {
+  world(on)
+  await $.tool.call(read('/repo/App.tsx'))
+  await $.session.compact({ ...(COMPACT as object), trigger: 'precompute' } as never)
+  expect((await $.tool.call(read('/repo/App.tsx'))).context).toBe(undefined)
 })

@@ -36,7 +36,7 @@ const byName = (a: RuleFile, b: RuleFile) => (a.name < b.name ? -1 : a.name > b.
 
 // Mirrors rules-inject.sh: each common file in name order, followed by a blank line.
 export function buildCommon(files: readonly RuleFile[]): string {
-  return [...files]
+  return files
     .filter((f) => f.name.endsWith('.md') && !SKIPPED.has(f.name))
     .sort(byName)
     .map((f) => f.text + '\n')
@@ -44,7 +44,7 @@ export function buildCommon(files: readonly RuleFile[]): string {
 }
 
 export function buildLangSet(set: string, files: readonly RuleFile[]): string {
-  const body = [...files]
+  const body = files
     .filter((f) => f.name.endsWith('.md'))
     .sort(byName)
     .map((f) => f.text.trimEnd())
@@ -87,15 +87,31 @@ export function registryPath(pluginRoot: string): string {
   return `${pluginRoot.replace(/[\\/]+$/, '')}/../../../../installed_plugins.json`
 }
 
-export function installPathFrom(registry: unknown): string | undefined {
+type InstallEntry = { scope?: string; projectPath?: string; installPath?: unknown }
+
+// Install paths that apply to this session: user-scope installs, or project/local ones for this checkout.
+export function installPathsFrom(registry: unknown, cwd: string): string[] {
   const entries = (registry as { plugins?: Record<string, unknown> })?.plugins?.[CORE_ID]
-  if (!Array.isArray(entries)) return undefined
-  const path = entries.find((e) => typeof e?.installPath === 'string')?.installPath
-  return typeof path === 'string' ? path : undefined
+  if (!Array.isArray(entries)) return []
+  return entries
+    .filter((e: InstallEntry) => typeof e?.installPath === 'string')
+    .filter((e: InstallEntry) => e.scope === 'user' || (typeof e.projectPath === 'string' && isWithin(cwd, e.projectPath)))
+    .map((e: InstallEntry) => e.installPath as string)
 }
 
-export function isCoreDisabled(settings: unknown): boolean {
-  return (settings as { enabledPlugins?: Record<string, unknown> })?.enabledPlugins?.[CORE_ID] === false
+function isWithin(path: string, dir: string): boolean {
+  const base = dir.replace(/[\\/]+$/, '')
+  return path === base || path.startsWith(base + '/') || path.startsWith(base + '\\')
+}
+
+// The last settings source (lowest precedence first) that mentions herow-core decides; undefined when none does.
+export function coreEnabledSetting(sources: readonly unknown[]): boolean | undefined {
+  let value: boolean | undefined
+  for (const src of sources) {
+    const v = (src as { enabledPlugins?: Record<string, unknown> })?.enabledPlugins?.[CORE_ID]
+    if (typeof v === 'boolean') value = v
+  }
+  return value
 }
 
 export function agentKey(agentId: string | undefined): string {

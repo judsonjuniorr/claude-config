@@ -4,8 +4,8 @@ import {
   buildLangSet,
   claimSets,
   fingerprint,
-  installPathFrom,
-  isCoreDisabled,
+  coreEnabledSetting,
+  installPathsFrom,
   isRulesInjectText,
   langSetsFor,
   languageNote,
@@ -118,18 +118,30 @@ describe('herow-core resolution', () => {
     )
   })
 
-  test('installPathFrom reads herow-core from installed_plugins.json', () => {
-    const registry = { plugins: { 'herow-core@herow': [{ scope: 'user', installPath: '/c/herow-core/64e5' }] } }
-    expect(installPathFrom(registry)).toBe('/c/herow-core/64e5')
-    expect(installPathFrom({ plugins: {} })).toBe(undefined)
-    expect(installPathFrom(null)).toBe(undefined)
-    expect(installPathFrom({ plugins: { 'herow-core@herow': 'bad' } })).toBe(undefined)
+  test('installPathsFrom keeps user installs and project installs for this checkout, in order', () => {
+    const registry = {
+      plugins: {
+        'herow-core@herow': [
+          { scope: 'project', projectPath: '/other', installPath: '/c/other' },
+          { scope: 'user', installPath: '/c/user' },
+          { scope: 'local', projectPath: '/repo/', installPath: '/c/local' },
+          { scope: 'user' },
+        ],
+      },
+    }
+    expect(installPathsFrom(registry, '/repo/sub')).toEqual(['/c/user', '/c/local'])
+    expect(installPathsFrom(registry, '/repository')).toEqual(['/c/user'])
+    expect(installPathsFrom({ plugins: {} }, '/repo')).toEqual([])
+    expect(installPathsFrom(null, '/repo')).toEqual([])
+    expect(installPathsFrom({ plugins: { 'herow-core@herow': 'bad' } }, '/repo')).toEqual([])
   })
 
-  test('isCoreDisabled is true only for an explicit false', () => {
-    expect(isCoreDisabled({ enabledPlugins: { 'herow-core@herow': false } })).toBe(true)
-    expect(isCoreDisabled({ enabledPlugins: { 'herow-core@herow': true } })).toBe(false)
-    expect(isCoreDisabled({})).toBe(false)
+  test('coreEnabledSetting takes the last source that mentions herow-core', () => {
+    const on = { enabledPlugins: { 'herow-core@herow': true } }
+    const off = { enabledPlugins: { 'herow-core@herow': false } }
+    expect(coreEnabledSetting([on, {}, off])).toBe(false)
+    expect(coreEnabledSetting([off, { enabledPlugins: { 'x@y': true } }, on])).toBe(true)
+    expect(coreEnabledSetting([{}, null])).toBe(undefined)
   })
 })
 
