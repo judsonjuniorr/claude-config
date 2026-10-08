@@ -20,6 +20,7 @@ Then pick the suites you want:
 /plugin install herow-seo@herow       # SEO/GEO suite
 /plugin install herow-finance@herow   # finance automation
 /plugin install herow-extras@herow    # standalone utilities
+/plugin install herow-mods@herow      # mods: rules in the system prompt (needs herow-core, Claude Code >= 2.1.287)
 ```
 
 ### Auto-update (do this once)
@@ -41,6 +42,7 @@ and `/herow-core:upgrade` force-updates on demand.
 | **herow-seo** | 11 commands (`/herow-seo:weekly-audit`, `ctr-tune`, `indexation-check`, `content-sprint`, `geo-optimize`, `report`, …) + `seo-strategist`, `technical-seo-auditor`, `content-engineer` agents + the GSC data-contract reference |
 | **herow-finance** | `/herow-finance:organizze` (Organizze API analysis with the `financial-analyst` agent), `/herow-finance:organizze-create` (create transactions — dry-run + confirm + read-back verify), `context`/`goal`/`profile` helpers, `/herow-finance:nf-tomada` (Contabilizei NF registration). Data lives in `~/.herow/finance/` and survives updates |
 | **herow-extras** | `/herow-extras:brainstorm` (any idea → concrete result: PRD, plan, research, an inline brief, or a Claude artifact), `/herow-extras:create-prd`, `/herow-extras:file-organizer`, `/herow-extras:graphify-install`. Skill: `design` (any prompt → a finished graphic image — post, cover, banner, OG — built as typographic HTML/SVG with a saved brand profile, on a Claude Design canvas by default, a shareable Artifact page, or an exact-size PNG via headless Playwright; two directions, pick, iterate) |
+| **herow-mods** | Opt-in Claude Code mod (in-process hooks, Claude Code >= 2.1.287, needs herow-core). Puts herow-core's `rules/common` into the main system prompt (the SessionStart injection reaches the model only as a truncated preview, and is re-sent after every compact) and hands each agent the matching `rules/<language>/` set the first time it reads or writes a file in that language, with a pointer to `rules/<language>/` for anything it never touches directly. Goes idle if herow-core is disabled. Logs `herow-mods: rules ready …` at load and `herow-mods: delivered … rules` on each delivery. Disable it in `/plugin` and herow-core's SessionStart injection takes over unchanged |
 
 ### Jev: typed decisions and routing (herow-core)
 
@@ -113,7 +115,8 @@ claude-config/
 │   ├── herow-dev/        # commands/{code,git,react,python}/ + skills/ + agents/
 │   ├── herow-seo/        # commands/ + agents/ + reference/gsc-data-contract.md
 │   ├── herow-finance/    # commands/ + scripts/{organizze,finance,contabilizei}/ + agents/
-│   └── herow-extras/     # commands/ + skills/design/
+│   ├── herow-extras/     # commands/ + skills/design/
+│   └── herow-mods/       # hooks/{hooks.json,register.ts,rules.ts} + tests/ (Claude Code mod)
 ├── docs/                 # relocated namespace docs + MCP server templates (docs/mcp/)
 ├── migrate.sh            # legacy symlink install → plugin migration
 └── .github/workflows/plugin-ci.yml
@@ -124,7 +127,13 @@ claude-config/
 - **Rules** are not a plugin component type. `herow-core` injects `rules/common/*.md`
   into context via a SessionStart hook (`scripts/rules-inject.sh`), which also prints
   a pointer to the per-language rule sets (`rules/<language>/`) with the resolved
-  plugin path — Claude reads those on demand per project.
+  plugin path — Claude reads those on demand per project. With `herow-mods` installed,
+  the mod moves the common rules into the system prompt, drops the SessionStart copy, and
+  delivers each language set on first use instead.
+- **Developing a mod**: load it with `claude --plugin-dir plugins/herow-mods` (hot-reloads on
+  save) and run `claude plugin test plugins/herow-mods`. Inside a Claude Code Bash tool,
+  `claude` can be a shell wrapper that breaks these subcommands; call `command claude` or the
+  binary's absolute path instead.
 - **Paths**: plugins are cache-copied, so everything uses `${CLAUDE_PLUGIN_ROOT}`
   (plugin files) or one per-user store, `~/.herow/` (override `HEROW_HOME`):
   `finance/`, `core/`, `seo/`, and `projects/<owner-repo>-<hash>/{plans,qa}` for

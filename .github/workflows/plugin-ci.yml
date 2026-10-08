@@ -51,19 +51,23 @@ jobs:
           set -e
           for m in plugins/*/hooks/hooks.json; do
             plugin_root="$(dirname "$(dirname "$m")")"
-            jq -r '.hooks | to_entries[] | .value[] | .hooks[] | .command' "$m" \
+            jq -r '(.hooks // {}) | to_entries[] | .value[] | .hooks[] | .command' "$m" \
               | sed -E 's/^[^"]*"([^"]+)".*$/\1/' \
               | sed "s|\\\${CLAUDE_PLUGIN_ROOT}|$plugin_root|" \
               | while read -r f; do
                   [ -f "$f" ] || { echo "::error::$m registers a missing hook script: $f"; exit 1; }
                 done
+            # Mods list their hooks modules relative to hooks.json.
+            jq -r '.modules // [] | .[]' "$m" | while read -r mod; do
+              [ -f "$(dirname "$m")/$mod" ] || { echo "::error::$m lists a missing hooks module: $mod"; exit 1; }
+            done
           done
           echo "hook paths OK"
 
       - name: Guard — JSON manifests valid
         run: |
           set -e
-          for f in .claude-plugin/marketplace.json plugins/*/.claude-plugin/plugin.json plugins/herow-core/hooks/hooks.json docs/mcp/*.json; do
+          for f in .claude-plugin/marketplace.json plugins/*/.claude-plugin/plugin.json plugins/*/hooks/hooks.json docs/mcp/*.json; do
             jq empty "$f"
           done
           echo "JSON OK"
@@ -176,4 +180,35 @@ jobs:
           claude plugin validate .
           for p in plugins/*/; do
             claude plugin validate "$p"
+          done
+
+      - name: Validate mods (fail on any warning except the versionless one)
+        run: |
+          set -e
+          for m in plugins/*/hooks/hooks.json; do
+            jq -e '.modules' "$m" >/dev/null || continue
+            p="$(dirname "$(dirname "$m")")"
+            rc=0
+            claude plugin validate --json "$p" > "$RUNNER_TEMP/validate.json" || rc=$?
+            # Plugins are versionless on purpose (see the versionless guard), so that warning is expected.
+            problems="$(jq -r '
+              [.manifest, (.contents // [])[]]
+              | map(
+                  ((.errors // [])[] | "error: \(.message)"),
+                  ((.warnings // [])[] | select(.message | startswith("No version specified") | not) | "warning: \(.message)"),
+                  ((.gatingHooks // [])[] | select(.hasCatch | not) | "gating hook without .catch: \(.hook)")
+                )
+              | .[]' "$RUNNER_TEMP/validate.json")"
+            if [ "$rc" -ne 0 ] || [ "$(jq -r '.success' "$RUNNER_TEMP/validate.json")" != "true" ] || [ -n "$problems" ]; then
+              echo "::error::$p failed mod validation (exit $rc)"; printf '%s\n' "$problems"; exit 1
+            fi
+          done
+          echo "mods valid"
+
+      - name: Test mods
+        run: |
+          set -e
+          for m in plugins/*/hooks/hooks.json; do
+            jq -e '.modules' "$m" >/dev/null || continue
+            claude plugin test "$(dirname "$(dirname "$m")")"
           done

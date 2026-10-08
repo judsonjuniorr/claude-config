@@ -1,0 +1,4 @@
+{
+  "description": "herow-mods hooks module",
+  "modules": ["./register.ts"]
+}
