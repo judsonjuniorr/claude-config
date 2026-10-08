@@ -35,6 +35,12 @@
       "source": "./plugins/herow-extras",
       "category": "productivity",
       "description": "Idea brainstorm, PRD generator, image design, file organizer, graphify bootstrap"
+    },
+    {
+      "name": "herow-mods",
+      "source": "./plugins/herow-mods",
+      "category": "workflow",
+      "description": "Claude Code mods: common rules in the system prompt + language rules on first use (opt-in, needs herow-core)"
     }
   ]
 }
