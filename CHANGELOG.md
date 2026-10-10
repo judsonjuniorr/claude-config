@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0.0] - 2026-10-10
+
+### Added
+- **New always-on rule: pick a model when creating a component.**
+  - When you create a command, skill or agent in `~/.claude/` or a project's `.claude/`, the
+    session suggests a `model:` first: `haiku` for lookup, `sonnet` for scoped implementation or
+    review, `opus` for architecture or high-stakes calls. For commands and skills it warns that
+    `model:` switches the main session's model for that turn. Herow plugin dirs are out of scope.
+  - You choose with `AskUserQuestion`; "Leave empty" inherits the session model and leaves the
+    key out.
+
+### Changed
+- **16 herow-dev agents now run on cheaper models.**
+  - Implementation, review and research agents are pinned to `sonnet`. Sonnet 5.5 scores as
+    well as Opus 5.5 on agentic coding at half the price, so Opus sessions (including `opusplan`
+    plan mode) stop paying Opus rates for them.
+  - `comment-analyzer` is pinned to `haiku` for read-only comment checks. On the Anthropic API
+    with Claude Code 2.1.293+ that is Haiku 5.5, at 1/20 the price of Sonnet below 100K prompt
+    tokens.
+  - Architecture, debugging, security, general review, UI/UX design, the other commands and
+    every skill still run on the session model. A `model:` on a command or skill would switch
+    the main conversation's model and re-send its whole context, most likely missing the prompt
+    cache.
+- **`/herow-core:upgrade` and `/herow-dev:git:release-notes` run as forked Haiku subagents.**
+  - `context: fork` + `model: haiku` + `background: false`: they start from a fresh context on
+    Haiku and return their result in the same turn, so the main session's model never switches.
+  - `release-notes` no longer asks for the language. Pass it as an argument
+    (`/herow-dev:git:release-notes en`); without one it reuses the saved per-repo choice
+    (default `pt-br`). Subagents can't call `AskUserQuestion`.
+- **`/herow-core:doctor` now pins the `haiku` alias too.** `token-guard.sh` writes
+  `ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-haiku-5-5` alongside the Opus and Sonnet pins, and
+  `verify.sh` checks for it. On Claude Code below 2.1.293 it falls back to `claude-haiku-4-5`.
+  The pin keeps `model: haiku` agents on Haiku 5.5 when an alias would resolve to an older Haiku.
+- **`prompt-optimizer` model table names Haiku 5.5, Sonnet 5.5 and Opus 5.5 explicitly.** Each tier
+  gets a one-line note on what it's for.
+
 ## [0.14.0.0] - 2026-10-04
 
 ### Added

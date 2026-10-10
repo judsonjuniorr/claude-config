@@ -49,6 +49,9 @@ ck default-opus-model \
 ck default-sonnet-model \
   'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); v=(s.get(\"env\",{}) or {}).get(\"ANTHROPIC_DEFAULT_SONNET_MODEL\",\"\"); sys.exit(0 if v.startswith(\"claude-sonnet-\") else 1)" 2>/dev/null' \
   "ANTHROPIC_DEFAULT_SONNET_MODEL pinned" "ANTHROPIC_DEFAULT_SONNET_MODEL not set to a claude-sonnet-* id in settings.json env"
+ck default-haiku-model \
+  'python3 -c "import json,sys; s=json.load(open(\"${SETTINGS}\")); v=(s.get(\"env\",{}) or {}).get(\"ANTHROPIC_DEFAULT_HAIKU_MODEL\",\"\"); sys.exit(0 if v.startswith(\"claude-haiku-\") else 1)" 2>/dev/null' \
+  "ANTHROPIC_DEFAULT_HAIKU_MODEL pinned" "ANTHROPIC_DEFAULT_HAIKU_MODEL not set to a claude-haiku-* id in settings.json env"
 
 # Jev is optional: a keyless machine is info, not a failure.
 jev_dry_run() {

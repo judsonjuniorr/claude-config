@@ -108,7 +108,7 @@ Generates a user-friendly changelog from the commits since the last tag (or the 
 **What it does**
 
 1. Detects the last language used in this repo (`customCommands.releaseNotes.lang` in `<repo-root>/.claude/settings.local.json`, default `pt-br`).
-2. Asks for the language (`pt-br` or `en`) with the last choice pre-selected as `(Recommended)` and persists the answer (atomic write via `jq`, Python fallback), preserving every other key in the file.
+2. Takes the language from the argument (`/release-notes en` or `pt-br`), falling back to the saved choice, and persists it (atomic write via `jq`, Python fallback), preserving every other key in the file.
 3. Collects commits since the most recent tag by date — or the last 50 commits if no tag exists — dropping merge commits and cancelling out revert↔original pairs.
 4. Classifies each commit into ✨ New Features, 🛠️ Improvements, 🐛 Bug Fixes, or 🔧 Internal Changes, using Conventional Commit prefixes and explicit decision rules. Marks breaking changes with `⚠️ Breaking:`.
 5. Rewrites bullets in past tense, user-facing language — no jargon, no hashes, no PR/issue IDs, no author names — and groups related commits.
@@ -118,6 +118,8 @@ Generates a user-friendly changelog from the commits since the last tag (or the 
 **Allowed tools**: inherits Claude Code defaults (no explicit allow-list).
 
 **Language**: bilingual — `pt-br` (default) or `en`, persisted per-repo.
+
+**Model**: runs as a forked Haiku subagent (`context: fork`, `model: haiku`), so it doesn't switch the main session's model.
 
 **When to use**: preparing release notes before tagging a new version, or sharing a human-readable summary with non-engineering stakeholders.
 

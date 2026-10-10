@@ -60,6 +60,12 @@ class VersionGateTest(unittest.TestCase):
             self._gate((2, 1, 150), "claude-sonnet-5"), "claude-sonnet-4-6"
         )
 
+    def test_haiku_5_5_pins_at_its_minimum_version(self) -> None:
+        self.assertEqual(self._gate((2, 1, 293), "claude-haiku-5-5"), "claude-haiku-5-5")
+
+    def test_haiku_5_5_steps_down_to_haiku_4_5(self) -> None:
+        self.assertEqual(self._gate((2, 1, 292), "claude-haiku-5-5"), "claude-haiku-4-5")
+
 
 class TableInvariantTest(unittest.TestCase):
     def test_every_chain_ends_on_an_ungated_model_without_looping(self) -> None:

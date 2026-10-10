@@ -2,6 +2,7 @@
 name: java-pro
 description: Expert Java developer for Java 21+. Use for Spring Boot 3.x services, microservices, data pipelines, automation, and system programming. Writes idiomatic, typed, tested Java.
 tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch
+model: sonnet
 effort: medium
 ---
 

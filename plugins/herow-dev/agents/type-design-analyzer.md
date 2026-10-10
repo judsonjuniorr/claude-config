@@ -1,6 +1,7 @@
 ---
 name: type-design-analyzer
 description: Reviews whether a module's types make illegal states unrepresentable — primitive obsession, invariants enforced at runtime that the type could enforce instead, optional fields encoding two different shapes, and types too loose to catch the bug they exist to prevent. Use when a diff introduces or reshapes domain types, interfaces, or schemas. Returns findings with a file:line, the tighter type, and the invariant it would enforce. Not a type-checker — it assumes the code already compiles and does not chase type errors.
+model: sonnet
 effort: low
 tools: Read, Grep, Glob
 ---

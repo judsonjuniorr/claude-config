@@ -31,7 +31,7 @@ new_fixture() {
 populate() {
   local h="$1/home"
   mkdir -p "$h/.claude/commands" "$h/.claude/hooks" "$h/.local/bin" "$h/.claude/skills/gstack/.git"
-  printf '{"model":"opusplan","advisorModel":"opus","effortLevel":"high","autoCompact":true,"env":{"ANTHROPIC_DEFAULT_OPUS_MODEL":"claude-opus-5-5","ANTHROPIC_DEFAULT_SONNET_MODEL":"claude-sonnet-5-5"},"hooks":{"x":"omega run; blueprint-track.sh"}}' > "$h/.claude/settings.json"
+  printf '{"model":"opusplan","advisorModel":"opus","effortLevel":"high","autoCompact":true,"env":{"ANTHROPIC_DEFAULT_OPUS_MODEL":"claude-opus-5-5","ANTHROPIC_DEFAULT_SONNET_MODEL":"claude-sonnet-5-5","ANTHROPIC_DEFAULT_HAIKU_MODEL":"claude-haiku-5-5"},"hooks":{"x":"omega run; blueprint-track.sh"}}' > "$h/.claude/settings.json"
   printf '## Memory\nOMEGA here\n' > "$h/.claude/CLAUDE.md"
   printf '{"mcpServers":{"omega-mem":{},"my-memory":{},"other":{}}}' > "$h/.claude.json"
   : > "$h/.claude/commands/blueprint.md"
@@ -81,7 +81,8 @@ fail|autocompact|autoCompact not set in settings.json
 fail|subagent-model|CLAUDE_CODE_SUBAGENT_MODEL still pinned
 fail|default-opus-model|ANTHROPIC_DEFAULT_OPUS_MODEL not set to a claude-opus-* id in settings.json env
 fail|default-sonnet-model|ANTHROPIC_DEFAULT_SONNET_MODEL not set to a claude-sonnet-* id in settings.json env
-summary|4 passed / 12 failed|review-fails'
+fail|default-haiku-model|ANTHROPIC_DEFAULT_HAIKU_MODEL not set to a claude-haiku-* id in settings.json env
+summary|4 passed / 13 failed|review-fails'
 
 FULL_DETECT='dep|git|installed|@T@/bin/git
 dep|brew|missing|-
@@ -119,7 +120,8 @@ pass|autocompact|autoCompact enabled
 pass|subagent-model|no subagent-model pin (inherits default)
 pass|default-opus-model|ANTHROPIC_DEFAULT_OPUS_MODEL pinned
 pass|default-sonnet-model|ANTHROPIC_DEFAULT_SONNET_MODEL pinned
-summary|8 passed / 8 failed|review-fails'
+pass|default-haiku-model|ANTHROPIC_DEFAULT_HAIKU_MODEL pinned
+summary|9 passed / 8 failed|review-fails'
 
 same() {
   if [ "$2" = "$3" ]; then ok "$1"; else
@@ -164,7 +166,7 @@ D="$(run "$E" detect OPENROUTER_API_KEY=sk-x)"; V="$(run "$E" verify OPENROUTER_
 printf '%s\n' "$D" | grep -qx 'tool|jev-shim|installed|@T@/home/.herow/bin/jev' && ok "detect: tool|jev-shim|installed" || fail "installed record"
 printf '%s\n' "$V" | grep -qx 'pass|jev-key|key found (env)' && ok "verify: pass|jev-key" || fail "verify key pass"
 printf '%s\n' "$V" | grep -q '^pass|jev-shim|' && ok "verify: shim dry-run passes" || fail "verify shim: $(printf '%s\n' "$V" | grep jev)"
-same "verify summary counts the Jev checks" "$(printf '%s\n' "$V" | tail -1)" "summary|6 passed / 12 failed|review-fails"
+same "verify summary counts the Jev checks" "$(printf '%s\n' "$V" | tail -1)" "summary|6 passed / 13 failed|review-fails"
 
 echo "----"
 echo "$PASS passed, $FAIL failed"

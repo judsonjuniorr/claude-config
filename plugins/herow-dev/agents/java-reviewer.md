@@ -2,6 +2,7 @@
 name: java-reviewer
 description: Expert Java code reviewer specializing in Spring Boot patterns, type safety, security vulnerabilities, and idiomatic Java. Use for all Java/Kotlin code changes. MUST BE USED for Java projects.
 tools: Read, Grep, Glob, Bash
+model: sonnet
 effort: medium
 ---
 

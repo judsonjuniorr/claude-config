@@ -1,5 +1,9 @@
 ---
 description: (herow) Generate a user-friendly changelog from commits since the last tag/release.
+argument-hint: "[en|pt-br]"
+context: fork
+background: false
+model: haiku
 effort: low
 ---
 
@@ -24,20 +28,14 @@ Call this value `LAST_LANG`.
 
 **Important:** never read, modify, or remove any other key in `settings.local.json`. Treat the rest of the file as opaque.
 
-## Step 2 — Ask for the language via `AskUserQuestion`
+## Step 2 — Pick the language from the arguments
 
-Ask **one** question with two options. The option matching `LAST_LANG` **must come first** and have the suffix `(Recommended)` in its label.
+This command runs in a forked subagent, which can't ask the user questions. Read `$ARGUMENTS`:
 
-- If `LAST_LANG == "pt-br"`:
-  - Option 1: label `Português (Brasil) (Recommended)`, description `Changelog em pt-br`
-  - Option 2: label `English`, description `Changelog in English`
-- If `LAST_LANG == "en"`:
-  - Option 1: label `English (Recommended)`, description `Changelog in English`
-  - Option 2: label `Português (Brasil)`, description `Changelog em pt-br`
+- `en` or `pt-br` (case-insensitive) → that value.
+- Empty or anything else → `LAST_LANG`.
 
-Question: `Which language should the changelog be in?` · header: `Language`.
-
-Map the answer to a slug: `pt-br` or `en`. Call it `LANG`.
+Call the result `LANG`.
 
 ## Step 3 — Persist the choice per project
 
@@ -118,7 +116,7 @@ If no current version is detectable (no tags), suggest `v0.1.0` as the initial v
 
 ## Step 8 — Render in the chat
 
-Output **inline in the chat** (do NOT create a file). Use exactly this structure, **omitting any section without items**. Localize headings/labels/summary to `LANG`, keeping icons and overall structure identical.
+Output **inline in the chat** as your final reply (do NOT create a file). Use exactly this structure, **omitting any section without items**. Localize headings/labels/summary to `LANG`, keeping icons and overall structure identical.
 
 **`pt-br` template:**
 
