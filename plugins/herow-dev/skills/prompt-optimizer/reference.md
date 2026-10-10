@@ -79,10 +79,10 @@ Supporting material for the pipeline in SKILL.md.
 
 | Scope | Recommended Model | Rationale |
 |-------|------------------|-----------|
-| TRIVIAL | Haiku | Cheapest tier for mechanical, single-file edits |
-| LOW–MEDIUM | Sonnet | Cheaper tier; enough for well-scoped work |
-| HIGH | Sonnet (impl) + Opus (planning) | Opus for architecture, Sonnet for implementation |
-| EPIC | Opus (planning) + Sonnet (execution) | Deep reasoning for multi-session planning |
+| TRIVIAL | Haiku 5.5 | Mechanical, read-only lookup or classification; weak on multi-step agentic coding |
+| LOW–MEDIUM | Sonnet 5.5 | Well-scoped implementation and review; matches Opus on agentic coding at half the price |
+| HIGH | Sonnet 5.5 (impl) + Opus 5.5 (planning) | Opus for architecture and high-stakes review, Sonnet for implementation |
+| EPIC | Opus 5.5 (planning) + Sonnet 5.5 (execution) | Deep reasoning for multi-session planning |
 
 **Multi-prompt splitting** (for HIGH/EPIC scope):
 

@@ -1,6 +1,7 @@
 ---
 name: comment-analyzer
 description: Audits code comments against the code they describe — comments that are now false, comments restating what the code already says, and missing "why" on non-obvious decisions. Use on a diff or file when comment quality is in question, or as one lane of a broader review. Returns per-comment findings with a file:line and a suggested rewrite or deletion. It does not review the code's correctness, naming, or structure — that is code-reviewer's job — and it reports only, never edits.
+model: haiku
 effort: low
 tools: Read, Grep, Glob
 ---

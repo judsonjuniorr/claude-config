@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0.0] - 2026-10-10
+
+### Added
+- **New always-on rule: pick a model when creating a component.**
+  - When you create a command, skill or agent in `~/.claude/` or a project's `.claude/`, the
+    session suggests a `model:` first: `haiku` for lookup, `sonnet` for scoped implementation or
+    review, `opus` for architecture or high-stakes calls. For commands and skills it warns that
+    `model:` switches the main session's model for that turn. Herow plugin dirs are out of scope.
+  - You choose with `AskUserQuestion`; "Leave empty" inherits the session model and leaves the
+    key out.
+
+### Changed
+- **16 herow-dev agents now run on cheaper models.**
+  - Implementation, review and research agents are pinned to `sonnet`. Sonnet 5.5 scores as well as Opus
+    5.5 on agentic coding at half the price, so Opus sessions (including `opusplan` plan mode)
+    stop paying Opus rates for them.
+  - `comment-analyzer` is pinned to `haiku` for read-only comment checks. On the Anthropic API
+    with Claude Code 2.1.293+ that is Haiku 5.5, at 1/20 the price of Sonnet below 100K prompt
+    tokens.
+  - Architecture, debugging, security, general review, UI/UX design, every command and every
+    skill still run on the session model. A `model:` on a command or skill would switch the main conversation's
+    model and re-send its whole context, most likely missing the prompt cache.
+- **`prompt-optimizer` model table names Haiku 5.5, Sonnet 5.5 and Opus 5.5 explicitly.** Each tier
+  gets a one-line note on what it's for.
+
 ## [0.14.0.0] - 2026-10-04
 
 ### Added

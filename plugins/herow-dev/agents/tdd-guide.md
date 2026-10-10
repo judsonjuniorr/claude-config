@@ -2,6 +2,7 @@
 name: tdd-guide
 description: Test-Driven Development specialist — writes the failing test first, then the minimal implementation, to 80%+ coverage. Use when the user asks for TDD or test-first work, or when a bug fix needs a regression test before the change.
 tools: Read, Write, Edit, Bash, Grep
+model: sonnet
 effort: medium
 ---
 

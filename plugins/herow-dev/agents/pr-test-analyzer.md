@@ -1,6 +1,7 @@
 ---
 name: pr-test-analyzer
 description: Judges whether a change's tests would actually catch it breaking — which behaviors are untested, which tests assert implementation detail instead of behavior, and which would still pass if the change were reverted. Use on a PR or local diff before it lands. Returns the specific uncovered behaviors with a suggested test per gap. It reads coverage as evidence rather than a target, so it does not chase a percentage, and it does not write the tests — use /herow-dev:code:generate-tests for that.
+model: sonnet
 effort: low
 tools: Read, Grep, Glob, Bash
 ---
