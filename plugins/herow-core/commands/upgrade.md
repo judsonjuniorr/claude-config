@@ -1,6 +1,9 @@
 ---
 description: Force-update the herow marketplace and all herow plugins to the latest GitHub version
 allowed-tools: Bash
+context: fork
+background: false
+model: haiku
 effort: low
 ---
 
