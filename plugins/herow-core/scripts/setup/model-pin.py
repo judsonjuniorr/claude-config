@@ -6,10 +6,11 @@ Modes:
   --list               Print top-3 opus/sonnet candidates (family|id|label),
                        live from the Anthropic Models API when ANTHROPIC_API_KEY
                        is set, otherwise from a static fallback.
-  --apply              Write ANTHROPIC_DEFAULT_{OPUS,SONNET}_MODEL into
+  --apply              Write ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL into
                        ~/.claude/settings.json (idempotent, atomic, .bak first)
     --opus <id>        Opus model ID to pin
     --sonnet <id>      Sonnet model ID to pin
+    --haiku <id>       Haiku model ID to pin (backs `model: haiku` agents)
     --dry-run          Show diff without writing
 """
 
@@ -49,6 +50,7 @@ MODEL_MIN_VERSION = {
     "claude-sonnet-5-5": (2, 1, 284),
     "claude-sonnet-5": (2, 1, 197),
     "claude-opus-4-8": (2, 1, 154),
+    "claude-haiku-5-5": (2, 1, 293),
 }
 
 # Next-older model to try when the installed Claude Code is below a model's
@@ -61,6 +63,7 @@ MODEL_VERSION_FALLBACK = {
     "claude-opus-4-8": "claude-opus-4-7",
     "claude-sonnet-5-5": "claude-sonnet-5",
     "claude-sonnet-5": "claude-sonnet-4-6",
+    "claude-haiku-5-5": "claude-haiku-4-5",
 }
 
 _VARIANT_SUFFIX = re.compile(r"\[[^\]]*\]$")
@@ -256,15 +259,19 @@ def _version_gate(model_id):
     return None
 
 
-def cmd_apply(opus_id, sonnet_id, dry_run):
-    if not opus_id and not sonnet_id:
+def cmd_apply(opus_id, sonnet_id, haiku_id, dry_run):
+    if not opus_id and not sonnet_id and not haiku_id:
         print(
-            "err|model-pin|at least one of --opus or --sonnet is required",
+            "err|model-pin|at least one of --opus, --sonnet or --haiku is required",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    for model_id, family in ((opus_id, "opus"), (sonnet_id, "sonnet")):
+    for model_id, family in (
+        (opus_id, "opus"),
+        (sonnet_id, "sonnet"),
+        (haiku_id, "haiku"),
+    ):
         if model_id and ("claude-%s-" % family) not in model_id:
             print(
                 "err|model-pin|--%s value %r is not a %s-family model id"
@@ -277,8 +284,10 @@ def cmd_apply(opus_id, sonnet_id, dry_run):
         opus_id = _version_gate(opus_id)
     if sonnet_id:
         sonnet_id = _version_gate(sonnet_id)
+    if haiku_id:
+        haiku_id = _version_gate(haiku_id)
 
-    if not opus_id and not sonnet_id:
+    if not opus_id and not sonnet_id and not haiku_id:
         print(
             "ok|model-pin|nothing to apply after version gating",
         )
@@ -297,6 +306,8 @@ def cmd_apply(opus_id, sonnet_id, dry_run):
         targets["ANTHROPIC_DEFAULT_OPUS_MODEL"] = opus_id
     if sonnet_id:
         targets["ANTHROPIC_DEFAULT_SONNET_MODEL"] = sonnet_id
+    if haiku_id:
+        targets["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = haiku_id
 
     # (key, status, old, new)
     changes = []
@@ -340,6 +351,7 @@ def main():
     )
     parser.add_argument("--opus", metavar="MODEL_ID", help="Opus model ID to pin")
     parser.add_argument("--sonnet", metavar="MODEL_ID", help="Sonnet model ID to pin")
+    parser.add_argument("--haiku", metavar="MODEL_ID", help="Haiku model ID to pin")
     parser.add_argument(
         "--dry-run", action="store_true", help="Show diff without writing"
     )
@@ -349,7 +361,7 @@ def main():
     if args.list:
         cmd_list()
     elif args.apply:
-        cmd_apply(args.opus, args.sonnet, args.dry_run)
+        cmd_apply(args.opus, args.sonnet, args.haiku, args.dry_run)
     else:
         parser.print_help()
         sys.exit(1)

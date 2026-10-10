@@ -24,6 +24,10 @@ All notable changes to this project will be documented in this file.
   - Architecture, debugging, security, general review, UI/UX design, every command and every
     skill still run on the session model. A `model:` on a command or skill would switch the main conversation's
     model and re-send its whole context, most likely missing the prompt cache.
+- **`/herow-core:doctor` now pins the `haiku` alias too.** `token-guard.sh` writes
+  `ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-haiku-5-5` alongside the Opus and Sonnet pins, and
+  `verify.sh` checks for it. On Claude Code below 2.1.293 it falls back to `claude-haiku-4-5`.
+  The pin keeps `model: haiku` agents on Haiku 5.5 when an alias would resolve to an older Haiku.
 - **`prompt-optimizer` model table names Haiku 5.5, Sonnet 5.5 and Opus 5.5 explicitly.** Each tier
   gets a one-line note on what it's for.
 
